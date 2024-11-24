@@ -149,11 +149,16 @@ func parsePacketPayload(a nfqueue.Attribute) (packetIP, error) {
 func startNFQueueFilter(ctx context.Context, fnCancel context.CancelFunc) (*nfqueue.Nfqueue, error) {
 	// Set configuration options for nfqueue
 	config := nfqueue.Config{
+		NetNS:        0,
 		NfQueue:      100,
-		MaxPacketLen: 0xFFFF,
 		MaxQueueLen:  0xFF,
+		MaxPacketLen: 0xFFFF,
 		Copymode:     nfqueue.NfQnlCopyPacket,
+		// Flags:        0,
+		// AfFamily:     0,
+		// ReadTimeout:  0,
 		WriteTimeout: 15 * time.Millisecond,
+		// Logger:       &log.Logger{},
 	}
 
 	// Open a new nfqueue
@@ -213,7 +218,7 @@ func startNFQueueFilter(ctx context.Context, fnCancel context.CancelFunc) (*nfqu
 			// return -1
 		}
 
-		return 0 // to stop receiving messages return something different than 0.
+		return -1 // to stop receiving messages return something different than 0.
 	}
 
 	err = nf.RegisterWithErrorFunc(ctx, fnPacketHandler, fnErrorHandler)
@@ -254,6 +259,7 @@ func main() {
 		fmt.Println("Context done.")
 	case <-sigs:
 		fmt.Println("Signal received, shutting down...")
+		cancel()
 	}
 
 	return
