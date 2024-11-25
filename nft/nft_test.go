@@ -74,7 +74,7 @@ func Test_SendIP4PacketsToDefaultNFQueue(t *testing.T) {
 		t.Errorf("addNFTablesRule() error = %v", err)
 	}
 	// Add empty rules list which should cause chain flush.
-	err = SendIP4PacketsToDefaultNFQueue([]string{""})
+	err = SendIP4PacketsToDefaultNFQueue([]string{""}) // send empty IP list to cause empty rules.
 	if err == nil {
 		t.Errorf("SendIP4PacketsToDefaultNFQueue() missing error")
 	}

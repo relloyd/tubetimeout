@@ -12,31 +12,28 @@ import (
 )
 
 var (
-	conn             = &nftables.Conn{}
-	table            *nftables.Table
-	chain            *nftables.Chain
+	// conn             = &nftables.Conn{}
+	// table            *nftables.Table
+	// chain            *nftables.Chain
 	defaultTableName = "crazydeer-table"
 	defaultChainName = "crazydeer-chain"
 	defaultQueueNum  = uint16(100)
 )
 
+type NFQueue struct {
+	conn  *nftables.Conn
+	table *nftables.Table
+	chain *nftables.Chain
+}
+
 func init() {
 	if os.Geteuid() != 0 {
 		log.Fatal("You must be root to run this program.")
 	}
-	var err error
-	table, err = getOrCreateDefaultTable()
-	if err != nil {
-		log.Fatalf("Failed to create nftables table: %v\n", err)
-	}
-	chain, err = getOrCreateDefaultChain(table)
-	if err != nil {
-		log.Fatalf("Failed to create nftables chain: %v\n", err)
-	}
 }
 
-func tableExists(tableName string) bool {
-	tables, err := conn.ListTables()
+func (q *NFQueue) tableExists(tableName string) bool {
+	tables, err := q.conn.ListTables()
 	if err != nil {
 		log.Fatalf("Failed to list nftables tables: %v\n", err)
 	}
@@ -48,8 +45,8 @@ func tableExists(tableName string) bool {
 	return false
 }
 
-func chainExists(chainName string) bool {
-	chains, err := conn.ListChains()
+func (q *NFQueue) chainExists(chainName string) bool {
+	chains, err := q.conn.ListChains()
 	if err != nil {
 		log.Fatalf("Failed to list nftables chains: %v\n", err)
 	}
@@ -92,7 +89,7 @@ func getOrCreateDefaultChain(table *nftables.Table) (*nftables.Chain, error) {
 
 // addNFTablesRule add a rule to send traffic to the NFQUEUE for this app.
 // The caller should flush the changes to the kernel after.
-func addNFTablesRule(ipString string) error {
+func (q *NFQueue) addNFTablesRule(ipString string) error {
 	// # iptables -I OUTPUT -p icmp -j NFQUEUE --queue-num 100
 	// Example YouTube IP address
 	ip := net.ParseIP(ipString)
@@ -131,7 +128,7 @@ func addNFTablesRule(ipString string) error {
 }
 
 // SendIP4PacketsToDefaultNFQueue adds nftables rules to send packets to the default NFQUEUE.
-func SendIP4PacketsToDefaultNFQueue(ips []string) error {
+func (q *NFQueue) SendIP4PacketsToDefaultNFQueue(ips []string) error {
 	// Empty the default chain.
 	conn.FlushChain(chain)
 	// Add rules for each IP address.
@@ -148,7 +145,7 @@ func SendIP4PacketsToDefaultNFQueue(ips []string) error {
 	return nil
 }
 
-func CleanAll() error {
+func (q *NFQueue) CleanAll() error {
 	// Initialize a new nftables connection
 	conn := &nftables.Conn{}
 
@@ -162,6 +159,24 @@ func CleanAll() error {
 
 	if tableExists(defaultTableName) {
 		return fmt.Errorf("nft table %q not deleted", defaultTableName)
+	}
+
+	return nil
+}
+
+func NewNFQueue() (NFQueue, error) {
+	var err error
+
+	nfq := NFQueue{}
+
+	table, err =
+	if err != nil {
+		return NFQueue{}, fmt.Errorf("failed to create nftables table: %v", err)
+	}
+
+	chain, err = getOrCreateDefaultChain(table)
+	if err != nil {
+		return NFQueue{}, fmt.Errorf("failed to create nftables chain: %v", err)
 	}
 
 	return nil
