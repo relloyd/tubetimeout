@@ -102,11 +102,11 @@ func deleteTable(conn *nftables.Conn, tableName string) error {
 
 func NewNFQueue() (*NFQueue, error) {
 	var err error
-	defaultNFQueue.table, err = getOrCreateTable(defaultNFQueue.conn, defaultTableName)
+	defaultNFQueue.table, err = getOrCreateTable(defaultNFQueue.conn, defaultNFQueue.tableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create nftables table: %v", err)
 	}
-	defaultNFQueue.chain, err = getOrCreateChain(defaultNFQueue.conn, defaultNFQueue.table, defaultChainName)
+	defaultNFQueue.chain, err = getOrCreateChain(defaultNFQueue.conn, defaultNFQueue.table, defaultNFQueue.chainName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create nftables chain: %v", err)
 	}
