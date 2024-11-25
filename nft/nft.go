@@ -3,16 +3,95 @@ package nft
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net"
+	"os"
 
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
 )
 
 var (
+	conn             = &nftables.Conn{}
+	table            *nftables.Table
+	chain            *nftables.Chain
 	defaultTableName = "crazydeer-table"
+	defaultChainName = "crazydeer-chain"
+	defaultQueueNum  = uint16(100)
 )
 
+func init() {
+	if os.Geteuid() != 0 {
+		log.Fatal("You must be root to run this program.")
+	}
+	var err error
+	table, err = getOrCreateDefaultTable()
+	if err != nil {
+		log.Fatalf("Failed to create nftables table: %v\n", err)
+	}
+	chain, err = getOrCreateDefaultChain(table)
+	if err != nil {
+		log.Fatalf("Failed to create nftables chain: %v\n", err)
+	}
+}
+
+func tableExists(tableName string) bool {
+	tables, err := conn.ListTables()
+	if err != nil {
+		log.Fatalf("Failed to list nftables tables: %v\n", err)
+	}
+	for _, v := range tables {
+		if v.Name == tableName {
+			return true
+		}
+	}
+	return false
+}
+
+func chainExists(chainName string) bool {
+	chains, err := conn.ListChains()
+	if err != nil {
+		log.Fatalf("Failed to list nftables chains: %v\n", err)
+	}
+	for _, v := range chains {
+		if v.Name == chainName {
+			return true
+		}
+	}
+	return false
+}
+
+func getOrCreateDefaultTable() (*nftables.Table, error) {
+	var err error
+	table := &nftables.Table{
+		Family: nftables.TableFamilyINet,
+		Name:   defaultTableName,
+	}
+	if !tableExists(defaultTableName) {
+		conn.AddTable(table)
+		err = conn.Flush()
+	}
+	return table, err
+}
+
+func getOrCreateDefaultChain(table *nftables.Table) (*nftables.Chain, error) {
+	var err error
+	chain := &nftables.Chain{
+		Name:     defaultTableName,
+		Table:    table,
+		Type:     nftables.ChainTypeFilter,
+		Hooknum:  nftables.ChainHookOutput,
+		Priority: nftables.ChainPriorityFilter,
+	}
+	if !chainExists(defaultChainName) {
+		conn.AddChain(chain)
+		err = conn.Flush()
+	}
+	return chain, err
+}
+
+// addNFTablesRule add a rule to send traffic to the NFQUEUE for this app.
+// The caller should flush the changes to the kernel after.
 func addNFTablesRule(ipString string) error {
 	// # iptables -I OUTPUT -p icmp -j NFQUEUE --queue-num 100
 	// Example YouTube IP address
@@ -20,26 +99,6 @@ func addNFTablesRule(ipString string) error {
 	if ip == nil {
 		return errors.New("invalid IP address")
 	}
-
-	// Initialize a new nftables connection
-	conn := &nftables.Conn{}
-
-	// Create a table for inet family (IPv4/IPv6)
-	table := &nftables.Table{
-		Family: nftables.TableFamilyINet,
-		Name:   defaultTableName,
-	}
-	conn.AddTable(table)
-
-	// Create a FILTER chain in the table
-	chain := &nftables.Chain{
-		Name:     defaultTableName,
-		Table:    table,
-		Type:     nftables.ChainTypeFilter,
-		Hooknum:  nftables.ChainHookForward,    // use Forward hook to capture packets routed through the system.
-		Priority: nftables.ChainPriorityFilter, // use ChainPriorityFilter which is the default filter chain priority 0
-	}
-	conn.AddChain(chain)
 
 	// Add a rule to send traffic to NFQUEUE
 	rule := &nftables.Rule{
@@ -61,43 +120,48 @@ func addNFTablesRule(ipString string) error {
 			},
 			// Send matched packets to NFQUEUE
 			&expr.Queue{
-				Num:   100, // NFQUEUE number
-				Total: 1,   // Single queue
-				Flag:  expr.QueueFlagBypass,
+				Num:   defaultQueueNum, // NFQUEUE number
+				Total: 1,               // Single queue
+				Flag:  0,               // 0 should block; expr.QueueFlagBypass will bypass if the net filter is not running or if the queue is full
 			},
 		},
 	}
 	conn.AddRule(rule)
-
-	// Flush changes to the kernel
-	if err := conn.Flush(); err != nil {
-		return fmt.Errorf("failed to flush nftables rules: %v", err)
-	}
-
 	return nil
 }
 
-func cleanUpNFTablesTable() error {
+// SendIP4PacketsToDefaultNFQueue adds nftables rules to send packets to the default NFQUEUE.
+func SendIP4PacketsToDefaultNFQueue(ips []string) error {
+	// Empty the default chain.
+	conn.FlushChain(chain)
+	// Add rules for each IP address.
+	for _, ip := range ips {
+		err := addNFTablesRule(ip)
+		if err != nil {
+			return fmt.Errorf("failed to add nftables rule for IP address %q: %v", ip, err)
+		}
+	}
+	// Flush changes to the kernel.
+	if err := conn.Flush(); err != nil {
+		return fmt.Errorf("failed to flush nftables rules: %v", err)
+	}
+	return nil
+}
+
+func CleanAll() error {
 	// Initialize a new nftables connection
 	conn := &nftables.Conn{}
 
 	// Delete the table and all its chains and rules
 	conn.DelTable(&nftables.Table{Name: defaultTableName})
 
-	tables, err := conn.ListTables()
-	if err != nil {
-		return fmt.Errorf("failed to list nft tables: %v", err)
-	}
-
-	err = conn.Flush()
+	err := conn.Flush()
 	if err != nil {
 		return fmt.Errorf("failed to flush nft: %v", err)
 	}
 
-	for _, v := range tables {
-		if v.Name == "" {
-			return fmt.Errorf("nft table %q not deleted", defaultTableName)
-		}
+	if tableExists(defaultTableName) {
+		return fmt.Errorf("nft table %q not deleted", defaultTableName)
 	}
 
 	return nil

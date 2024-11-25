@@ -253,6 +253,8 @@ func main() {
 	// Start a goroutine to periodically resolve the domains.
 	go periodicResolver(ctx, resolveDomains, domains, 5*time.Minute)
 
+	// Set up nft rules to send traffic to nfqueue.
+
 	// Setup nfqueue.
 	nf, err := startNFQueueFilter(ctx, cancel)
 	if err != nil {
