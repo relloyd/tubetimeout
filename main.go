@@ -125,6 +125,7 @@ func parseL2Hdr(a nfqueue.Attribute) {
 }
 
 func parsePacketPayload(a nfqueue.Attribute) (packetIP, error) {
+	// TODO: handle empty payload and return nf -> Accept
 	payload := *a.Payload
 
 	// Ensure we have enough data for an IPv4 header
@@ -175,23 +176,37 @@ func startNFQueueFilter(ctx context.Context, fnCancel context.CancelFunc) (*nfqu
 	fnPacketHandler := func(a nfqueue.Attribute) int {
 		var err error
 		var ipData packetIP
-
 		id := *a.PacketID
+
+		if a.Payload == nil { // if there's no payload then accept the packet.
+			fmt.Println("Payload is nil")
+			err = nf.SetVerdict(id, nfqueue.NfAccept)
+			if err != nil {
+				fmt.Printf("error setting verdict: %v\n", err)
+				return -1 // TODO: find out if this kills the nfqueue
+			}
+			return 0
+		}
+
+		// Decode the packet.
+		// parseL2Hdr(a)
+		// TODO: decide if this is ip4 or ip6 or some other packet type because there are ICMP and all sorts to deal with.
+		// p := gopacket.NewPacket(*a.Payload, layers.LayerTypeIPv4, gopacket.Default)
+		// p.Layer(layers.LayerTypeIPv4)
 
 		// Just print out the id and payload of the nfqueue packet
 		// fmt.Printf("[%d]:\t%v\n", id, *a.L2Hdr)
 		// fmt.Printf("[%d]:\t%v\n", id, *a.Payload)
 
-		parseL2Hdr(a)
+		// Check the hardware address of the packet.
+		// if a.HwAddr != nil {
+		// 	fmt.Printf("HwAddr: %v\n", *a.HwAddr)
+		// }
+
 		ipData, err = parsePacketPayload(a)
 		if err != nil {
 			fmt.Println(err)
 			return -1 // TODO: find out if this kills the nfqueue
-		}
-
-		// Check the hardware address of the packet.
-		if a.HwAddr != nil {
-			fmt.Printf("HwAddr: %v\n", *a.HwAddr)
 		}
 
 		// Check if the packet is for any of the resolved IPs.
@@ -235,7 +250,6 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
 	// Start a goroutine to periodically resolve the domains.
 	go periodicResolver(ctx, resolveDomains, domains, 5*time.Minute)
 
@@ -260,6 +274,7 @@ func main() {
 	case <-sigs:
 		fmt.Println("Signal received, shutting down...")
 		cancel()
+		_ = nf.Close() // kill the context before closing else it will block.
 	}
 
 	return
