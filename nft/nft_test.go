@@ -2,25 +2,22 @@ package nft
 
 import (
 	"testing"
+
+	"github.com/google/nftables"
+	"github.com/stretchr/testify/assert"
 )
 
 // TODO: use a different table name for testing
 // TODO: use setup and teardown functions to create and delete the table
 
 func Test_CleanAll(t *testing.T) {
-	tests := []struct {
-		name    string
-		wantErr bool
-	}{
-		{"Delete default nft table", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := CleanAll(); (err != nil) != tt.wantErr {
-				t.Errorf("CleanAll() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
+	t.Run("delete table", func(t *testing.T) {
+		conn := &nftables.Conn{}
+		table, err := getOrCreateTable(conn, defaultTableName)
+		assert.NoError(t, err, "getOrCreateTable() error = %v", err)
+		err = deleteTable(conn, table.Name)
+		assert.NoError(t, err, "CleanAll() error = %v, wantErr %v", err, tt.wantErr)
+	})
 }
 
 func Test_getOrCreateDefaultTable(t *testing.T) {
@@ -34,7 +31,7 @@ func Test_getOrCreateDefaultTable(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := getOrCreateDefaultTable()
 			if (err != nil) != tt.wantErr {
-				t.Errorf("getOrCreateDefaultTable() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("getOrCreateTable() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			err = conn.Flush()
 			if (err != nil) != tt.wantErr {
