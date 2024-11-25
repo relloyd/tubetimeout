@@ -9,6 +9,15 @@ import (
 // TODO: use a different table name for testing
 // TODO: use setup and teardown functions to create and delete the table
 
+func Test_New(t *testing.T) {
+	nfq, err := NewNFQueue()
+	assert.NoError(t, err, "NewNFQueue() error = %v", err)
+	assert.NotNil(t, nfq, "NewNFQueue() returned nil")
+	assert.NotNil(t, nfq.conn, "NewNFQueue() conn is nil")
+	assert.NotNil(t, nfq.table, "NewNFQueue() table is nil")
+	assert.NotNil(t, nfq.chain, "NewNFQueue() chain is nil")
+}
+
 func Test_SendIP4PacketsToDefaultNFQueue(t *testing.T) {
 	nfq, err := NewNFQueue()
 	assert.NoError(t, err, "NewNFQueue() error = %v", err)
