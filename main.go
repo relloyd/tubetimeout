@@ -16,8 +16,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Register interfaces to receive updated list of IPs periodically.
-	domains.RegisterIPListReceiver(queue.Ips)
+	// Register interfaces to receive updated lists of IPs periodically.
+	domains.RegisterIPListReceivers(queue.Ips, domains.Ips)
 
 	// Start a goroutine to periodically resolve the domains.
 	go domains.PeriodicResolver(ctx)

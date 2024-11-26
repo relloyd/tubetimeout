@@ -7,15 +7,17 @@ import (
 	"net"
 	"os"
 
+	"example.com/youtube-nfqueue/models"
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
+	"golang.org/x/exp/maps"
 )
 
 var (
 	defaultTableName = "crazydeer-table"
 	defaultChainName = "crazydeer-chain"
-	defaultNFQueue   = &NFQueue{tableName: defaultTableName, chainName: defaultChainName, conn: &nftables.Conn{}}
 	defaultQueueNum  = uint16(100)
+
 )
 
 type NFQueue struct {
@@ -24,6 +26,7 @@ type NFQueue struct {
 	conn      *nftables.Conn
 	table     *nftables.Table
 	chain     *nftables.Chain
+	Ips              = &models.IpSet{Ips: make(map[string]struct{}), FnCallBack: Re}
 }
 
 func init() {
@@ -164,9 +167,11 @@ func (q *NFQueue) SendIP4PacketsToDefaultNFQueue(ips []string) error {
 	q.conn.FlushChain(q.chain)
 	// Add rules for each IP address.
 	for _, ip := range ips {
-		err := q.addNFTablesRule(ip)
-		if err != nil {
-			return fmt.Errorf("failed to add nftables rule for IP address %q: %v", ip, err)
+		if ip != "" {
+			err := q.addNFTablesRule(ip)
+			if err != nil {
+				return fmt.Errorf("failed to add nftables rule for IP address %q: %v", ip, err)
+			}
 		}
 	}
 	// Flush changes to the kernel.
@@ -174,6 +179,13 @@ func (q *NFQueue) SendIP4PacketsToDefaultNFQueue(ips []string) error {
 		return fmt.Errorf("failed to flush nftables rules: %v", err)
 	}
 	return nil
+}
+
+func (q *NFQueue) NotifyCallback(ips map[string]struct{}) {
+	err := q.SendIP4PacketsToDefaultNFQueue(maps.Keys(ips))
+	if err != nil {
+		log.Printf("failed to send IP addresses to default NFQUEUE: %v\n", err)
+	}
 }
 
 func (q *NFQueue) Clean() error {

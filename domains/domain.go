@@ -91,8 +91,10 @@ func PeriodicResolver(ctx context.Context) {
 	}
 }
 
-func RegisterIPListReceiver(receiver models.IPListReceiver) {
-	if receiver != nil {
-		registeredIPListReceivers = append(registeredIPListReceivers, receiver)
+func RegisterIPListReceivers(receiver ...models.IPListReceiver) {
+	for _, r := range receiver {
+		if r != nil {
+			registeredIPListReceivers = append(registeredIPListReceivers, r)
+		}
 	}
 }
