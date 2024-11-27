@@ -6,9 +6,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"example.com/youtube-nfqueue/domains"
-	"example.com/youtube-nfqueue/nft"
+	"example.com/youtube-nfqueue/nftables"
 	"example.com/youtube-nfqueue/queue"
 )
 
@@ -26,9 +27,23 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Allow debug connection timeout.
+	tc := time.After(30 * time.Second)
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	fmt.Println("Waiting for debug time or signal...")
+	select {
+	case <-tc:
+		fmt.Println("Debug time is up; continuing...")
+	case <-sigs:
+		fmt.Println("Signal received, continuing...")
+	}
+
+	time.Sleep(1 * time.Second)
+
 	// Set up nft rules to send traffic to nfqueue.
 	// There won't be any rules until IPs are supplied by PeriodicResolver.
-	rules, err := nft.NewNFTRules()
+	rules, err := nftables.NewNFTRules()
 	if err != nil {
 		fmt.Println("failed to setup nft rules:", err)
 		os.Exit(1)
@@ -50,7 +65,7 @@ func main() {
 	go domains.PeriodicResolver(ctx)
 
 	// Capture SIGINT and SIGTERM to gracefully shutdown
-	sigs := make(chan os.Signal, 1)
+	sigs = make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	select {

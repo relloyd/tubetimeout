@@ -20,7 +20,7 @@ type domain string
 var (
 	defaultDomains            = []domain{"www.youtube.com", "youtube.com", "googlevideo.com"}
 	defaultResolver           = resolver(resolveDomains)
-	defaultInterval           = time.Minute * 5
+	defaultInterval           = time.Minute * 1
 	registeredIPListReceivers []IPListReceiver
 	Ips                       = &models.IpSet{Ips: make(map[string]struct{})}
 )
@@ -81,8 +81,9 @@ func notifyIPListReceivers() {
 func PeriodicResolver(ctx context.Context) {
 	ticker := time.NewTicker(defaultInterval) // Update every 5 minutes
 	defer ticker.Stop()
-	// Initial resolve.
+	// Initial resolve & notify.  // TODO: test that notifications happen at startup
 	defaultResolver(defaultDomains)
+	notifyIPListReceivers()
 	// Periodically resolve.
 	for {
 		select {

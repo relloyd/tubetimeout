@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"time"
 
@@ -60,10 +61,11 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 		MaxQueueLen:  0xFF,
 		MaxPacketLen: 0xFFFF,
 		Copymode:     nfqueue.NfQnlCopyPacket,
-		// Flags:        0,
+		Flags:        0,
 		// AfFamily:     0,
 		// ReadTimeout:  0,
 		WriteTimeout: 15 * time.Millisecond,
+		// WriteTimeout: 15 * time.Second,
 		// Logger:       &log.Logger{},
 	}
 
@@ -82,6 +84,8 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 		var err error
 		var ipData packetIP
 		id := *a.PacketID
+
+		log.Printf("Received packet with ID: %d\n", id)
 
 		if a.Payload == nil { // if there's no payload then accept the packet.
 			fmt.Println("Payload is nil")

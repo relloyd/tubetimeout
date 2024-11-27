@@ -1,6 +1,7 @@
-package nft
+package nftables
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -9,6 +10,7 @@ import (
 	"example.com/youtube-nfqueue/models"
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
+	"golang.org/x/exp/maps"
 )
 
 func init() {
@@ -61,6 +63,24 @@ func (q *NFTRules) addNFTablesRule(ipString string) error {
 		return errors.New("invalid IP address")
 	}
 
+	if ip.To4() == nil && ip.To16() == nil { // if the address is not valid...
+		log.Printf("Skipped IP address %q as it is not IPv4 or IPv6\n", ipString)
+		return nil
+	}
+
+	var offset, length uint32
+	var ipBytes []byte
+	if ip.To4() != nil {
+		offset = 16
+		length = 4
+		ipBytes = ip.To4()
+	}
+	if ip.To16() != nil{
+		offset = 24
+		length = 16
+		ipBytes = ip.To16()
+	}
+
 	// Add a rule to send traffic to NFQUEUE
 	rule := &nftables.Rule{
 		Table: q.table,
@@ -70,14 +90,15 @@ func (q *NFTRules) addNFTablesRule(ipString string) error {
 			&expr.Payload{
 				DestRegister: 1,                             // Store the payload in register 1
 				Base:         expr.PayloadBaseNetworkHeader, // Match the network header
-				Offset:       16,                            // Offset for IPv4 destination address
-				Len:          4,                             // Length of an IPv4 address
+				Offset:       offset,
+				Len:          length,
 				// TODO: handle IPv6 in nftables rules
 			},
 			&expr.Cmp{
 				Op:       expr.CmpOpEq,
 				Register: 1,
-				Data:     ip.To4(), // Match the specific IPv4 address
+				Data:     ipBytes,
+
 			},
 			// Send matched packets to NFQUEUE
 			&expr.Queue{
