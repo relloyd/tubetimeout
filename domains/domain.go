@@ -9,17 +9,21 @@ import (
 	"example.com/youtube-nfqueue/models"
 )
 
-var (
-	defaultDomains            = []domain{"www.youtube.com", "youtube.com", "googlevideo.com"}
-	defaultResolver           = resolver(resolveDomains)
-	defaultInterval           = time.Minute * 5
-	registeredIPListReceivers []models.IPListReceiver
-	Ips                       = &models.IpSet{Ips: make(map[string]struct{})}
-)
+type IPListReceiver interface {
+	Notify(newIps map[string]struct{})
+}
 
 type resolver func(d []domain)
 
 type domain string
+
+var (
+	defaultDomains            = []domain{"www.youtube.com", "youtube.com", "googlevideo.com"}
+	defaultResolver           = resolver(resolveDomains)
+	defaultInterval           = time.Minute * 5
+	registeredIPListReceivers []IPListReceiver
+	Ips                       = &models.IpSet{Ips: make(map[string]struct{})}
+)
 
 func resolveOneDomain(domain domain) ([]string, error) {
 	ips, err := net.LookupIP(string(domain))
@@ -91,7 +95,7 @@ func PeriodicResolver(ctx context.Context) {
 	}
 }
 
-func RegisterIPListReceivers(receiver ...models.IPListReceiver) {
+func RegisterIPListReceivers(receiver ...IPListReceiver) {
 	for _, r := range receiver {
 		if r != nil {
 			registeredIPListReceivers = append(registeredIPListReceivers, r)

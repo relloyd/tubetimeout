@@ -4,10 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
-	"os/signal"
-	"sync"
-	"syscall"
 	"time"
 
 	"example.com/youtube-nfqueue/models"
@@ -15,20 +11,143 @@ import (
 	"github.com/mdlayher/netlink"
 )
 
-var (
-	Ips = &models.IpSet{Ips: make(map[string]struct{})}
-)
-
 type packetIP struct {
 	src net.IP
 	dst net.IP
 }
 
-func ipIsResolved(ip net.IP) bool {
-	Ips.Mu.RLock()
-	defer Ips.Mu.RUnlock()
-	_, ok := Ips.Ips[ip.String()]
+type NFQueueFilter struct {
+	Nfq *nfqueue.Nfqueue
+	models.IpSet
+}
+
+// NewNFQueueFilter creates a new nfqueue filtering outbound packets.
+// The returned NFQueueFilter implements the IPListReceiver interface so this stuct can be supplied with a list of
+// IP addresses for which to perform filtering.
+// If the packets are destined for any of the injected Ips then filtering happens based on
+// <LOGIC-TBC>
+func NewNFQueueFilter(ctx context.Context) (*NFQueueFilter, error) {
+	var err error
+	f := &NFQueueFilter{}
+	f.Ips = make(map[string]struct{})
+	f.Nfq, err = f.startNFQueueFilter(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
+// Notify implements the IPListReceiver interface.
+func (f *NFQueueFilter) Notify(newIps map[string]struct{}) {
+	// TODO: don't trust the supplied map is good to just take as we want our own copy.
+	f.Mu.Lock()
+	defer f.Mu.Unlock()
+	f.Ips = newIps
+}
+
+func (f *NFQueueFilter) ipIsResolved(ip net.IP) bool {
+	f.Mu.RLock()
+	defer f.Mu.RUnlock()
+	_, ok := f.Ips[ip.String()]
 	return ok
+}
+
+func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueue, error) {
+	// Set configuration options for nfqueue
+	config := nfqueue.Config{
+		NetNS:        0,
+		NfQueue:      100,
+		MaxQueueLen:  0xFF,
+		MaxPacketLen: 0xFFFF,
+		Copymode:     nfqueue.NfQnlCopyPacket,
+		// Flags:        0,
+		// AfFamily:     0,
+		// ReadTimeout:  0,
+		WriteTimeout: 15 * time.Millisecond,
+		// Logger:       &log.Logger{},
+	}
+
+	// Open a new nfqueue
+	nf, err := nfqueue.Open(&config)
+	if err != nil {
+		return nil, fmt.Errorf("could not open nfqueue socket: %v", err)
+	}
+
+	// Avoid receiving ENOBUFS errors.
+	if err := nf.SetOption(netlink.NoENOBUFS, true); err != nil {
+		return nil, fmt.Errorf("failed to set netlink option %v: %v", netlink.NoENOBUFS, err)
+	}
+
+	fnPacketHandler := func(a nfqueue.Attribute) int {
+		var err error
+		var ipData packetIP
+		id := *a.PacketID
+
+		if a.Payload == nil { // if there's no payload then accept the packet.
+			fmt.Println("Payload is nil")
+			err = nf.SetVerdict(id, nfqueue.NfAccept)
+			if err != nil {
+				fmt.Printf("error setting verdict: %v\n", err)
+				return -1 // TODO: find out if this kills the nfqueue
+			}
+			return 0
+		}
+
+		// TRYING NEW STUFF:
+		// parseL2Hdr(a)
+		// TODO: decide if this is ip4 or ip6 or some other packet type because there are ICMP and all sorts to deal with.
+		// p := gopacket.NewPacket(*a.Payload, layers.LayerTypeIPv4, gopacket.Default)
+		// p.Layer(layers.LayerTypeIPv4)
+
+		// Just print out the id and payload of the nfqueue packet
+		// fmt.Printf("[%d]:\t%v\n", id, *a.L2Hdr)
+		// fmt.Printf("[%d]:\t%v\n", id, *a.Payload)
+
+		// Check the hardware address of the packet.
+		// if a.HwAddr != nil {
+		// 	fmt.Printf("HwAddr: %v\n", *a.HwAddr)
+		// }
+
+		ipData, err = parsePacketPayload(a)
+		if err != nil {
+			fmt.Println(err)
+			return -1 // TODO: find out if this kills the nfqueue
+		}
+
+		// Check if the packet is for any of the resolved IPs.
+		if f.ipIsResolved(ipData.dst) {
+			fmt.Println("Dropping packet to resolved IP:", ipData.dst)
+			err = nf.SetVerdict(id, nfqueue.NfDrop)
+		} else {
+			fmt.Println("Accepting packet to:", ipData.dst)
+			err = nf.SetVerdict(id, nfqueue.NfAccept)
+		}
+
+		if err != nil {
+			fmt.Printf("error setting verdict: %v\n", err)
+			return -1 // TODO: find out if this kills the nfqueue
+		}
+
+		return 0
+	}
+
+	fnErrorHandler := func(err error) int {
+		if err != nil {
+			fmt.Printf("error handler caught: %v\n", err)
+			// TODO: decide how error handler should return 0 or -1 or cancel everything.
+			// fnCancel() // cancel the context to stop the nfqueue
+			// return -1
+		}
+
+		return -1 // to stop receiving messages return something different than 0.
+	}
+
+	err = nf.RegisterWithErrorFunc(ctx, fnPacketHandler, fnErrorHandler)
+	if err != nil {
+		return nil, fmt.Errorf("error registering nfqueue callback: %v", err)
+	}
+
+	return nf, nil
 }
 
 func parseL2Hdr(a nfqueue.Attribute) {
@@ -83,101 +202,4 @@ func parsePacketPayload(a nfqueue.Attribute) (packetIP, error) {
 	// Destination IP (bytes 16-19 in IPv4 header)
 	// destIP := net.IP(payload[16:20])
 	// fmt.Printf("Destination IP: %s\n", destIP)
-}
-
-func StartNFQueueFilter(ctx context.Context, fnCancel context.CancelFunc) (*nfqueue.Nfqueue, error) {
-	// Set configuration options for nfqueue
-	config := nfqueue.Config{
-		NetNS:        0,
-		NfQueue:      100,
-		MaxQueueLen:  0xFF,
-		MaxPacketLen: 0xFFFF,
-		Copymode:     nfqueue.NfQnlCopyPacket,
-		// Flags:        0,
-		// AfFamily:     0,
-		// ReadTimeout:  0,
-		WriteTimeout: 15 * time.Millisecond,
-		// Logger:       &log.Logger{},
-	}
-
-	// Open a new nfqueue
-	nf, err := nfqueue.Open(&config)
-	if err != nil {
-		return nil, fmt.Errorf("could not open nfqueue socket: %v", err)
-	}
-
-	// Avoid receiving ENOBUFS errors.
-	if err := nf.SetOption(netlink.NoENOBUFS, true); err != nil {
-		return nil, fmt.Errorf("failed to set netlink option %v: %v", netlink.NoENOBUFS, err)
-	}
-
-	fnPacketHandler := func(a nfqueue.Attribute) int {
-		var err error
-		var ipData packetIP
-		id := *a.PacketID
-
-		if a.Payload == nil { // if there's no payload then accept the packet.
-			fmt.Println("Payload is nil")
-			err = nf.SetVerdict(id, nfqueue.NfAccept)
-			if err != nil {
-				fmt.Printf("error setting verdict: %v\n", err)
-				return -1 // TODO: find out if this kills the nfqueue
-			}
-			return 0
-		}
-
-		// Decode the packet.
-		// parseL2Hdr(a)
-		// TODO: decide if this is ip4 or ip6 or some other packet type because there are ICMP and all sorts to deal with.
-		// p := gopacket.NewPacket(*a.Payload, layers.LayerTypeIPv4, gopacket.Default)
-		// p.Layer(layers.LayerTypeIPv4)
-
-		// Just print out the id and payload of the nfqueue packet
-		// fmt.Printf("[%d]:\t%v\n", id, *a.L2Hdr)
-		// fmt.Printf("[%d]:\t%v\n", id, *a.Payload)
-
-		// Check the hardware address of the packet.
-		// if a.HwAddr != nil {
-		// 	fmt.Printf("HwAddr: %v\n", *a.HwAddr)
-		// }
-
-		ipData, err = parsePacketPayload(a)
-		if err != nil {
-			fmt.Println(err)
-			return -1 // TODO: find out if this kills the nfqueue
-		}
-
-		// Check if the packet is for any of the resolved IPs.
-		if ipIsResolved(ipData.dst) {
-			fmt.Println("Dropping packet to resolved IP:", ipData.dst)
-			err = nf.SetVerdict(id, nfqueue.NfDrop)
-		} else {
-			fmt.Println("Accepting packet to:", ipData.dst)
-			err = nf.SetVerdict(id, nfqueue.NfAccept)
-		}
-
-		if err != nil {
-			fmt.Printf("error setting verdict: %v\n", err)
-			return -1 // TODO: find out if this kills the nfqueue
-		}
-
-		return 0
-	}
-
-	fnErrorHandler := func(err error) int {
-		if err != nil {
-			fmt.Printf("error handler caught: %v\n", err)
-			// fnCancel() // cancel the context to stop the nfqueue
-			// return -1
-		}
-
-		return -1 // to stop receiving messages return something different than 0.
-	}
-
-	err = nf.RegisterWithErrorFunc(ctx, fnPacketHandler, fnErrorHandler)
-	if err != nil {
-		return nil, fmt.Errorf("error registering callback: %v", err)
-	}
-
-	return nf, nil
 }

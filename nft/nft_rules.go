@@ -1,7 +1,6 @@
 package nft
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -10,29 +9,124 @@ import (
 	"example.com/youtube-nfqueue/models"
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
-	"golang.org/x/exp/maps"
 )
-
-var (
-	defaultTableName = "crazydeer-table"
-	defaultChainName = "crazydeer-chain"
-	defaultQueueNum  = uint16(100)
-
-)
-
-type NFQueue struct {
-	tableName string
-	chainName string
-	conn      *nftables.Conn
-	table     *nftables.Table
-	chain     *nftables.Chain
-	Ips              = &models.IpSet{Ips: make(map[string]struct{}), FnCallBack: Re}
-}
 
 func init() {
 	if os.Geteuid() != 0 {
 		log.Fatal("You must be root to run this program.")
 	}
+}
+
+var (
+	defaultTableName = "crazydeer-table"
+	defaultChainName = "crazydeer-chain"
+	defaultQueueNum  = uint16(100)
+)
+
+type NFTRules struct {
+	tableName string
+	chainName string
+	conn      *nftables.Conn
+	table     *nftables.Table
+	chain     *nftables.Chain
+	models.IpSet
+}
+
+func NewNFTRules() (*NFTRules, error) {
+	var err error
+	nfq := &NFTRules{
+		conn:      &nftables.Conn{},
+		tableName: defaultTableName,
+		chainName: defaultChainName,
+	}
+	nfq.table, err = getOrCreateTable(nfq.conn, nfq.tableName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create nftables table: %v", err)
+	}
+	nfq.chain, err = getOrCreateChain(nfq.conn, nfq.table, nfq.chainName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create nftables chain: %v", err)
+	}
+	nfq.Ips = make(map[string]struct{})
+	return nfq, nil
+}
+
+// addNFTablesRule add a rule to send traffic to the NFQUEUE for this app.
+// The caller should flush the changes to the kernel after.
+func (q *NFTRules) addNFTablesRule(ipString string) error {
+	// # iptables -I OUTPUT -p icmp -j NFQUEUE --queue-num 100
+	// Example YouTube IP address
+	ip := net.ParseIP(ipString)
+	if ip == nil {
+		return errors.New("invalid IP address")
+	}
+
+	// Add a rule to send traffic to NFQUEUE
+	rule := &nftables.Rule{
+		Table: q.table,
+		Chain: q.chain,
+		Exprs: []expr.Any{
+			// Match destination IP address
+			&expr.Payload{
+				DestRegister: 1,                             // Store the payload in register 1
+				Base:         expr.PayloadBaseNetworkHeader, // Match the network header
+				Offset:       16,                            // Offset for IPv4 destination address
+				Len:          4,                             // Length of an IPv4 address
+				// TODO: handle IPv6 in nftables rules
+			},
+			&expr.Cmp{
+				Op:       expr.CmpOpEq,
+				Register: 1,
+				Data:     ip.To4(), // Match the specific IPv4 address
+			},
+			// Send matched packets to NFQUEUE
+			&expr.Queue{
+				Num:   defaultQueueNum, // NFQUEUE number
+				Total: 1,               // Single queue
+				Flag:  0,               // 0 should block; expr.QueueFlagBypass will bypass if the net filter is not running or if the queue is full
+			},
+		},
+	}
+	q.conn.AddRule(rule)
+	return nil
+}
+
+// sendIP4PacketsToDefaultNFQueue adds nftables rules to send packets to the default NFQUEUE.
+func (q *NFTRules) sendIP4PacketsToDefaultNFQueue(ips []string) error {
+	// Empty the default chain.
+	q.conn.FlushChain(q.chain)
+	// Add rules for each IP address.
+	for _, ip := range ips {
+		if ip != "" {
+			err := q.addNFTablesRule(ip)
+			if err != nil {
+				return fmt.Errorf("failed to add nftables rule for IP address %q: %v", ip, err)
+			}
+		}
+	}
+	// Flush changes to the kernel.
+	if err := q.conn.Flush(); err != nil {
+		return fmt.Errorf("failed to flush nftables rules: %v", err)
+	}
+	return nil
+}
+
+// Notify is a callback that saves the supplied IP addresses and updates the nft rules using them.
+func (q *NFTRules) Notify(newIps map[string]struct{}) {
+	// TODO: don't trust the supplied map is good to just take as we want our own copy.
+	q.Mu.Lock()
+	defer q.Mu.Unlock()
+	q.Ips = newIps
+
+	err := q.sendIP4PacketsToDefaultNFQueue(maps.Keys(newIps))
+	if err != nil {
+		log.Printf("failed to send IP addresses to default NFQUEUE: %v\n", err)
+	}
+}
+
+// Clean deletes the nftables table and therefore all its chains and rules.
+func (q *NFTRules) Clean() error {
+	return deleteTable(q.conn, q.table.Name)
 }
 
 func tableExists(conn *nftables.Conn, tableName string) bool {
@@ -101,93 +195,4 @@ func deleteTable(conn *nftables.Conn, tableName string) error {
 		return fmt.Errorf("nft table %q not deleted", defaultTableName)
 	}
 	return nil
-}
-
-func NewNFQueue() (*NFQueue, error) {
-	var err error
-	nfq := &NFQueue{
-		conn:      &nftables.Conn{},
-		tableName: defaultTableName,
-		chainName: defaultChainName,
-	}
-	nfq.table, err = getOrCreateTable(nfq.conn, nfq.tableName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create nftables table: %v", err)
-	}
-	nfq.chain, err = getOrCreateChain(nfq.conn, nfq.table, nfq.chainName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create nftables chain: %v", err)
-	}
-	return nfq, nil
-}
-
-// addNFTablesRule add a rule to send traffic to the NFQUEUE for this app.
-// The caller should flush the changes to the kernel after.
-func (q *NFQueue) addNFTablesRule(ipString string) error {
-	// # iptables -I OUTPUT -p icmp -j NFQUEUE --queue-num 100
-	// Example YouTube IP address
-	ip := net.ParseIP(ipString)
-	if ip == nil {
-		return errors.New("invalid IP address")
-	}
-
-	// Add a rule to send traffic to NFQUEUE
-	rule := &nftables.Rule{
-		Table: q.table,
-		Chain: q.chain,
-		Exprs: []expr.Any{
-			// Match destination IP address
-			&expr.Payload{
-				DestRegister: 1,                             // Store the payload in register 1
-				Base:         expr.PayloadBaseNetworkHeader, // Match the network header
-				Offset:       16,                            // Offset for IPv4 destination address
-				Len:          4,                             // Length of an IPv4 address
-				// TODO: handle IPv6 in nftables rules
-			},
-			&expr.Cmp{
-				Op:       expr.CmpOpEq,
-				Register: 1,
-				Data:     ip.To4(), // Match the specific IPv4 address
-			},
-			// Send matched packets to NFQUEUE
-			&expr.Queue{
-				Num:   defaultQueueNum, // NFQUEUE number
-				Total: 1,               // Single queue
-				Flag:  0,               // 0 should block; expr.QueueFlagBypass will bypass if the net filter is not running or if the queue is full
-			},
-		},
-	}
-	q.conn.AddRule(rule)
-	return nil
-}
-
-// SendIP4PacketsToDefaultNFQueue adds nftables rules to send packets to the default NFQUEUE.
-func (q *NFQueue) SendIP4PacketsToDefaultNFQueue(ips []string) error {
-	// Empty the default chain.
-	q.conn.FlushChain(q.chain)
-	// Add rules for each IP address.
-	for _, ip := range ips {
-		if ip != "" {
-			err := q.addNFTablesRule(ip)
-			if err != nil {
-				return fmt.Errorf("failed to add nftables rule for IP address %q: %v", ip, err)
-			}
-		}
-	}
-	// Flush changes to the kernel.
-	if err := q.conn.Flush(); err != nil {
-		return fmt.Errorf("failed to flush nftables rules: %v", err)
-	}
-	return nil
-}
-
-func (q *NFQueue) NotifyCallback(ips map[string]struct{}) {
-	err := q.SendIP4PacketsToDefaultNFQueue(maps.Keys(ips))
-	if err != nil {
-		log.Printf("failed to send IP addresses to default NFQUEUE: %v\n", err)
-	}
-}
-
-func (q *NFQueue) Clean() error {
-	return deleteTable(q.conn, q.table.Name)
 }
