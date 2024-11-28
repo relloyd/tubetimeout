@@ -6,10 +6,10 @@ build:
 	go build -buildvcs=false -gcflags='all=-N -l' -o $(APP) .
 
 sync:
-	rsync -auv --delete-after --exclude=.git ./ root@raspberrypi.local:nfqueue/
+	rsync -auv --delete-after --exclude=.git ./ root@raspberrypi:nfqueue/
 
 debug: build
-	dlv exec --headless --continue --accept-multiclient --listen=:56268 --api-version=2 $(APP)
+	DEBUG_ENABLED=true dlv exec --headless --continue --accept-multiclient --listen=:56268 --api-version=2 $(APP)
 #	dlv exec --accept-multiclient --listen=:56268 --api-version=2 $(APP)
 
 docker:

@@ -71,14 +71,13 @@ func (q *NFTRules) addNFTablesRule(ipString string) error {
 	var offset, length uint32
 	var ipBytes []byte
 
-
-
 	if ip.To4() != nil {
 		offset = 16
 		length = 4
 		ipBytes = ip.To4()
 	} else {
 		log.Printf("Skipped bad IP address (which may be IPv6) %q\n", ipString)
+		return nil
 		// if ip.To16() != nil { // skip if IPv6
 		// 	log.Printf("Skipped IPv6 address %q\n", ipString)
 		// 	return nil
@@ -132,6 +131,7 @@ func (q *NFTRules) addNFTablesRule(ipString string) error {
 }
 
 // sendIP4PacketsToDefaultNFQueue adds nftables rules to send packets to the default NFQUEUE.
+// TODO: do rule replacement atomically
 func (q *NFTRules) sendIP4PacketsToDefaultNFQueue(ips []string) error {
 	// Empty the default chain.
 	q.conn.FlushChain(q.chain)

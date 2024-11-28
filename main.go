@@ -11,6 +11,7 @@ import (
 	"example.com/youtube-nfqueue/domains"
 	"example.com/youtube-nfqueue/nftables"
 	"example.com/youtube-nfqueue/queue"
+	"github.com/kelseyhightower/envconfig"
 )
 
 // TODO:
@@ -23,23 +24,37 @@ import (
 // TODO: implement another filter for return/incoming traffic from YouTube
 //   do rate limiting
 
+type Config struct {
+	DebugEnabled bool          `envconfig:"DEBUG_ENABLED" default:"false"`
+	DebugTime    time.Duration `envconfig:"DEBUG_TIME_SECONDS" default:"30s"`
+}
+
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Allow debug connection timeout.
-	tc := time.After(30 * time.Second)
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	fmt.Println("Waiting for debug time or signal...")
-	select {
-	case <-tc:
-		fmt.Println("Debug time is up; continuing...")
-	case <-sigs:
-		fmt.Println("Signal received, continuing...")
+	// Load config from the environment.
+	var cfg Config
+	err := envconfig.Process("", &cfg)
+	if err != nil {
+		fmt.Println("failed to process env vars:", err)
+		os.Exit(1)
 	}
 
-	time.Sleep(1 * time.Second)
+	if cfg.DebugEnabled {
+		// Allow debug connection timeout.
+		tc := time.After(cfg.DebugTime)
+		sigs := make(chan os.Signal, 1)
+		signal.Notify(sigs, syscall.SIGINT)
+		fmt.Println("Waiting for debug time or CTRL-C signal...")
+		select {
+		case <-tc:
+			fmt.Println("Debug time is up; continuing...")
+		case <-sigs:
+			fmt.Println("Signal received, continuing...")
+		}
+		time.Sleep(1 * time.Second) // allow more time for debugger/dlv to attach 🤷‍♂️
+	}
 
 	// Set up nft rules to send traffic to nfqueue.
 	// There won't be any rules until IPs are supplied by PeriodicResolver.
@@ -67,7 +82,7 @@ func main() {
 	go domains.PeriodicResolver(ctx)
 
 	// Capture SIGINT and SIGTERM to gracefully shutdown
-	sigs = make(chan os.Signal, 1)
+	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	select {
