@@ -59,6 +59,8 @@ func main() {
 	fmt.Println("nfq filter setup.")
 
 	// Register interfaces to receive updated IPs periodically.
+	// rules.Notify(map[string]struct{}{"142.250.179.238": {}})
+	// nfq.Notify(map[string]struct{}{"142.250.179.238": {}})
 	domains.RegisterIPListReceivers(rules, nfq)
 
 	// Start a goroutine to periodically resolve the domains.

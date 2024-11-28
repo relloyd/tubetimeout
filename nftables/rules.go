@@ -70,15 +70,22 @@ func (q *NFTRules) addNFTablesRule(ipString string) error {
 
 	var offset, length uint32
 	var ipBytes []byte
+
+
+
 	if ip.To4() != nil {
 		offset = 16
 		length = 4
 		ipBytes = ip.To4()
-	}
-	if ip.To16() != nil{
-		offset = 24
-		length = 16
-		ipBytes = ip.To16()
+	} else {
+		log.Printf("Skipped bad IP address (which may be IPv6) %q\n", ipString)
+		// if ip.To16() != nil { // skip if IPv6
+		// 	log.Printf("Skipped IPv6 address %q\n", ipString)
+		// 	return nil
+			// offset = 24
+			// length = 16
+			// ipBytes = ip.To16()
+		// }
 	}
 
 	// Add a rule to send traffic to NFQUEUE
@@ -98,13 +105,25 @@ func (q *NFTRules) addNFTablesRule(ipString string) error {
 				Op:       expr.CmpOpEq,
 				Register: 1,
 				Data:     ipBytes,
-
 			},
-			// Send matched packets to NFQUEUE
+			// TODO: get TCP port filtering working for 80 and 443
+			// &expr.Payload{
+			// 	DestRegister: 2,
+			// 	Base:         expr.PayloadBaseNetworkHeader,
+			// 	Offset:       9, // Offset for protocol field in IPv4 header  // TODO: what is the offset for IPv6?
+			// 	Len:          1, // Length of protocol field
+			// },
+			// // Compare the extracted protocol (in register 2) with TCP
+			// &expr.Cmp{
+			// 	Op:       expr.CmpOpEq,
+			// 	Register: 2,         // Compare value in register 2
+			// 	Data:     []byte{6}, // TCP protocol number; see also gopacket/layers.IPProtocolTCP
+			// },
+			// // Send matched packets to NFQUEUE
 			&expr.Queue{
 				Num:   defaultQueueNum, // NFQUEUE number
 				Total: 1,               // Single queue
-				Flag:  0,               // 0 should block; expr.QueueFlagBypass will bypass if the net filter is not running or if the queue is full
+				Flag:  0,               // 0 = block; use expr.QueueFlagBypass (1) to bypass if the net filter is not running or if the queue is full
 			},
 		},
 	}
@@ -179,7 +198,7 @@ func chainExists(conn *nftables.Conn, chainName string) bool {
 func getOrCreateTable(conn *nftables.Conn, tableName string) (*nftables.Table, error) {
 	var err error
 	table := &nftables.Table{
-		Family: nftables.TableFamilyINet,
+		Family: nftables.TableFamilyIPv4, // TODO: work out if we can use family inet instead for both ip4 and ip16 addresses
 		Name:   tableName,
 	}
 	if !tableExists(conn, tableName) { // TODO: decide if we want to delete/replace the table if it exists already
