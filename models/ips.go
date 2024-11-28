@@ -4,7 +4,11 @@ import (
 	"sync"
 )
 
+type Domain string
+type IP string
+type MapIpDomain map[IP]Domain
+
 type IpSet struct {
-	Ips map[string]struct{}
+	Ips MapIpDomain
 	Mu  sync.RWMutex
 }

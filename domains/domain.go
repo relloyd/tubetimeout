@@ -10,22 +10,25 @@ import (
 )
 
 type IPListReceiver interface {
-	Notify(newIps map[string]struct{})
+	Notify(newIps models.MapIpDomain)
 }
 
-type resolver func(d []domain)
+type resolver func(d []models.Domain)
 
-type domain string
+type ipDomain struct {
+	ip     models.IP
+	domain models.Domain
+}
 
 var (
-	defaultDomains            = []domain{"www.youtube.com", "youtube.com", "googlevideo.com"}
+	defaultDomains            = []models.Domain{"www.youtube.com", "youtube.com", "googlevideo.com"}
 	defaultResolver           = resolver(resolveDomains)
 	defaultInterval           = time.Minute * 1
 	registeredIPListReceivers []IPListReceiver
-	Ips                       = &models.IpSet{Ips: make(map[string]struct{})}
+	Ips                       = &models.IpSet{Ips: make(models.MapIpDomain)}
 )
 
-func resolveOneDomain(domain domain) ([]string, error) {
+func resolveOneDomain(domain models.Domain) ([]string, error) {
 	ips, err := net.LookupIP(string(domain))
 	if err != nil {
 		return nil, err
@@ -37,8 +40,8 @@ func resolveOneDomain(domain domain) ([]string, error) {
 	return ipStrings, nil
 }
 
-func resolveDomains(domains []domain) {
-	var allIPs []string
+func resolveDomains(domains []models.Domain) {
+	var allIPs []ipDomain
 
 	for _, domain := range domains {
 		ips, err := resolveOneDomain(domain)
@@ -46,27 +49,28 @@ func resolveDomains(domains []domain) {
 			fmt.Printf("Failed to resolve %s: %v\n", domain, err)
 			continue
 		}
-		allIPs = append(allIPs, ips...)
+		for _, ip := range ips {
+			fmt.Printf("Resolved %s to %s\n", domain, ip)
+			allIPs = append(allIPs, ipDomain{ip: models.IP(ip), domain: domain})
+		}
 	}
 
 	// Remove duplicates
-	newIpSet := make(map[string]struct{})
+	newIpSet := make(map[models.IP]models.Domain)
 	for _, ip := range allIPs {
-		newIpSet[ip] = struct{}{}
+		newIpSet[ip.ip] = ip.domain
 	}
 
 	// Save them all.
 	Ips.Mu.Lock()
 	defer Ips.Mu.Unlock()
 	Ips.Ips = newIpSet
-
-	fmt.Println("Resolved IPs:", newIpSet)
 }
 
 // notifyIPListReceivers duplicates the cachedIPs map per receiver and sends it.
 func notifyIPListReceivers() {
 	for _, receiver := range registeredIPListReceivers {
-		newIps := make(map[string]struct{})
+		newIps := make(models.MapIpDomain)
 		Ips.Mu.RLock()
 		for k, v := range Ips.Ips {
 			newIps[k] = v

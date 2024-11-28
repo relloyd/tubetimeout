@@ -30,7 +30,7 @@ type NFQueueFilter struct {
 func NewNFQueueFilter(ctx context.Context) (*NFQueueFilter, error) {
 	var err error
 	f := &NFQueueFilter{}
-	f.Ips = make(map[string]struct{})
+	f.Ips = make(models.MapIpDomain)
 	f.Nfq, err = f.startNFQueueFilter(ctx)
 	if err != nil {
 		return nil, err
@@ -39,18 +39,18 @@ func NewNFQueueFilter(ctx context.Context) (*NFQueueFilter, error) {
 }
 
 // Notify implements the IPListReceiver interface.
-func (f *NFQueueFilter) Notify(newIps map[string]struct{}) {
+func (f *NFQueueFilter) Notify(newIps models.MapIpDomain) {
 	// TODO: don't trust the supplied map is good to just take as we want our own copy.
 	f.Mu.Lock()
 	defer f.Mu.Unlock()
 	f.Ips = newIps
 }
 
-func (f *NFQueueFilter) ipIsResolved(ip net.IP) bool {
+func (f *NFQueueFilter) ipIsKnown(ip net.IP) (models.Domain, bool) {
 	f.Mu.RLock()
 	defer f.Mu.RUnlock()
-	_, ok := f.Ips[ip.String()]
-	return ok
+	d, ok := f.Ips[models.IP(ip.String())]
+	return d, ok
 }
 
 func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueue, error) {
@@ -119,8 +119,9 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 		}
 
 		// Check if the packet is for any of the resolved IPs.
-		if f.ipIsResolved(ipData.dst) {
-			fmt.Println("Dropping packet to resolved IP:", ipData.dst)
+		d, ok := f.ipIsKnown(ipData.dst)
+		if ok {
+			log.Printf("Dropping packet to resolved IP %q domain %q", ipData.dst, d)
 			err = nf.SetVerdict(id, nfqueue.NfDrop)
 		} else {
 			fmt.Println("Accepting packet to:", ipData.dst)

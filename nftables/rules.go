@@ -10,7 +10,6 @@ import (
 	"example.com/youtube-nfqueue/models"
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
-	"golang.org/x/exp/maps"
 )
 
 func init() {
@@ -49,22 +48,22 @@ func NewNFTRules() (*NFTRules, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create nftables chain: %v", err)
 	}
-	nfq.Ips = make(map[string]struct{})
+	nfq.Ips = make(models.MapIpDomain)
 	return nfq, nil
 }
 
 // addNFTablesRule add a rule to send traffic to the NFQUEUE for this app.
 // The caller should flush the changes to the kernel after.
-func (q *NFTRules) addNFTablesRule(ipString string) error {
+func (q *NFTRules) addNFTablesRule(dAddr models.IP) error {
 	// # iptables -I OUTPUT -p icmp -j NFQUEUE --queue-num 100
 	// Example YouTube IP address
-	ip := net.ParseIP(ipString)
+	ip := net.ParseIP(string(dAddr))
 	if ip == nil {
 		return errors.New("invalid IP address")
 	}
 
 	if ip.To4() == nil && ip.To16() == nil { // if the address is not valid...
-		log.Printf("Skipped IP address %q as it is not IPv4 or IPv6\n", ipString)
+		log.Printf("Skipped IP address %q as it is not IPv4 or IPv6\n", dAddr)
 		return nil
 	}
 
@@ -76,7 +75,7 @@ func (q *NFTRules) addNFTablesRule(ipString string) error {
 		length = 4
 		ipBytes = ip.To4()
 	} else {
-		log.Printf("Skipped bad IP address (which may be IPv6) %q\n", ipString)
+		log.Printf("Skipped bad IP address (which may be IPv6) %q\n", dAddr)
 		return nil
 		// if ip.To16() != nil { // skip if IPv6
 		// 	log.Printf("Skipped IPv6 address %q\n", ipString)
@@ -132,7 +131,7 @@ func (q *NFTRules) addNFTablesRule(ipString string) error {
 
 // sendIP4PacketsToDefaultNFQueue adds nftables rules to send packets to the default NFQUEUE.
 // TODO: do rule replacement atomically
-func (q *NFTRules) sendIP4PacketsToDefaultNFQueue(ips []string) error {
+func (q *NFTRules) sendIP4PacketsToDefaultNFQueue(ips []models.IP) error {
 	// Empty the default chain.
 	q.conn.FlushChain(q.chain)
 	// Add rules for each IP address.
@@ -152,13 +151,18 @@ func (q *NFTRules) sendIP4PacketsToDefaultNFQueue(ips []string) error {
 }
 
 // Notify is a callback that saves the supplied IP addresses and updates the nft rules using them.
-func (q *NFTRules) Notify(newIps map[string]struct{}) {
+func (q *NFTRules) Notify(newIps models.MapIpDomain) {
 	// TODO: don't trust the supplied map is good to just take as we want our own copy.
 	q.Mu.Lock()
 	defer q.Mu.Unlock()
 	q.Ips = newIps
 
-	err := q.sendIP4PacketsToDefaultNFQueue(maps.Keys(newIps))
+	var newKeys []models.IP
+	for k := range newIps {
+		newKeys = append(newKeys, k)
+	}
+
+	err := q.sendIP4PacketsToDefaultNFQueue(newKeys)
 	if err != nil {
 		log.Printf("failed to send IP addresses to default NFQUEUE: %v\n", err)
 	}
