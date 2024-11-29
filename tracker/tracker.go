@@ -83,9 +83,9 @@ func (t *Tracker) HasExceededThreshold(deviceID string) bool {
 }
 
 // getIndex calculates the index in the slice for the current time.
-func (t *Tracker) getIndex(now time.Time) int {
-	elapsed := now.Sub(now.Truncate(t.granularity))
-	return int(elapsed/t.granularity) % t.sampleSize
+func (t *Tracker) getIndex(now time.Time, bufferStart time.Time) int {
+	elapsed := int(now.Sub(bufferStart) / t.granularity)
+	return (elapsed%t.sampleSize + t.sampleSize) % t.sampleSize // Ensure positive modulo.
 }
 
 // syncWindow ensures the slice is synchronized with the current time.
