@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"example.com/youtube-nfqueue/models"
+	"example.com/youtube-nfqueue/tracker"
 	nfqueue "github.com/florianl/go-nfqueue"
 	"github.com/mdlayher/netlink"
 )
@@ -19,6 +20,7 @@ type packetIP struct {
 
 type NFQueueFilter struct {
 	Nfq *nfqueue.Nfqueue
+	t  *tracker.Tracker
 	models.IpSet
 }
 
@@ -27,11 +29,12 @@ type NFQueueFilter struct {
 // IP addresses for which to perform filtering.
 // If the packets are destined for any of the injected Ips then filtering happens based on
 // <LOGIC-TBC>
-func NewNFQueueFilter(ctx context.Context) (*NFQueueFilter, error) {
+func NewNFQueueFilter(ctx context.Context, t *tracker.Tracker) (*NFQueueFilter, error) {
 	var err error
 	f := &NFQueueFilter{}
 	f.Ips = make(models.MapIpDomain)
 	f.Nfq, err = f.startNFQueueFilter(ctx)
+	f.t = t
 	if err != nil {
 		return nil, err
 	}
@@ -97,22 +100,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 			return 0
 		}
 
-		// TRYING NEW STUFF:
-		// parseL2Hdr(a)
-		// TODO: decide if this is ip4 or ip6 or some other packet type because there are ICMP and all sorts to deal with.
-		// p := gopacket.NewPacket(*a.Payload, layers.LayerTypeIPv4, gopacket.Default)
-		// p.Layer(layers.LayerTypeIPv4)
-
-		// Just print out the id and payload of the nfqueue packet
-		// fmt.Printf("[%d]:\t%v\n", id, *a.L2Hdr)
-		// fmt.Printf("[%d]:\t%v\n", id, *a.Payload)
-
-		// Check the hardware address of the packet.
-		// if a.HwAddr != nil {
-		// 	fmt.Printf("HwAddr: %v\n", *a.HwAddr)
-		// }
-
-		ipData, err = parsePacketPayload(a)
+		ipData, err = getPacketIPs(a)
 		if err != nil {
 			fmt.Println(err)
 			return -1 // TODO: find out if this kills the nfqueue
@@ -120,11 +108,18 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 
 		// Check if the packet is for any of the resolved IPs.
 		d, ok := f.ipIsKnown(ipData.dst)
-		if ok {
-			log.Printf("Dropping packet to resolved IP %q domain %q", ipData.dst, d)
-			err = nf.SetVerdict(id, nfqueue.NfDrop)
+		if ok { // if the packet destination IP address is known...
+			// Remember that we saw it.
+			f.t.AddSample(ipData.dst.String())
+			if f.t.HasExceededThreshold(ipData.dst.String()) {
+				log.Printf("Dropping packet to %v (%v) threshold breached", d, ipData.dst)
+				err = nf.SetVerdict(id, nfqueue.NfDrop)
+			} else {
+				fmt.Println("Accepting packet within threshold to known destination:", ipData.dst)
+				err = nf.SetVerdict(id, nfqueue.NfAccept)
+			}
 		} else {
-			fmt.Println("Accepting packet to:", ipData.dst)
+			fmt.Println("Accepting packet to unregistered destination:", ipData.dst)
 			err = nf.SetVerdict(id, nfqueue.NfAccept)
 		}
 
@@ -186,12 +181,14 @@ func parseL2Hdr(a nfqueue.Attribute) {
 	}
 }
 
-func parsePacketPayload(a nfqueue.Attribute) (packetIP, error) {
+// Source IP (bytes 12-15 in IPv4 header)
+// Destination IP (bytes 16-19 in IPv4 header)
+// getPacketIPs extracts the source and destination IP addresses from the packet payload.
+func getPacketIPs(a nfqueue.Attribute) (packetIP, error) {
 	// TODO: handle empty payload and return nf -> Accept
 	payload := *a.Payload
 
-	// Ensure we have enough data for an IPv4 header
-	if len(payload) < 20 {
+	if len(payload) < 20 { // if the payload is too short for ipv4 header...
 		return packetIP{}, fmt.Errorf("payload too short for IPv4 header")
 	}
 
@@ -199,12 +196,4 @@ func parsePacketPayload(a nfqueue.Attribute) (packetIP, error) {
 		src: payload[12:16],
 		dst: payload[16:20],
 	}, nil
-
-	// Source IP (bytes 12-15 in IPv4 header)
-	// srcIP := net.IP(payload[12:16])
-	// fmt.Printf("Source IP: %s; ", srcIP)
-
-	// Destination IP (bytes 16-19 in IPv4 header)
-	// destIP := net.IP(payload[16:20])
-	// fmt.Printf("Destination IP: %s\n", destIP)
 }

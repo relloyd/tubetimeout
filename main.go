@@ -11,6 +11,7 @@ import (
 	"example.com/youtube-nfqueue/domains"
 	"example.com/youtube-nfqueue/nftables"
 	"example.com/youtube-nfqueue/queue"
+	"example.com/youtube-nfqueue/tracker"
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -65,8 +66,11 @@ func main() {
 	}
 	fmt.Println("nft rules setup.")
 
+	// Create a tracker.
+	t := tracker.NewTracker(10*time.Minute, 2*time.Minute, 1*time.Minute)
+
 	// Create our NFQueue to listen for packets in user space.
-	nfq, err := queue.NewNFQueueFilter(ctx)
+	nfq, err := queue.NewNFQueueFilter(ctx, t)
 	if err != nil {
 		fmt.Println("failed to setup nfqueue filter:", err)
 		os.Exit(1)

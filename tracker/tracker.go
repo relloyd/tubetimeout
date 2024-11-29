@@ -1,6 +1,7 @@
 package tracker
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -78,10 +79,11 @@ func (t *Tracker) HasExceededThreshold(deviceID string) bool {
 	for _, seen := range dd.samples {
 		if seen {
 			count++
+			fmt.Printf("seen count: %v\n", count)
 		}
 	}
 
-	return time.Duration(count)*t.granularity >= t.threshold
+	return time.Duration(count)*t.granularity > t.threshold
 }
 
 // getIndex calculates the index in the slice for the current time.
@@ -92,20 +94,14 @@ func (t *Tracker) getIndex(now time.Time, bufferStart time.Time) int {
 
 // syncWindow ensures the slice is synchronized with the current time.
 func (t *Tracker) syncWindow(dd *deviceData, now time.Time) {
+	// Calculate number of time slices that have elapsed since the start of the window.
 	elapsed := int(now.Sub(dd.start) / t.granularity)
-
-	if elapsed >= t.sampleSize {
+	if elapsed >= t.sampleSize || elapsed < 0 {
 		// If elapsed time exceeds the buffer size, reset the entire window.
 		for i := range dd.samples {
 			dd.samples[i] = false
 		}
 		dd.start = now.Truncate(t.granularity) // Reset start only for large time jumps.
-	} else if elapsed < 0 {
-		// Backward movement: Reset the entire window (for simplicity).
-		for i := range dd.samples {
-			dd.samples[i] = false
-		}
-		dd.start = now.Truncate(t.granularity) // Reset start for backward jumps.
 	}
 	// If 0 < elapsed < t.sampleSize, do nothing. The circular buffer handles overwriting naturally.
 }
