@@ -13,12 +13,12 @@ type deviceData struct {
 }
 
 type Tracker struct {
-	devices       sync.Map       // Map of device IDs (string) to *deviceData
-	retention     time.Duration  // The retention period for samples
-	granularity   time.Duration  // The time granularity for sampling
-	threshold     time.Duration  // The threshold duration for exceeding conditions
-	sampleSize    int            // The number of slots in the circular buffer
-	nowFunc       func() time.Time // Function to get the current time (defaults to time.Now)
+	devices     sync.Map         // Map of device IDs (string) to *deviceData
+	retention   time.Duration    // The retention period for samples
+	granularity time.Duration    // The time granularity for sampling
+	threshold   time.Duration    // The threshold duration for exceeding conditions
+	sampleSize  int              // The number of slots in the circular buffer
+	nowFunc     func() time.Time // Function to get the current time (defaults to time.Now)
 }
 
 // NewTracker initializes a Tracker with preallocated slices for each device.
@@ -83,7 +83,7 @@ func (t *Tracker) HasExceededThreshold(deviceID string) bool {
 		}
 	}
 
-	return time.Duration(count)*t.granularity > t.threshold
+	return time.Duration(count)*t.granularity >= t.threshold
 }
 
 // getIndex calculates the index in the slice for the current time.
