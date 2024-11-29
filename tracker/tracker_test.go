@@ -5,6 +5,70 @@ import (
 	"time"
 )
 
+func TestHasExceededThreshold(t *testing.T) {
+	// Setup: Create a tracker with a 1-hour retention, 10-minute threshold, and 1-minute granularity.
+	retention := 1 * time.Hour
+	threshold := 10 * time.Minute
+	granularity := 1 * time.Minute
+	tracker := NewTracker(retention, threshold, granularity)
+
+	// Simulate a device data structure with pre-allocated samples.
+	startTime := time.Now().Truncate(granularity)
+	deviceID := "test-device"
+	deviceData := &deviceData{
+		samples: make([]bool, tracker.sampleSize),
+		start:   startTime,
+	}
+
+	// Add device data to the tracker.
+	tracker.devices.Store(deviceID, deviceData)
+
+	// Case 1: No samples recorded.
+	if tracker.HasExceededThreshold(deviceID) {
+		t.Error("HasExceededThreshold returned true with no samples recorded")
+	}
+
+	// Case 2: Samples recorded but below threshold.
+	for i := 0; i < 5; i++ {
+		deviceData.samples[i] = true // Mark 5 minutes as seen.
+	}
+	if tracker.HasExceededThreshold(deviceID) {
+		t.Error("HasExceededThreshold returned true with samples below the threshold")
+	}
+
+	// Case 3: Samples meet the threshold.
+	for i := 0; i < 10; i++ {
+		deviceData.samples[i] = true // Mark 10 minutes as seen.
+	}
+	if !tracker.HasExceededThreshold(deviceID) {
+		t.Error("HasExceededThreshold returned false with samples meeting the threshold")
+	}
+
+	// Case 4: Simulate backward time adjustment.
+	// Step 4a: Mark all slots as seen.
+	for i := 0; i < tracker.sampleSize; i++ {
+		deviceData.samples[i] = true
+	}
+	// Step 4b: Move `start` time backward by 2 hours.
+	// This simulates an old start time being used.
+	deviceData.start = startTime.Add(-2 * time.Hour)
+	// Step 4c: Test that stale samples are ignored and the buffer is reset.
+	if tracker.HasExceededThreshold(deviceID) {
+		t.Errorf("HasExceededThreshold incorrectly included stale samples or did not reset after backward time adjustment")
+	}
+	// Step 4d: Reset the device data with valid samples and verify behavior.
+	deviceData.start = startTime
+	for i := range deviceData.samples {
+		deviceData.samples[i] = false
+	}
+	for i := 0; i < 10; i++ {
+		deviceData.samples[i] = true
+	}
+	if !tracker.HasExceededThreshold(deviceID) {
+		t.Error("HasExceededThreshold returned false with valid samples meeting the threshold")
+	}
+}
+
 func TestAddSample(t *testing.T) {
 	// Setup: Create a tracker with 1-hour retention and 1-minute granularity.
 	retention := 1 * time.Hour
@@ -47,13 +111,13 @@ func TestAddSample(t *testing.T) {
 
 	// Case 3: Add a sample after the retention period has passed.
 	now = now.Add(retention) // Advance time by 1 hour.
-	tracker.AddSample(deviceID)
-
+	tracker.AddSample(deviceID)  // This should reset the whole buffer and record a new one.
+	// Case 3a: Verify that the device data was reinitialized.
 	data, ok = tracker.devices.Load(deviceID)
 	if !ok {
 		t.Fatalf("AddSample did not reinitialize device data after retention period")
 	}
-
+	// Case 3b: Verify that the sample was recorded.
 	dd = data.(*deviceData)
 	index = tracker.getIndex(now, dd.start)
 	if !dd.samples[index] {
@@ -74,12 +138,12 @@ func TestAddSample(t *testing.T) {
 	// Case 5: Add a sample with a large time jump forward.
 	now = now.Add(2 * retention) // Advance time by 2 hours.
 	tracker.AddSample(deviceID)
-
+	// Case 5a: Verify that the device data was reinitialized.
 	data, ok = tracker.devices.Load(deviceID)
 	if !ok {
 		t.Fatalf("AddSample did not reinitialize device data after large time jump")
 	}
-
+	// Case 5b: Verify that the sample was recorded.
 	dd = data.(*deviceData)
 	index = tracker.getIndex(now, dd.start)
 	if !dd.samples[index] {
@@ -111,74 +175,6 @@ func TestGetIndex(t *testing.T) {
 		if index != test.expected {
 			t.Errorf("getIndex(%v, %v) = %d; want %d", test.now, startTime, index, test.expected)
 		}
-	}
-}
-
-func TestHasExceededThreshold(t *testing.T) {
-	// Setup: Create a tracker with a 1-hour retention, 10-minute threshold, and 1-minute granularity.
-	retention := 1 * time.Hour
-	threshold := 10 * time.Minute
-	granularity := 1 * time.Minute
-	tracker := NewTracker(retention, threshold, granularity)
-
-	// Simulate a device data structure with preallocated samples.
-	startTime := time.Now().Truncate(granularity)
-	deviceID := "test-device"
-	deviceData := &deviceData{
-		samples: make([]bool, tracker.sampleSize),
-		start:   startTime,
-	}
-
-	// Add device data to the tracker.
-	tracker.devices.Store(deviceID, deviceData)
-
-	// Case 1: No samples recorded.
-	if tracker.HasExceededThreshold(deviceID) {
-		t.Error("HasExceededThreshold returned true with no samples recorded")
-	}
-
-	// Case 2: Samples recorded but below threshold.
-	for i := 0; i < 5; i++ {
-		deviceData.samples[i] = true // Mark 5 minutes as seen.
-	}
-	if tracker.HasExceededThreshold(deviceID) {
-		t.Error("HasExceededThreshold returned true with samples below the threshold")
-	}
-
-	// Case 3: Samples meet the threshold.
-	for i := 0; i < 10; i++ {
-		deviceData.samples[i] = true // Mark 10 minutes as seen.
-	}
-	if !tracker.HasExceededThreshold(deviceID) {
-		t.Error("HasExceededThreshold returned false with samples meeting the threshold")
-	}
-
-	// Case 4: Simulate backward time adjustment.
-	// Step 1: Mark all slots as seen.
-	for i := 0; i < tracker.sampleSize; i++ {
-		deviceData.samples[i] = true
-	}
-
-	// Step 2: Move `start` time backward by 2 hours.
-	// This simulates an old start time being used.
-	deviceData.start = startTime.Add(-2 * time.Hour)
-
-	// Step 3: Test that stale samples are ignored and the buffer is reset.
-	if tracker.HasExceededThreshold(deviceID) {
-		t.Errorf("HasExceededThreshold incorrectly included stale samples after backward time adjustment")
-	}
-
-	// Step 4: Reset the device data with valid samples and verify behavior.
-	deviceData.start = startTime
-	for i := range deviceData.samples {
-		deviceData.samples[i] = false
-	}
-	for i := 0; i < 10; i++ {
-		deviceData.samples[i] = true
-	}
-
-	if !tracker.HasExceededThreshold(deviceID) {
-		t.Error("HasExceededThreshold returned false with valid samples meeting the threshold")
 	}
 }
 
