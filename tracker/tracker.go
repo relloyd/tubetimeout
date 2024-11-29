@@ -7,26 +7,26 @@ import (
 
 type deviceData struct {
 	mu      sync.Mutex
-	samples []bool // Slice of fixed size to represent the rotating window
+	samples []bool    // Slice of fixed size to represent the rotating window
 	start   time.Time // Start time of the slice window
 }
 
 type Tracker struct {
-	devices    sync.Map
-	retention  time.Duration
+	devices     sync.Map
+	retention   time.Duration
 	granularity time.Duration
-	threshold  time.Duration
-	sampleSize int
+	threshold   time.Duration
+	sampleSize  int
 }
 
 // NewTracker initializes a Tracker with preallocated slices for each device.
 func NewTracker(retention, threshold, granularity time.Duration) *Tracker {
 	sampleSize := int(retention / granularity)
 	return &Tracker{
-		retention:  retention,
-		threshold:  threshold,
+		retention:   retention,
+		threshold:   threshold,
 		granularity: granularity,
-		sampleSize: sampleSize,
+		sampleSize:  sampleSize,
 	}
 }
 
@@ -85,7 +85,7 @@ func (t *Tracker) HasExceededThreshold(deviceID string) bool {
 // getIndex calculates the index in the slice for the current time.
 func (t *Tracker) getIndex(now time.Time) int {
 	elapsed := now.Sub(now.Truncate(t.granularity))
-	return int(elapsed / t.granularity) % t.sampleSize
+	return int(elapsed/t.granularity) % t.sampleSize
 }
 
 // syncWindow ensures the slice is synchronized with the current time.
@@ -102,6 +102,12 @@ func (t *Tracker) syncWindow(dd *deviceData, now time.Time) {
 		// Clear only the elapsed slots.
 		for i := 0; i < elapsed; i++ {
 			dd.samples[(int(dd.start.Sub(dd.start.Truncate(t.granularity))/t.granularity)+i)%t.sampleSize] = false
+		}
+		dd.start = now.Truncate(t.granularity)
+	} else if elapsed < 0 {
+		// Backward movement: Reset the entire window (for simplicity).
+		for i := range dd.samples {
+			dd.samples[i] = false
 		}
 		dd.start = now.Truncate(t.granularity)
 	}
