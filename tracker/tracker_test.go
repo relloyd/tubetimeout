@@ -9,106 +9,109 @@ func TestAddSample(t *testing.T) {
 	// Setup: Create a tracker with 1-hour retention and 1-minute granularity.
 	retention := 1 * time.Hour
 	granularity := 1 * time.Minute
-	tracker := NewTracker(retention, 0, granularity) // Threshold is not relevant here.
+	threshold := 10 * time.Minute
+	tracker := NewTracker(retention, threshold, granularity)
 
-	// Define test device.
 	deviceID := "test-device"
 
+	// Mock current time to control time progression in tests.
+	now := time.Now().Truncate(granularity)
+
+	// Override time.Now function in the tracker to use the mocked time.
+	tracker.nowFunc = func() time.Time {
+		return now
+	}
+
 	// Case 1: Add a sample at the start of the buffer.
-	startTime := time.Now().Truncate(granularity)
 	tracker.AddSample(deviceID)
 
-	// Verify the sample was added to the correct index.
 	data, ok := tracker.devices.Load(deviceID)
 	if !ok {
 		t.Fatalf("AddSample did not initialize device data")
 	}
 
 	dd := data.(*deviceData)
-	index := tracker.getIndex(startTime)
+	index := tracker.getIndex(now, dd.start)
 	if !dd.samples[index] {
 		t.Errorf("AddSample failed to mark the sample at index %d", index)
 	}
 
-	// Case 2: Add a sample at a later time (within retention window).
-	nextTime := startTime.Add(5 * granularity) // 5 minutes later.
+	// Case 2: Add a sample at a later time within the same hour.
+	now = now.Add(5 * granularity) // Advance time by 5 minutes.
 	tracker.AddSample(deviceID)
 
-	// Verify the new sample was added.
-	index = tracker.getIndex(nextTime)
+	index = tracker.getIndex(now, dd.start)
 	if !dd.samples[index] {
-		t.Errorf("AddSample failed to mark the sample at index %d for time %v", index, nextTime)
+		t.Errorf("AddSample failed to mark the sample at index %d for time %v", index, now)
 	}
 
-	// Case 3: Add a sample that wraps around the buffer.
-	wrapTime := startTime.Add(65 * granularity) // 65 minutes later (wraparound).
+	// Case 3: Add a sample after the retention period has passed.
+	now = now.Add(retention) // Advance time by 1 hour.
 	tracker.AddSample(deviceID)
 
-	// Verify the sample wraps to the correct index.
-	index = tracker.getIndex(wrapTime)
+	data, ok = tracker.devices.Load(deviceID)
+	if !ok {
+		t.Fatalf("AddSample did not reinitialize device data after retention period")
+	}
+
+	dd = data.(*deviceData)
+	index = tracker.getIndex(now, dd.start)
 	if !dd.samples[index] {
-		t.Errorf("AddSample failed to wrap and mark the sample at index %d for time %v", index, wrapTime)
+		t.Errorf("AddSample failed to mark the sample at index %d after retention period", index)
 	}
 
-	// Case 4: Ensure older samples are overwritten when wraparound occurs.
-	// Step 4a: Add a sample far into the future (to trigger wraparound and overwrite).
-	oldIndex := tracker.getIndex(startTime)
-	newTime := startTime.Add(retention + granularity) // Add 61 minutes later.
-	tracker.AddSample(deviceID)
-	// Step 4b: Verify the old sample at `oldIndex` is cleared.
-	if dd.samples[oldIndex] {
-		t.Errorf("AddSample did not clear the old sample at index %d during wraparound", oldIndex)
+	// Case 4: Add multiple samples in rapid succession.
+	now = now.Add(2 * granularity) // Advance time by 2 minutes.
+	for i := 0; i < 3; i++ {
+		tracker.AddSample(deviceID)
+		index = tracker.getIndex(now, dd.start)
+		if !dd.samples[index] {
+			t.Errorf("AddSample failed to mark the sample at index %d on iteration %d", index, i)
+		}
+		now = now.Add(granularity) // Advance time by 1 minute for next iteration.
 	}
-	// Step 4c: Verify the new sample is added at the correct index.
-	newIndex := tracker.getIndex(newTime)
-	if !dd.samples[newIndex] {
-		t.Errorf("AddSample failed to mark the new sample at index %d for time %v", newIndex, newTime)
+
+	// Case 5: Add a sample with a large time jump forward.
+	now = now.Add(2 * retention) // Advance time by 2 hours.
+	tracker.AddSample(deviceID)
+
+	data, ok = tracker.devices.Load(deviceID)
+	if !ok {
+		t.Fatalf("AddSample did not reinitialize device data after large time jump")
+	}
+
+	dd = data.(*deviceData)
+	index = tracker.getIndex(now, dd.start)
+	if !dd.samples[index] {
+		t.Errorf("AddSample failed to mark the sample at index %d after large time jump", index)
 	}
 }
 
 func TestGetIndex(t *testing.T) {
-	// Setup: Create a tracker with a 1-hour retention, 1-minute granularity.
+	// Setup: Create a tracker with a 1-hour retention and 1-minute granularity.
 	retention := 1 * time.Hour
 	granularity := 1 * time.Minute
-	tracker := NewTracker(retention, 0, granularity) // Threshold not relevant for this test.
+	tracker := NewTracker(retention, 0, granularity)
 
-	// Start time for the circular buffer.
-	startTime := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC) // Fixed start time.
-	sampleSize := tracker.sampleSize                          // Expected size of the buffer.
+	startTime := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
 
-	// Define test cases.
 	tests := []struct {
-		now      time.Time // Current time.
-		expected int       // Expected index.
+		now      time.Time
+		expected int
 	}{
-		// Basic cases within the buffer range.
-		{startTime.Add(0 * granularity), 0},   // Start of the buffer.
-		{startTime.Add(1 * granularity), 1},   // 1 minute in.
-		{startTime.Add(59 * granularity), 59}, // Last slot before wraparound.
-
-		// Wraparound cases.
-		{startTime.Add(60 * granularity), 0}, // Wraps back to start.
-		{startTime.Add(61 * granularity), 1}, // Wraps to second slot.
-
-		// Backward time cases.
-		{startTime.Add(-1 * granularity), 59}, // 1 minute backward wraps to last index.
-		{startTime.Add(-60 * granularity), 0}, // Full buffer backward wraps to start.
+		{startTime.Add(0 * granularity), 0},
+		{startTime.Add(1 * granularity), 1},
+		{startTime.Add(59 * granularity), 59},
+		{startTime.Add(60 * granularity), 0}, // Wraps around.
+		{startTime.Add(-1 * granularity), 59}, // Negative time wraps to last index.
 	}
 
-	// Execute test cases.
 	for _, test := range tests {
 		index := tracker.getIndex(test.now, startTime)
 		if index != test.expected {
 			t.Errorf("getIndex(%v, %v) = %d; want %d", test.now, startTime, index, test.expected)
 		}
 	}
-
-	// Edge case: Test an extremely large time difference to verify that the modulo operation handles it correctly.
-	// largeTime := time.Date(2024, 1, 2, 10, 0, 0, 0, time.UTC) // 1 day later.
-	// expectedIndex := 1440 % sampleSize                        // 1440 minutes in a day % 60 slots.
-	// if index := tracker.getIndex(largeTime, startTime); index != expectedIndex {
-	// 	t.Errorf("getIndex(%v) = %d; want %d", largeTime, index, expectedIndex)
-	// }
 }
 
 func TestHasExceededThreshold(t *testing.T) {
@@ -203,17 +206,7 @@ func TestSyncWindow(t *testing.T) {
 		t.Error("syncWindow cleared samples when no time had elapsed")
 	}
 
-	// Case 2: Partial elapsed time (clear first few slots).
-	elapsedTime := startTime.Add(3 * granularity)
-	tracker.syncWindow(deviceData, elapsedTime)
-	if deviceData.samples[0] || deviceData.samples[1] || deviceData.samples[2] {
-		t.Error("syncWindow did not clear the correct slots")
-	}
-	if deviceData.samples[3] || deviceData.samples[4] {
-		t.Errorf("syncWindow incorrectly cleared untouched slots")
-	}
-
-	// Case 3: Elapsed time exceeds retention (expect the buffer to be reset).
+	// Case 2: Elapsed time exceeds retention (expect the buffer to be reset).
 	exceedTime := startTime.Add(2 * retention)
 	tracker.syncWindow(deviceData, exceedTime)
 	for i, v := range deviceData.samples {

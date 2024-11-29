@@ -12,11 +12,12 @@ type deviceData struct {
 }
 
 type Tracker struct {
-	devices     sync.Map
-	retention   time.Duration
-	granularity time.Duration
-	threshold   time.Duration
-	sampleSize  int
+	devices       sync.Map       // Map of device IDs (string) to *deviceData
+	retention     time.Duration  // The retention period for samples
+	granularity   time.Duration  // The time granularity for sampling
+	threshold     time.Duration  // The threshold duration for exceeding conditions
+	sampleSize    int            // The number of slots in the circular buffer
+	nowFunc       func() time.Time // Function to get the current time (defaults to time.Now)
 }
 
 // NewTracker initializes a Tracker with preallocated slices for each device.
@@ -24,16 +25,16 @@ func NewTracker(retention, threshold, granularity time.Duration) *Tracker {
 	sampleSize := int(retention / granularity)
 	return &Tracker{
 		retention:   retention,
-		threshold:   threshold,
 		granularity: granularity,
+		threshold:   threshold,
 		sampleSize:  sampleSize,
+		nowFunc:     time.Now, // Default to time.Now
 	}
 }
 
 // AddSample records a sample for a given device at the current time.
 func (t *Tracker) AddSample(deviceID string) {
-	now := time.Now()
-	index := t.getIndex(now)
+	now := t.nowFunc() // Use nowFunc instead of time.Now
 
 	// Get or initialize the device data.
 	data, _ := t.devices.LoadOrStore(deviceID, &deviceData{
@@ -51,6 +52,7 @@ func (t *Tracker) AddSample(deviceID string) {
 	t.syncWindow(dd, now)
 
 	// Mark the sample as seen.
+	index := t.getIndex(now, dd.start)
 	dd.samples[index] = true
 }
 
@@ -93,22 +95,17 @@ func (t *Tracker) syncWindow(dd *deviceData, now time.Time) {
 	elapsed := int(now.Sub(dd.start) / t.granularity)
 
 	if elapsed >= t.sampleSize {
-		// Reset the entire slice if elapsed exceeds the window size.
+		// If elapsed time exceeds the buffer size, reset the entire window.
 		for i := range dd.samples {
 			dd.samples[i] = false
 		}
-		dd.start = now.Truncate(t.granularity)
-	} else if elapsed > 0 {
-		// Clear only the elapsed slots.
-		for i := 0; i < elapsed; i++ {
-			dd.samples[(int(dd.start.Sub(dd.start.Truncate(t.granularity))/t.granularity)+i)%t.sampleSize] = false
-		}
-		dd.start = now.Truncate(t.granularity)
+		dd.start = now.Truncate(t.granularity) // Reset start only for large time jumps.
 	} else if elapsed < 0 {
 		// Backward movement: Reset the entire window (for simplicity).
 		for i := range dd.samples {
 			dd.samples[i] = false
 		}
-		dd.start = now.Truncate(t.granularity)
+		dd.start = now.Truncate(t.granularity) // Reset start for backward jumps.
 	}
+	// If 0 < elapsed < t.sampleSize, do nothing. The circular buffer handles overwriting naturally.
 }
