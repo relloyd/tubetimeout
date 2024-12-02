@@ -5,8 +5,8 @@ import (
 )
 
 const (
-	// DefaultConfigFile is the default configuration file path.
-	// DefaultConfigFile = ".tubetimeout/config.yaml"
+// DefaultConfigFile is the default configuration file path.
+// DefaultConfigFile = ".tubetimeout/config.yaml"
 )
 
 type DebugConfig struct {
@@ -15,17 +15,18 @@ type DebugConfig struct {
 }
 
 type AppConfig struct {
-	TrackerConfig TrackerConfig
+	TrackerConfig TrackerConfig `envconfig:"TRACKER_CONFIG"`
 }
 
 type TrackerConfig struct {
-	WindowStartDay  int           `envconfig:"WINDOW_START_DAY" default:"5"`    // Friday
-	WindowStartTime time.Duration `envconfig:"WINDOW_START_TIME" default:"12h"` // 12 PM
-	// The default time granularity for sampling.
+	// Retention is the period for samples to be kept and evaluated.
+	Retention time.Duration `envconfig:"RETENTION" default:"1w"` // 1 week
+	// Granularity is the sampling resolution.
 	Granularity time.Duration `envconfig:"GRANULARITY" default:"1m"`
-	// The default retention period for samples.
-	Retention time.Duration `envconfig:"RETENTION" default:"168h"` // 1 week
-	// The default threshold duration for exceeding conditions.
-	Threshold time.Duration `envconfig:"THRESHOLD" default:"2h"`
+	// Threshold is duration for exceeding conditions.
+	Threshold time.Duration `envconfig:"THRESHOLD" default:"3h"`
+	// StartDay is the day of the week to start the window.
+	StartDay int `envconfig:"START_DAY" default:"5"` // Friday
+	// StartTime is the duration past midnight to start the window.
+	StartTime time.Duration `envconfig:"START_TIME" default:"12h"` // 12 PM
 }
-

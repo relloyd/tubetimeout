@@ -71,7 +71,13 @@ func main() {
 	fmt.Println("nft rules setup.")
 
 	// Create a tracker.
-	t := tracker.NewTracker(appCfg.TrackerConfig.Retention, appCfg.TrackerConfig.Granularity, appCfg.TrackerConfig.Threshold)
+	t := tracker.NewTracker(
+		appCfg.TrackerConfig.Retention,
+		appCfg.TrackerConfig.Granularity,
+		appCfg.TrackerConfig.Threshold,
+		appCfg.TrackerConfig.StartDay,
+		appCfg.TrackerConfig.StartTime,
+	)
 
 	// Create our NFQueue to listen for packets in user space.
 	nfq, err := queue.NewNFQueueFilter(ctx, t)
