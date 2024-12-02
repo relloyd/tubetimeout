@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
 )
@@ -121,13 +122,9 @@ func (t *Tracker) syncWindow(dd *deviceData, now time.Time) {
 		// dd.start = now.Truncate(t.granularity) // Reset start as we roll into a new window.
 		lastWindowStart, _ := t.calculateWindow(now)
 		dd.start = lastWindowStart // Reset the start as we roll into a new window.
+		log.Printf("Renew retention window (%v) for device %s", now, t.retention)
 	}
 	// If 0 < elapsed < t.sampleSize, do nothing. The circular buffer handles overwriting naturally.
-}
-
-type trackerWindow struct {
-	lastWindowStart time.Time
-	nextWindowStart time.Time
 }
 
 // calculateWindow determines the start times for the last and next windows.
