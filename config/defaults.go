@@ -24,7 +24,7 @@ type TrackerConfig struct {
 	// The default time granularity for sampling.
 	Granularity time.Duration `envconfig:"GRANULARITY" default:"1m"`
 	// The default retention period for samples.
-	Retention time.Duration `envconfig:"RETENTION" default:"1w"` // 1 week
+	Retention time.Duration `envconfig:"RETENTION" default:"168h"` // 1 week
 	// The default threshold duration for exceeding conditions.
 	Threshold time.Duration `envconfig:"THRESHOLD" default:"2h"`
 }

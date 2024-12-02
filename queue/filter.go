@@ -20,7 +20,7 @@ type packetIP struct {
 
 type NFQueueFilter struct {
 	Nfq *nfqueue.Nfqueue
-	t  *tracker.Tracker
+	t   *tracker.Tracker
 	models.IpSet
 }
 
@@ -110,8 +110,8 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 		d, ok := f.ipIsKnown(ipData.dst)
 		if ok { // if the packet destination IP address is known...
 			// Remember that we saw it.
-			f.t.AddSample(ipData.dst.String())
-			if f.t.HasExceededThreshold(ipData.dst.String()) {
+			f.t.AddSample(ipData.src.String()) // TODO: add a source group identifier to the tracker
+			if f.t.HasExceededThreshold(ipData.src.String()) {
 				log.Printf("Dropping packet to %v (%v) threshold breached", d, ipData.dst)
 				err = nf.SetVerdict(id, nfqueue.NfDrop)
 			} else {

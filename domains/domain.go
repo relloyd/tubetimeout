@@ -23,7 +23,7 @@ type ipDomain struct {
 var (
 	defaultDomains            = []models.Domain{"www.youtube.com", "youtube.com", "googlevideo.com"}
 	defaultResolver           = resolver(resolveDomains)
-	defaultInterval           = time.Minute * 1
+	defaultInterval           = time.Minute * 5
 	registeredIPListReceivers []IPListReceiver
 	Ips                       = &models.IpSet{Ips: make(models.MapIpDomain)}
 )
