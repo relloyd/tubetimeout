@@ -1,7 +1,6 @@
 package tracker
 
 import (
-	"reflect"
 	"testing"
 	"time"
 )
@@ -11,7 +10,7 @@ func TestHasExceededThreshold(t *testing.T) {
 	retention := 1 * time.Hour
 	threshold := 10 * time.Minute
 	granularity := 1 * time.Minute
-	tracker := NewTracker(retention, threshold, granularity)
+	tracker := NewTracker(retention, granularity, threshold, 0, 0)
 
 	// Simulate a device data structure with pre-allocated samples.
 	startTime := time.Now().Truncate(granularity)
@@ -75,7 +74,7 @@ func TestAddSample(t *testing.T) {
 	retention := 1 * time.Hour
 	granularity := 1 * time.Minute
 	threshold := 10 * time.Minute
-	tracker := NewTracker(retention, threshold, granularity)
+	tracker := NewTracker(retention, granularity, threshold, 0, 0)
 
 	deviceID := "test-device"
 
@@ -111,8 +110,8 @@ func TestAddSample(t *testing.T) {
 	}
 
 	// Case 3: Add a sample after the retention period has passed.
-	now = now.Add(retention) // Advance time by 1 hour.
-	tracker.AddSample(deviceID)  // This should reset the whole buffer and record a new one.
+	now = now.Add(retention)    // Advance time by 1 hour.
+	tracker.AddSample(deviceID) // This should reset the whole buffer and record a new one.
 	// Case 3a: Verify that the device data was reinitialized.
 	data, ok = tracker.devices.Load(deviceID)
 	if !ok {
@@ -156,7 +155,7 @@ func TestGetIndex(t *testing.T) {
 	// Setup: Create a tracker with a 1-hour retention and 1-minute granularity.
 	retention := 1 * time.Hour
 	granularity := 1 * time.Minute
-	tracker := NewTracker(retention, 0, granularity)
+	tracker := NewTracker(retention, granularity, 0, 0, 0)
 
 	startTime := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
 
@@ -167,7 +166,7 @@ func TestGetIndex(t *testing.T) {
 		{startTime.Add(0 * granularity), 0},
 		{startTime.Add(1 * granularity), 1},
 		{startTime.Add(59 * granularity), 59},
-		{startTime.Add(60 * granularity), 0}, // Wraps around.
+		{startTime.Add(60 * granularity), 0},  // Wraps around.
 		{startTime.Add(-1 * granularity), 59}, // Negative time wraps to last index.
 	}
 
@@ -183,10 +182,11 @@ func TestSyncWindow(t *testing.T) {
 	// Setup - Create a tracker with a 1-hour retention and 1-minute granularity.
 	retention := 1 * time.Hour
 	granularity := 1 * time.Minute
-	tracker := NewTracker(retention, 0, granularity) // No threshold needed for this test.
+	tracker := NewTracker(retention, granularity, 0, 0, 0) // No threshold needed for this test.
 
 	// Simulate a device data structure.
-	startTime := time.Now().Truncate(granularity)
+	// startTime := time.Now().Truncate(granularity)
+	startTime, _ := tracker.calculateWindow(time.Now())
 	deviceData := &deviceData{
 		samples: make([]bool, tracker.sampleSize),
 		start:   startTime,
@@ -206,45 +206,80 @@ func TestSyncWindow(t *testing.T) {
 	// Case 2: Elapsed time exceeds retention (expect the buffer to be reset).
 	exceedTime := startTime.Add(2 * retention)
 	tracker.syncWindow(deviceData, exceedTime)
+	expectedNewTime, _ := tracker.calculateWindow(exceedTime)
 	for i, v := range deviceData.samples {
 		if v {
 			t.Errorf("syncWindow failed to reset the buffer at index %d", i)
 		}
 	}
 	if !deviceData.start.Equal(exceedTime.Truncate(granularity)) {
-		t.Errorf("syncWindow did not update the start time correctly. Got %v, want %v", deviceData.start, exceedTime.Truncate(granularity))
+		t.Errorf("syncWindow did not update the start time correctly. Got %v, want %v", deviceData.start, expectedNewTime)
 	}
 }
 
-func Test_calculateWindow(t *testing.T) {
-	type args struct {
-		now             time.Time
-		WindowStartDay  int
-		WindowStartTime time.Duration
-	}
+func TestCalculateWindow(t *testing.T) {
 	tests := []struct {
-		name string
-		args args
-		want trackerWindow
+		name         string
+		tracker      Tracker
+		now          time.Time
+		expectedLast time.Time
+		expectedNext time.Time
 	}{
 		{
-			name: "",
-			args: args{
-				now:             time.Date(2024, 12, 2, 12, 0, 0, 0, time.UTC),
-				WindowStartDay:  5,
-				WindowStartTime: 12 * time.Hour,
+			name: "Weekly Retention - Current Week",
+			tracker: Tracker{
+				retention:       7 * 24 * time.Hour,
+				windowStartDay:  int(time.Monday),
+				windowStartTime: 10 * time.Hour,
 			},
-			want: trackerWindow{
-				lastWindowStart: time.Date(2024, 11, 29, 12, 0, 0, 0, time.UTC),
-				nextWindowStart: time.Date(2024, 12, 6, 12, 0, 0, 0, time.UTC),
-				durationToNext:  96 * time.Hour,
+			now:          time.Date(2024, 12, 2, 15, 0, 0, 0, time.UTC), // Monday
+			expectedLast: time.Date(2024, 12, 2, 10, 0, 0, 0, time.UTC),
+			expectedNext: time.Date(2024, 12, 9, 10, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "Daily Retention - Current Day",
+			tracker: Tracker{
+				retention:       24 * time.Hour,
+				windowStartDay:  int(time.Sunday), // Ignored for daily retention
+				windowStartTime: 6 * time.Hour,
 			},
+			now:          time.Date(2024, 12, 2, 15, 0, 0, 0, time.UTC), // Monday
+			expectedLast: time.Date(2024, 12, 2, 6, 0, 0, 0, time.UTC),
+			expectedNext: time.Date(2024, 12, 3, 6, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "Sub-Daily Retention",
+			tracker: Tracker{
+				retention:       12 * time.Hour,
+				windowStartDay:  0, // Ignored for sub-daily retention
+				windowStartTime: 3 * time.Hour,
+			},
+			now:          time.Date(2024, 12, 2, 15, 0, 0, 0, time.UTC), // Monday
+			expectedLast: time.Date(2024, 12, 2, 15, 0, 0, 0, time.UTC),
+			expectedNext: time.Date(2024, 12, 3, 3, 0, 0, 0, time.UTC),
+		},
+		{
+			name: "Sub-Daily Retention 2",
+			tracker: Tracker{
+				retention:       10 * time.Minute,
+				windowStartDay:  0, // Ignored for sub-daily retention
+				windowStartTime: 3 * time.Minute,
+			},
+			now:          time.Date(2024, 12, 2, 13, 50, 0, 0, time.UTC), // Monday
+			expectedLast: time.Date(2024, 12, 2, 13, 43, 0, 0, time.UTC),
+			expectedNext: time.Date(2024, 12, 2, 13, 53, 0, 0, time.UTC),
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := calculateWindow(tt.args.now, tt.args.WindowStartDay, tt.args.WindowStartTime); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("calculateWindow() = %v, want %v", got, tt.want)
+			lastWindowStart, nextWindowStart := tt.tracker.calculateWindow(tt.now)
+
+			if !lastWindowStart.Equal(tt.expectedLast) {
+				t.Errorf("%v: lastWindowStart: got %v, want %v", tt.name, lastWindowStart, tt.expectedLast)
+			}
+			if !nextWindowStart.Equal(tt.expectedNext) {
+				t.Errorf("%v: nextWindowStart: got %v, want %v", tt.name, nextWindowStart, tt.expectedNext)
 			}
 		})
 	}
