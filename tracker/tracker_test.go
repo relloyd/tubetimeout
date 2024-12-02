@@ -1,6 +1,7 @@
 package tracker
 
 import (
+	"reflect"
 	"testing"
 	"time"
 )
@@ -212,5 +213,39 @@ func TestSyncWindow(t *testing.T) {
 	}
 	if !deviceData.start.Equal(exceedTime.Truncate(granularity)) {
 		t.Errorf("syncWindow did not update the start time correctly. Got %v, want %v", deviceData.start, exceedTime.Truncate(granularity))
+	}
+}
+
+func Test_calculateWindow(t *testing.T) {
+	type args struct {
+		now             time.Time
+		WindowStartDay  int
+		WindowStartTime time.Duration
+	}
+	tests := []struct {
+		name string
+		args args
+		want trackerWindow
+	}{
+		{
+			name: "",
+			args: args{
+				now:             time.Date(2024, 12, 2, 12, 0, 0, 0, time.UTC),
+				WindowStartDay:  5,
+				WindowStartTime: 12 * time.Hour,
+			},
+			want: trackerWindow{
+				lastWindowStart: time.Date(2024, 11, 29, 12, 0, 0, 0, time.UTC),
+				nextWindowStart: time.Date(2024, 12, 6, 12, 0, 0, 0, time.UTC),
+				durationToNext:  96 * time.Hour,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := calculateWindow(tt.args.now, tt.args.WindowStartDay, tt.args.WindowStartTime); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("calculateWindow() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"example.com/youtube-nfqueue/config"
 	"example.com/youtube-nfqueue/domains"
 	"example.com/youtube-nfqueue/nftables"
 	"example.com/youtube-nfqueue/queue"
@@ -25,26 +26,29 @@ import (
 // TODO: implement another filter for return/incoming traffic from YouTube
 //   do rate limiting
 
-type Config struct {
-	DebugEnabled bool          `envconfig:"DEBUG_ENABLED" default:"false"`
-	DebugTime    time.Duration `envconfig:"DEBUG_TIME_SECONDS" default:"30s"`
-}
-
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Load config from the environment.
-	var cfg Config
-	err := envconfig.Process("", &cfg)
+	var debugCfg config.DebugConfig
+	err := envconfig.Process("", &debugCfg)
 	if err != nil {
-		fmt.Println("failed to process env vars:", err)
+		fmt.Println("failed to process debug config:", err)
 		os.Exit(1)
 	}
 
-	if cfg.DebugEnabled {
+	// Load app config from the environment.
+	var appCfg config.AppConfig
+	err = envconfig.Process("", &appCfg)
+	if err != nil {
+		fmt.Println("failed to process app config:", err)
+		os.Exit(1)
+	}
+
+	if debugCfg.DebugEnabled {
 		// Allow debug connection timeout.
-		tc := time.After(cfg.DebugTime)
+		tc := time.After(debugCfg.DebugTime)
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT)
 		fmt.Println("Waiting for debug time or CTRL-C signal...")
@@ -67,7 +71,7 @@ func main() {
 	fmt.Println("nft rules setup.")
 
 	// Create a tracker.
-	t := tracker.NewTracker(1*time.Minute, 10*time.Second, 1*time.Second)
+	t := tracker.NewTracker(appCfg.TrackerConfig.Retention, appCfg.TrackerConfig.Granularity, appCfg.TrackerConfig.Threshold)
 
 	// Create our NFQueue to listen for packets in user space.
 	nfq, err := queue.NewNFQueueFilter(ctx, t)

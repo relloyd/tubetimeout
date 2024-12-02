@@ -22,7 +22,7 @@ type Tracker struct {
 }
 
 // NewTracker initializes a Tracker with preallocated slices for each device.
-func NewTracker(retention, threshold, granularity time.Duration) *Tracker {
+func NewTracker(retention, granularity, threshold time.Duration) *Tracker {
 	sampleSize := int(retention / granularity)
 	return &Tracker{
 		retention:   retention,
@@ -104,4 +104,32 @@ func (t *Tracker) syncWindow(dd *deviceData, now time.Time) {
 		dd.start = now.Truncate(t.granularity) // Reset start only for large time jumps.
 	}
 	// If 0 < elapsed < t.sampleSize, do nothing. The circular buffer handles overwriting naturally.
+}
+
+type trackerWindow struct {
+	lastWindowStart time.Time
+	nextWindowStart time.Time
+	durationToNext  time.Duration
+}
+
+func calculateWindow(now time.Time, WindowStartDay int, WindowStartTime time.Duration) trackerWindow {
+	// Find the last occurrence of the desired day of the week
+	daysSinceStartDay := (int(now.Weekday()) - int(WindowStartDay) + 7) % 7
+	lastWindowStart := now.AddDate(0, 0, -daysSinceStartDay).Truncate(24 * time.Hour).Add(WindowStartTime)
+
+	// Calculate the duration to the next occurrence of WindowStartDay
+	nextWindowStart := lastWindowStart.AddDate(0, 0, 7)
+	durationToNextStart := nextWindowStart.Sub(now)
+
+	// Output results
+	fmt.Printf("Current time: %v\n", now)
+	fmt.Printf("Last %v: %v\n", WindowStartDay, lastWindowStart)
+	fmt.Printf("Next %v: %v\n", WindowStartDay, nextWindowStart)
+	fmt.Printf("Duration to next %v: %v\n", WindowStartDay, durationToNextStart)
+
+	return trackerWindow{
+			lastWindowStart: lastWindowStart,
+			nextWindowStart: nextWindowStart,
+			durationToNext: durationToNextStart,
+	}
 }
