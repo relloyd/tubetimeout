@@ -10,6 +10,7 @@ import (
 
 	"example.com/youtube-nfqueue/config"
 	"example.com/youtube-nfqueue/domains"
+	"example.com/youtube-nfqueue/netwatch"
 	"example.com/youtube-nfqueue/nftables"
 	"example.com/youtube-nfqueue/queue"
 	"example.com/youtube-nfqueue/tracker"
@@ -71,13 +72,7 @@ func main() {
 	fmt.Println("nft rules setup.")
 
 	// Create a tracker.
-	t := tracker.NewTracker(
-		appCfg.TrackerConfig.Retention,
-		appCfg.TrackerConfig.Granularity,
-		appCfg.TrackerConfig.Threshold,
-		appCfg.TrackerConfig.StartDay,
-		appCfg.TrackerConfig.StartTime,
-	)
+	t := tracker.NewTracker(appCfg.TrackerConfig.Retention, appCfg.TrackerConfig.Granularity, appCfg.TrackerConfig.Threshold, appCfg.TrackerConfig.StartDay, appCfg.TrackerConfig.StartTime)
 
 	// Create our NFQueue to listen for packets in user space.
 	nfq, err := queue.NewNFQueueFilter(ctx, t)
@@ -95,6 +90,17 @@ func main() {
 	// Start a goroutine to periodically resolve the domains.
 	go domains.PeriodicResolver(ctx)
 
+	// Create a new NetWatcher
+	watcher := netwatch.NewNetWatcher()
+
+	// Register a callback
+	watcher.RegisterCallback(func(data map[string]netwatch.MACGroup) {
+		fmt.Println("Updated IP map:")
+		for ip, mapping := range data {
+			fmt.Printf("IP: %s, MAC: %s, Group: %s\n", ip, mapping.MAC, mapping.Group)
+		}
+	})
+
 	// Capture SIGINT and SIGTERM to gracefully shutdown
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -110,7 +116,7 @@ func main() {
 			fmt.Println("Error: unable to remove NFT rules")
 			os.Exit(1)
 		}
-		_ = nfq.Nfq.Close() // kill the context before closing else it will block.
+		_ = nfq.Nfq.Close() // cancel its context above before calling Close() else it will block.
 	}
 
 	return
