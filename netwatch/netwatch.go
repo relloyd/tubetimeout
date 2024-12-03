@@ -43,19 +43,20 @@ func (nw *NetWatcher) RegisterCallback(callback []NetWatcherReceiver) {
 
 // Start begins the periodic ARP scanning process and supports cancellation using context
 func (nw *NetWatcher) Start(ctx context.Context, yamlPath string) {
+	ticker := time.NewTicker(1 * time.Minute)
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				// Context was canceled, exit the loop
 				return
-			default:
+			case <-ticker.C:
 				// Perform ARP scan and get updated map
 				newMap := ScanNetwork(yamlPath, ARPCmd)
 
 				// Compare with existing data
 				nw.mutex.Lock()
-				if !maps.Equal(nw.ipMap, newMap) {
+				if !maps.Equal(nw.ipMap, newMap) { // if there is new arp data...
 					nw.ipMap = newMap
 
 					// Notify all registered callbacks
@@ -64,23 +65,7 @@ func (nw *NetWatcher) Start(ctx context.Context, yamlPath string) {
 					}
 				}
 				nw.mutex.Unlock()
-
-				// Sleep for 1 minute before the next scan
-				time.Sleep(1 * time.Minute)
 			}
 		}
 	}()
-}
-
-// mapsEqual compares two maps for equality
-func mapsEqual(m1, m2 map[string]MACGroup) bool {
-	if len(m1) != len(m2) {
-		return false
-	}
-	for k, v := range m1 {
-		if v != m2[k] {
-			return false
-		}
-	}
-	return true
 }

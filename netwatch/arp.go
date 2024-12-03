@@ -49,7 +49,7 @@ func ScanNetwork(yamlPath string, arpCmd ARPCommand) map[models.IP]MACGroup {
 	ipMap := make(map[models.IP]MACGroup)
 
 	// Execute ARP scan
-	output, err := ARPCmd()
+	output, err := arpCmd()
 	if err != nil {
 		fmt.Printf("Error running ARP command: %v\n", err)
 		return nil
@@ -59,12 +59,12 @@ func ScanNetwork(yamlPath string, arpCmd ARPCommand) map[models.IP]MACGroup {
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		fields := strings.Fields(line)
-		if len(fields) < 3 {
+		if len(fields) < 3 { // if the line can be skipped...
 			continue
 		}
 
-		ip := fields[1] // field zero may be '?' as the hostnames haven't been looked up
-		mac := fields[2]
+		ip := strings.Trim(fields[1], "()") // field zero may be '?' as the hostnames haven't been looked up
+		mac := fields[3]
 
 		// Find group for MAC
 		for group, macs := range cfg.Groups {
