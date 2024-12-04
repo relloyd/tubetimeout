@@ -30,7 +30,8 @@ type NFTRules struct {
 	conn      *nftables.Conn
 	table     *nftables.Table
 	chain     *nftables.Chain
-	models.IpSet
+	destIPs        models.IpDomains
+	srcIPMacGroups models.IpMacGroups
 }
 
 func NewNFTRules() (*NFTRules, error) {
@@ -48,8 +49,45 @@ func NewNFTRules() (*NFTRules, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create nftables chain: %v", err)
 	}
-	nfq.Ips = make(models.MapIpDomain)
+	nfq.destIPs.Data = make(models.MapIpDomain)
 	return nfq, nil
+}
+
+// UpdateIPDomains is a callback that saves the supplied IP addresses and updates the nft rules using them.
+func (q *NFTRules) UpdateIPDomains(newData models.MapIpDomain) {
+	// TODO: don't trust the supplied map is good to just take as we want our own copy.
+	q.destIPs.Mu.Lock()
+	defer q.destIPs.Mu.Unlock()
+	q.destIPs.Data = newData
+
+	var newKeys []models.IP
+	for k := range newData {
+		newKeys = append(newKeys, k)
+	}
+
+	err := q.sendIP4PacketsToDefaultNFQueue(newKeys)
+	if err != nil {
+		log.Printf("failed to send IP addresses to default NFQUEUE: %v\n", err)
+	}
+}
+
+// UpdateIpMacGroups is a callback that saves the supplied IP addresses and updates the nft rules using them.
+func (q *NFTRules) UpdateIpMacGroups(newData models.MapIpMacGroup) {
+	// TODO: don't trust the supplied map is good to just take as we want our own copy.
+	q.srcIPMacGroups.Mu.Lock()
+	defer q.srcIPMacGroups.Mu.Unlock()
+	q.srcIPMacGroups.Data = newData
+
+	var newKeys []models.IP
+	for k := range newData {
+		newKeys = append(newKeys, k)
+	}
+
+	// TODO: add src IP rules or merge with destIP rules!
+	// err := q.sendIP4PacketsToDefaultNFQueue(newKeys)
+	// if err != nil {
+	// 	log.Printf("failed to send IP addresses to default NFQUEUE: %v\n", err)
+	// }
 }
 
 // addNFTablesRule add a rule to send traffic to the NFQUEUE for this app.
@@ -80,9 +118,9 @@ func (q *NFTRules) addNFTablesRule(dAddr models.IP) error {
 		// if ip.To16() != nil { // skip if IPv6
 		// 	log.Printf("Skipped IPv6 address %q\n", ipString)
 		// 	return nil
-			// offset = 24
-			// length = 16
-			// ipBytes = ip.To16()
+		// offset = 24
+		// length = 16
+		// ipBytes = ip.To16()
 		// }
 	}
 
@@ -148,24 +186,6 @@ func (q *NFTRules) sendIP4PacketsToDefaultNFQueue(ips []models.IP) error {
 		return fmt.Errorf("failed to flush nftables rules: %v", err)
 	}
 	return nil
-}
-
-// Notify is a callback that saves the supplied IP addresses and updates the nft rules using them.
-func (q *NFTRules) Notify(newIps models.MapIpDomain) {
-	// TODO: don't trust the supplied map is good to just take as we want our own copy.
-	q.Mu.Lock()
-	defer q.Mu.Unlock()
-	q.Ips = newIps
-
-	var newKeys []models.IP
-	for k := range newIps {
-		newKeys = append(newKeys, k)
-	}
-
-	err := q.sendIP4PacketsToDefaultNFQueue(newKeys)
-	if err != nil {
-		log.Printf("failed to send IP addresses to default NFQUEUE: %v\n", err)
-	}
 }
 
 // Clean deletes the nftables table and therefore all its chains and rules.

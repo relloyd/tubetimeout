@@ -9,8 +9,8 @@ import (
 	"example.com/youtube-nfqueue/models"
 )
 
-type IPListReceiver interface {
-	Notify(newIps models.MapIpDomain)
+type DomainListReceiver interface {
+	UpdateIPDomains(newIps models.MapIpDomain)
 }
 
 type resolver func(d []models.Domain)
@@ -23,9 +23,9 @@ type ipDomain struct {
 var (
 	defaultDomains            = []models.Domain{"www.youtube.com", "youtube.com", "googlevideo.com"}
 	defaultResolver           = resolver(resolveDomains)
-	defaultInterval           = time.Minute * 5
-	registeredIPListReceivers []IPListReceiver
-	Ips                       = &models.IpSet{Ips: make(models.MapIpDomain)}
+	defaultInterval             = time.Minute * 5
+	registeredIPDomainReceivers []DomainListReceiver
+	Ips                         = &models.IpDomains{Data: make(models.MapIpDomain)}
 )
 
 func resolveOneDomain(domain models.Domain) ([]string, error) {
@@ -64,18 +64,18 @@ func resolveDomains(domains []models.Domain) {
 	// Save them all.
 	Ips.Mu.Lock()
 	defer Ips.Mu.Unlock()
-	Ips.Ips = newIpSet
+	Ips.Data = newIpSet
 }
 
 // notifyIPListReceivers duplicates the cachedIPs map per receiver and sends it.
 func notifyIPListReceivers() {
-	for _, receiver := range registeredIPListReceivers {
-		newIps := make(models.MapIpDomain)
+	for _, receiver := range registeredIPDomainReceivers {
+		newData := make(models.MapIpDomain)
 		Ips.Mu.RLock()
-		for k, v := range Ips.Ips {
-			newIps[k] = v
+		for k, v := range Ips.Data {
+			newData[k] = v
 		}
-		receiver.Notify(newIps)
+		receiver.UpdateIPDomains(newData)
 		Ips.Mu.RUnlock()
 	}
 }
@@ -100,10 +100,10 @@ func PeriodicResolver(ctx context.Context) {
 	}
 }
 
-func RegisterIPListReceivers(receiver ...IPListReceiver) {
+func RegisterIPDomainReceivers(receiver ...DomainListReceiver) {
 	for _, r := range receiver {
 		if r != nil {
-			registeredIPListReceivers = append(registeredIPListReceivers, r)
+			registeredIPDomainReceivers = append(registeredIPDomainReceivers, r)
 		}
 	}
 }

@@ -9,11 +9,11 @@ import (
 
 	"example.com/youtube-nfqueue/models"
 	"example.com/youtube-nfqueue/tracker"
-	nfqueue "github.com/florianl/go-nfqueue"
+	"github.com/florianl/go-nfqueue"
 	"github.com/mdlayher/netlink"
 )
 
-type packetIP struct {
+type packetIPs struct {
 	src net.IP
 	dst net.IP
 }
@@ -21,18 +21,19 @@ type packetIP struct {
 type NFQueueFilter struct {
 	Nfq *nfqueue.Nfqueue
 	t   *tracker.Tracker
-	models.IpSet
+	dstIps models.IpDomains
+	srcIps models.IpMacGroups
 }
 
 // NewNFQueueFilter creates a new nfqueue filtering outbound packets.
-// The returned NFQueueFilter implements the IPListReceiver interface so this stuct can be supplied with a list of
+// The returned NFQueueFilter implements the IPListReceiver interface so this struct can be supplied with a list of
 // IP addresses for which to perform filtering.
 // If the packets are destined for any of the injected Ips then filtering happens based on
 // <LOGIC-TBC>
 func NewNFQueueFilter(ctx context.Context, t *tracker.Tracker) (*NFQueueFilter, error) {
 	var err error
 	f := &NFQueueFilter{}
-	f.Ips = make(models.MapIpDomain)
+	f.dstIps.Data = make(models.MapIpDomain)
 	f.Nfq, err = f.startNFQueueFilter(ctx)
 	f.t = t
 	if err != nil {
@@ -41,18 +42,25 @@ func NewNFQueueFilter(ctx context.Context, t *tracker.Tracker) (*NFQueueFilter, 
 	return f, nil
 }
 
-// Notify implements the IPListReceiver interface.
-func (f *NFQueueFilter) Notify(newIps models.MapIpDomain) {
+// UpdateIPDomains implements the IPListReceiver interface.
+func (f *NFQueueFilter) UpdateIPDomains(newData models.MapIpDomain) {
 	// TODO: don't trust the supplied map is good to just take as we want our own copy.
-	f.Mu.Lock()
-	defer f.Mu.Unlock()
-	f.Ips = newIps
+	f.dstIps.Mu.Lock()
+	defer f.dstIps.Mu.Unlock()
+	f.dstIps.Data = newData
 }
 
-func (f *NFQueueFilter) ipIsKnown(ip net.IP) (models.Domain, bool) {
-	f.Mu.RLock()
-	defer f.Mu.RUnlock()
-	d, ok := f.Ips[models.IP(ip.String())]
+func (f *NFQueueFilter) UpdateIpMacGroups(newData models.MapIpMacGroup) {
+	// TODO: don't trust the supplied map is good to just take as we want our own copy.
+	f.srcIps.Mu.Lock()
+	defer f.srcIps.Mu.Unlock()
+	f.srcIps.Data = newData
+}
+
+func (f *NFQueueFilter) IsDstIpKnown(ip net.IP) (models.Domain, bool) {
+	f.dstIps.Mu.RLock()
+	defer f.dstIps.Mu.RUnlock()
+	d, ok := f.dstIps.Data[models.IP(ip.String())]
 	return d, ok
 }
 
@@ -85,7 +93,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 
 	fnPacketHandler := func(a nfqueue.Attribute) int {
 		var err error
-		var ipData packetIP
+		var pips packetIPs
 		id := *a.PacketID
 
 		log.Printf("Received packet with ID: %d\n", id)
@@ -100,26 +108,26 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 			return 0
 		}
 
-		ipData, err = getPacketIPs(a)
+		pips, err = getPacketIPs(a)
 		if err != nil {
 			fmt.Println(err)
 			return -1 // TODO: find out if this kills the nfqueue
 		}
 
 		// Check if the packet is for any of the resolved IPs.
-		d, ok := f.ipIsKnown(ipData.dst)
+		d, ok := f.IsDstIpKnown(pips.dst)
 		if ok { // if the packet destination IP address is known...
 			// Remember that we saw it.
-			f.t.AddSample(ipData.src.String()) // TODO: add a source group identifier to the tracker
-			if f.t.HasExceededThreshold(ipData.src.String()) {
-				log.Printf("Dropping packet to %v (%v) threshold breached", d, ipData.dst)
+			f.t.AddSample(pips.src.String()) // TODO: add a source group identifier to the tracker
+			if f.t.HasExceededThreshold(pips.src.String()) {
+				log.Printf("Dropping packet to %v (%v) threshold breached", d, pips.dst)
 				err = nf.SetVerdict(id, nfqueue.NfDrop)
 			} else {
-				fmt.Println("Accepting packet within threshold to known destination:", ipData.dst)
+				fmt.Println("Accepting packet within threshold to known destination:", pips.dst)
 				err = nf.SetVerdict(id, nfqueue.NfAccept)
 			}
 		} else {
-			fmt.Println("Accepting packet to unregistered destination:", ipData.dst)
+			fmt.Println("Accepting packet to unregistered destination:", pips.dst)
 			err = nf.SetVerdict(id, nfqueue.NfAccept)
 		}
 
@@ -139,7 +147,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 			// return -1
 		}
 
-		return -1 // to stop receiving messages return something different than 0.
+		return -1 // to stop receiving messages return something different from 0.
 	}
 
 	err = nf.RegisterWithErrorFunc(ctx, fnPacketHandler, fnErrorHandler)
@@ -150,49 +158,18 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 	return nf, nil
 }
 
-func parseL2Hdr(a nfqueue.Attribute) {
-	if a.L2Hdr != nil && len(*a.L2Hdr) < 14 { // Minimum Ethernet header size
-		fmt.Println("L2Hdr is too short")
-		return
-	} else if a.L2Hdr == nil {
-		fmt.Println("L2Hdr is nil")
-		return
-	}
-
-	// Destination MAC: bytes 0-5
-	destMAC := net.HardwareAddr((*a.L2Hdr)[0:6])
-	// Source MAC: bytes 6-11
-	srcMAC := net.HardwareAddr((*a.L2Hdr)[6:12])
-	// EtherType: bytes 12-13
-	etherType := uint16((*a.L2Hdr)[12])<<8 | uint16((*a.L2Hdr)[13])
-
-	fmt.Printf("Destination MAC: %s\t", destMAC)
-	fmt.Printf("Source MAC: %s\t", srcMAC)
-	fmt.Printf("EtherType: 0x%04X\t", etherType)
-
-	// Check for IPv4 or IPv6 EtherType
-	switch etherType {
-	case 0x0800:
-		fmt.Println("Payload contains an IPv4 packet")
-	case 0x86DD:
-		fmt.Println("Payload contains an IPv6 packet")
-	default:
-		fmt.Println("Unknown EtherType")
-	}
-}
-
 // Source IP (bytes 12-15 in IPv4 header)
 // Destination IP (bytes 16-19 in IPv4 header)
 // getPacketIPs extracts the source and destination IP addresses from the packet payload.
-func getPacketIPs(a nfqueue.Attribute) (packetIP, error) {
+func getPacketIPs(a nfqueue.Attribute) (packetIPs, error) {
 	// TODO: handle empty payload and return nf -> Accept
 	payload := *a.Payload
 
 	if len(payload) < 20 { // if the payload is too short for ipv4 header...
-		return packetIP{}, fmt.Errorf("payload too short for IPv4 header")
+		return packetIPs{}, fmt.Errorf("payload too short for IPv4 header")
 	}
 
-	return packetIP{
+	return packetIPs{
 		src: payload[12:16],
 		dst: payload[16:20],
 	}, nil

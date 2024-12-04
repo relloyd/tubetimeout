@@ -9,13 +9,14 @@ const (
 // DefaultConfigFile = ".tubetimeout/config.yaml"
 )
 
-type DebugConfig struct {
-	DebugEnabled bool          `envconfig:"DEBUG_ENABLED" default:"false"`
-	DebugTime    time.Duration `envconfig:"DEBUG_TIME_SECONDS" default:"30s"`
+type AppConfig struct {
+	DebugConfig  DebugConfig   `envconfig:"DEBUG"`
+	TrackerConfig TrackerConfig `envconfig:"TRACKER"`
 }
 
-type AppConfig struct {
-	TrackerConfig TrackerConfig `envconfig:"TRACKER_CONFIG"`
+type DebugConfig struct {
+	DebugEnabled bool          `envconfig:"ENABLED" default:"false"`
+	DebugTime    time.Duration `envconfig:"TIME_SECONDS" default:"30s"`
 }
 
 type TrackerConfig struct {

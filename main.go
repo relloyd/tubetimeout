@@ -32,24 +32,24 @@ func main() {
 	defer cancel()
 
 	// Load config from the environment.
-	var debugCfg config.DebugConfig
-	err := envconfig.Process("", &debugCfg)
-	if err != nil {
-		fmt.Println("failed to process debug config:", err)
-		os.Exit(1)
-	}
+	// var debugCfg config.DebugConfig
+	// err := envconfig.Process("", &debugCfg)
+	// if err != nil {
+	// 	fmt.Println("failed to process debug config:", err)
+	// 	os.Exit(1)
+	// }
 
 	// Load app config from the environment.
 	var appCfg config.AppConfig
-	err = envconfig.Process("", &appCfg)
+	err := envconfig.Process("", &appCfg)
 	if err != nil {
 		fmt.Println("failed to process app config:", err)
 		os.Exit(1)
 	}
 
-	if debugCfg.DebugEnabled {
+	if appCfg.DebugConfig.DebugEnabled {
 		// Allow debug connection timeout.
-		tc := time.After(debugCfg.DebugTime)
+		tc := time.After(appCfg.DebugConfig.DebugTime)
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT)
 		fmt.Println("Waiting for debug time or CTRL-C signal...")
@@ -69,9 +69,9 @@ func main() {
 		fmt.Println("failed to setup nft rules:", err)
 		os.Exit(1)
 	}
-	fmt.Println("nft rules setup.")
+	fmt.Println("NFTables rules setup")
 
-	// Create a tracker.
+	// Create a usage tracker.
 	t := tracker.NewTracker(appCfg.TrackerConfig.Retention, appCfg.TrackerConfig.Granularity, appCfg.TrackerConfig.Threshold, appCfg.TrackerConfig.StartDay, appCfg.TrackerConfig.StartTime)
 
 	// Create our NFQueue to listen for packets in user space.
@@ -80,26 +80,18 @@ func main() {
 		fmt.Println("failed to setup nfqueue filter:", err)
 		os.Exit(1)
 	}
-	fmt.Println("nfq filter setup.")
+	fmt.Println("NFQueue setup")
 
 	// Register interfaces to receive updated IPs periodically.
-	// rules.Notify(map[string]struct{}{"142.250.179.238": {}})
-	// nfq.Notify(map[string]struct{}{"142.250.179.238": {}})
-	domains.RegisterIPListReceivers(rules, nfq)
+	domains.RegisterIPDomainReceivers(rules, nfq)
 
 	// Start a goroutine to periodically resolve the domains.
 	go domains.PeriodicResolver(ctx)
 
-	// Create a new NetWatcher
+	// Create a new NetWatcher to get IPs and MACs from ARP scanning.
+	// TODO: add the callbacks directly to the new net watcher.
 	watcher := netwatch.NewNetWatcher()
-
-	// Register a callback
-	watcher.RegisterCallback(func(data map[string]netwatch.MACGroup) {
-		fmt.Println("Updated IP map:")
-		for ip, mapping := range data {
-			fmt.Printf("IP: %s, MAC: %s, Group: %s\n", ip, mapping.MAC, mapping.Group)
-		}
-	})
+	watcher.RegisterIpMacGroupReceivers(rules, nfq)
 
 	// Capture SIGINT and SIGTERM to gracefully shutdown
 	sigs := make(chan os.Signal, 1)
@@ -110,7 +102,7 @@ func main() {
 		fmt.Println("Context done.")
 	case <-sigs:
 		fmt.Println("Signal received, shutting down...")
-		cancel() // cancel before closing the nfq else it will block.
+		cancel() // clean up; call cancel before closing the nfq else it will block.
 		err = rules.Clean()
 		if err != nil {
 			fmt.Println("Error: unable to remove NFT rules")

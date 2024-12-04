@@ -37,7 +37,7 @@ func checkARPAvailability() error {
 }
 
 // ScanNetwork performs an ARP scan and maps MAC addresses to IPs
-func ScanNetwork(yamlPath string, arpCmd ARPCommand) map[models.IP]MACGroup {
+func ScanNetwork(yamlPath string, arpCmd ARPCommand) models.MapIpMacGroup {
 	// Load YAML data
 	cfg, err := LoadMACGroups(yamlPath)
 	if err != nil {
@@ -46,7 +46,7 @@ func ScanNetwork(yamlPath string, arpCmd ARPCommand) map[models.IP]MACGroup {
 	}
 
 	// Initialize map
-	ipMap := make(map[models.IP]MACGroup)
+	ipMap := make(map[models.IP]models.MACGroup)
 
 	// Execute ARP scan
 	output, err := arpCmd()
@@ -56,7 +56,7 @@ func ScanNetwork(yamlPath string, arpCmd ARPCommand) map[models.IP]MACGroup {
 	}
 
 	// Parse ARP output
-	lines := strings.Split(string(output), "\n")
+	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		fields := strings.Fields(line)
 		if len(fields) < 3 { // if the line can be skipped...
@@ -70,7 +70,7 @@ func ScanNetwork(yamlPath string, arpCmd ARPCommand) map[models.IP]MACGroup {
 		for group, macs := range cfg.Groups {
 			for _, gmac := range macs {
 				if gmac == mac {
-					ipMap[models.IP(ip)] = MACGroup{MAC: mac, Group: group}
+					ipMap[models.IP(ip)] = models.MACGroup{MAC: mac, Group: group}
 					break
 				}
 			}

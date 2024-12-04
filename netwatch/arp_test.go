@@ -46,7 +46,7 @@ groups:
 	ipMap := ScanNetwork(tempFile.Name(), mockARPCommand)
 
 	// Validate the result
-	expectedMap := map[models.IP]MACGroup{
+	expectedMap := map[models.IP]models.MACGroup{
 		"192.168.1.10": {MAC: "00:11:22:33:44:55", Group: "group1"},
 		"192.168.1.11": {MAC: "66:77:88:99:AA:BB", Group: "group1"},
 		"192.168.1.12": {MAC: "CC:DD:EE:FF:00:11", Group: "group2"},

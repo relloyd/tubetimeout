@@ -9,33 +9,27 @@ import (
 	"example.com/youtube-nfqueue/models"
 )
 
-// MACGroup contains MAC and group information
-type MACGroup struct {
-	MAC   string
-	Group string
-}
-
 type NetWatcherReceiver interface {
-	Notify(map[models.IP]MACGroup)
+	UpdateIpMacGroups(newData models.MapIpMacGroup)
 }
 
 // NetWatcher manages ARP scanning and registered callbacks
 type NetWatcher struct {
-	ipMap     map[models.IP]MACGroup
-	callbacks []NetWatcherReceiver
-	mutex     sync.RWMutex
+	ipMacGroups models.MapIpMacGroup
+	callbacks   []NetWatcherReceiver
+	mutex       sync.RWMutex
 }
 
 // NewNetWatcher creates a new NetWatcher instance
 func NewNetWatcher() *NetWatcher {
 	return &NetWatcher{
-		ipMap:     make(map[models.IP]MACGroup),
-		callbacks: []NetWatcherReceiver{},
+		ipMacGroups: make(map[models.IP]models.MACGroup),
+		callbacks:   []NetWatcherReceiver{},
 	}
 }
 
-// RegisterCallback registers a callback to be called on updates
-func (nw *NetWatcher) RegisterCallback(callback []NetWatcherReceiver) {
+// RegisterIpMacGroupReceivers registers a callback to be called on updates
+func (nw *NetWatcher) RegisterIpMacGroupReceivers(callback ...NetWatcherReceiver) {
 	nw.mutex.Lock()
 	defer nw.mutex.Unlock()
 	nw.callbacks = append(nw.callbacks, callback...)
@@ -56,12 +50,12 @@ func (nw *NetWatcher) Start(ctx context.Context, yamlPath string) {
 
 				// Compare with existing data
 				nw.mutex.Lock()
-				if !maps.Equal(nw.ipMap, newMap) { // if there is new arp data...
-					nw.ipMap = newMap
+				if !maps.Equal(nw.ipMacGroups, newMap) { // if there is new arp data...
+					nw.ipMacGroups = newMap
 
-					// Notify all registered callbacks
+					// UpdateIPDomains all registered callbacks
 					for _, cb := range nw.callbacks {
-						cb.Notify(newMap)
+						cb.UpdateIpMacGroups(newMap)
 					}
 				}
 				nw.mutex.Unlock()

@@ -3,6 +3,7 @@ package nftables
 import (
 	"testing"
 
+	"example.com/youtube-nfqueue/models"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,7 +36,7 @@ func Test_SendIP4PacketsToDefaultNFQueue(t *testing.T) {
 	assert.Equal(t, 1, len(r), "expected 1 rule")
 
 	// Add empty rules list which should cause chain flush.
-	err = nfq.sendIP4PacketsToDefaultNFQueue([]string{}) // send empty IP list to cause empty rules.
+	err = nfq.sendIP4PacketsToDefaultNFQueue([]models.IP{}) // send empty IP list to cause empty rules.
 	assert.NoError(t, err, "sendIP4PacketsToDefaultNFQueue() error = %v", err)
 
 	// Check length of chain rules.
