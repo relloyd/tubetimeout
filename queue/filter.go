@@ -94,49 +94,52 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 	fnPacketHandler := func(a nfqueue.Attribute) int {
 		var err error
 		var pips packetIPs
+		var retval = 0 // 0 to accept, 1 to drop, -1 to stop receiving messages
+
 		id := *a.PacketID
 
-		log.Printf("Received packet with ID: %d\n", id)
-
 		if a.Payload == nil { // if there's no payload then accept the packet.
-			fmt.Println("Payload is nil")
+			log.Println("Payload is nil")
 			err = nf.SetVerdict(id, nfqueue.NfAccept)
 			if err != nil {
-				fmt.Printf("error setting verdict: %v\n", err)
-				return -1 // TODO: find out if this kills the nfqueue
+				log.Printf("Error setting verdict: %v\n", err)
+				return -1
 			}
 			return 0
 		}
 
 		pips, err = getPacketIPs(a)
 		if err != nil {
-			fmt.Println(err)
-			return -1 // TODO: find out if this kills the nfqueue
+			log.Println(err)
+			return -1
 		}
 
 		// Check if the packet is for any of the resolved IPs.
 		d, ok := f.IsDstIpKnown(pips.dst)
 		if ok { // if the packet destination IP address is known...
 			// Remember that we saw it.
-			f.t.AddSample(pips.src.String()) // TODO: add a source group identifier to the tracker
-			if f.t.HasExceededThreshold(pips.src.String()) {
-				log.Printf("Dropping packet to %v (%v) threshold breached", d, pips.dst)
+			f.t.AddSample(pips.src.String())                 // TODO: add a source group identifier to the tracker
+			if f.t.HasExceededThreshold(pips.src.String()) { // if the threshold is exceeded for this source IP...
+				// Drop the packet.
+				log.Printf("Dropping packet (threshold breached) from %v to %v", pips.src, d)
 				err = nf.SetVerdict(id, nfqueue.NfDrop)
-			} else {
-				fmt.Println("Accepting packet within threshold to known destination:", pips.dst)
+				retval = 1
+			} else { // else the threshold is not exceeded...
+				// Accept the packet.
+				log.Printf("Accepting packet from %v to %v", pips.src, d)
 				err = nf.SetVerdict(id, nfqueue.NfAccept)
 			}
-		} else {
-			fmt.Println("Accepting packet to unregistered destination:", pips.dst)
+		} else { // else the packet destination IP address is not known...
+			// Accept the packet.
+			log.Println("Accepting packet to unregistered destination:", pips.dst)
 			err = nf.SetVerdict(id, nfqueue.NfAccept)
 		}
 
 		if err != nil {
-			fmt.Printf("error setting verdict: %v\n", err)
-			return -1 // TODO: find out if this kills the nfqueue
+			log.Printf("Error setting verdict: %v", err)
+			retval = -1
 		}
-
-		return 0
+		return retval
 	}
 
 	fnErrorHandler := func(err error) int {

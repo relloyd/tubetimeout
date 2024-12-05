@@ -2,7 +2,7 @@ package domains
 
 import (
 	"context"
-	"fmt"
+	"log"
 	"net"
 	"time"
 
@@ -46,13 +46,13 @@ func resolveDomains(domains []models.Domain) {
 	for _, domain := range domains {
 		ips, err := resolveOneDomain(domain)
 		if err != nil {
-			fmt.Printf("Failed to resolve %s: %v\n", domain, err)
+			log.Printf("Failed to resolve %s: %v\n", domain, err)
 			continue
 		}
 		for _, ip := range ips {
-			fmt.Printf("Resolved %s to %s\n", domain, ip)
 			allIPs = append(allIPs, ipDomain{ip: models.IP(ip), domain: domain})
 		}
+		log.Printf("Resolved domains")
 	}
 
 	// Remove duplicates

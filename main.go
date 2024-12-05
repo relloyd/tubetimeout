@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -38,6 +38,7 @@ import (
 //
 // TODO: implement another filter for return/incoming traffic from YouTube
 //       do rate limiting
+// TODO: notify if another device hits youtube not via the proxy
 
 func handleDebugging(appCfg *config.AppConfig) {
 	if appCfg.DebugConfig.DebugEnabled {
@@ -45,12 +46,12 @@ func handleDebugging(appCfg *config.AppConfig) {
 		tc := time.After(appCfg.DebugConfig.DebugTime)
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT)
-		fmt.Println("Waiting for debug time or CTRL-C signal...")
+		log.Println("Waiting for debug time or CTRL-C signal...")
 		select {
 		case <-tc:
-			fmt.Println("Debug time is up; continuing...")
+			log.Println("Debug time is up; continuing...")
 		case <-sigs:
-			fmt.Println("Signal received, continuing...")
+			log.Println("Signal received, continuing...")
 		}
 		time.Sleep(1 * time.Second) // allow more time for debugger/dlv to attach 🤷‍♂️
 	}
@@ -64,7 +65,7 @@ func main() {
 	var appCfg config.AppConfig
 	err := envconfig.Process("", &appCfg)
 	if err != nil {
-		fmt.Println("failed to process app config:", err)
+		log.Println("failed to process app config:", err)
 		os.Exit(1)
 	}
 
@@ -73,21 +74,21 @@ func main() {
 	// NFT rules to send traffic to NFQueue. There won't be any rules until IPs are supplied by PeriodicResolver.
 	rules, err := nftables.NewNFTRules()
 	if err != nil {
-		fmt.Println("failed to setup nft rules:", err)
+		log.Println("failed to setup nft rules:", err)
 		os.Exit(1)
 	}
-	fmt.Println("NFTables rules created")
+	log.Println("NFTables rules created")
 
 	// Usage tracker.
-	// t := usage.NewTracker(appCfg.TrackerConfig.Retention, appCfg.TrackerConfig.Granularity, appCfg.TrackerConfig.Threshold, appCfg.TrackerConfig.StartDay, appCfg.TrackerConfig.StartTime)
+	t := usage.NewTracker(appCfg.TrackerConfig.Retention, appCfg.TrackerConfig.Granularity, appCfg.TrackerConfig.Threshold, appCfg.TrackerConfig.StartDay, appCfg.TrackerConfig.StartTime)
 
 	// NF Queue to listen to and track packets in user space.
 	nfq, err := queue.NewNFQueueFilter(ctx, t)
 	if err != nil {
-		fmt.Println("failed to setup nfqueue filter:", err)
+		log.Println("failed to setup nfqueue filter:", err)
 		os.Exit(1)
 	}
-	fmt.Println("NFQueue listener running")
+	log.Println("NFQueue listener running")
 
 	// Register interfaces to receive updated IPs periodically.
 	domains.RegisterIPDomainReceivers(rules, nfq)
@@ -119,7 +120,7 @@ func main() {
 	done := make(chan struct{}, 1)
 	go func() {
 		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			fmt.Println("Error starting proxy server:", err)
+			log.Println("Error starting proxy server:", err)
 			os.Exit(1)
 		}
 		close(done)
@@ -129,20 +130,21 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	<-sigs
-	fmt.Println("Signal received, shutting down...")
+	log.Println("Signal received, shutting down...")
 
 	// Shutdown the server.
-	ctxSrv, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	ctxSrv, cancelSrv := context.WithTimeout(context.Background(), 5*time.Second)
 	if err = s.Shutdown(ctxSrv); err != nil {
-		fmt.Println("Error shutting down server:", err)
+		log.Println("Error shutting down server:", err)
 		os.Exit(1)
 	}
+	cancelSrv()
 
 	// More cleanup.
 	cancel() // call cancel before closing the rules/nfq else it will block.
 	err = rules.Clean()
 	if err != nil {
-		fmt.Println("Error: unable to remove NFT rules")
+		log.Println("Error: unable to remove NFT rules")
 		os.Exit(1)
 	}
 	_ = nfq.Nfq.Close() // cancel its context above before calling Close() else it will block.

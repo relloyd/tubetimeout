@@ -1,7 +1,6 @@
 package usage
 
 import (
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -97,7 +96,7 @@ func (t *Tracker) HasExceededThreshold(deviceID string) bool {
 	for _, seen := range dd.samples {
 		if seen {
 			count++
-			fmt.Printf("seen count: %v\n", count)
+			log.Printf("Seen %v count %v", deviceID, count)
 		}
 	}
 
