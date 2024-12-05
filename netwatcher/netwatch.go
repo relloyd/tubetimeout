@@ -1,4 +1,4 @@
-package netwatch
+package netwatcher
 
 import (
 	"context"
@@ -9,14 +9,14 @@ import (
 	"example.com/youtube-nfqueue/models"
 )
 
-type NetWatcherReceiver interface {
+type Receiver interface {
 	UpdateIpMacGroups(newData models.MapIpMacGroup)
 }
 
 // NetWatcher manages ARP scanning and registered callbacks
 type NetWatcher struct {
 	ipMacGroups models.MapIpMacGroup
-	callbacks   []NetWatcherReceiver
+	callbacks   []Receiver
 	mutex       sync.RWMutex
 }
 
@@ -24,12 +24,12 @@ type NetWatcher struct {
 func NewNetWatcher() *NetWatcher {
 	return &NetWatcher{
 		ipMacGroups: make(map[models.IP]models.MACGroup),
-		callbacks:   []NetWatcherReceiver{},
+		callbacks:   []Receiver{},
 	}
 }
 
 // RegisterIpMacGroupReceivers registers a callback to be called on updates
-func (nw *NetWatcher) RegisterIpMacGroupReceivers(callback ...NetWatcherReceiver) {
+func (nw *NetWatcher) RegisterIpMacGroupReceivers(callback ...Receiver) {
 	nw.mutex.Lock()
 	defer nw.mutex.Unlock()
 	nw.callbacks = append(nw.callbacks, callback...)

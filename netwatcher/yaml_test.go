@@ -1,4 +1,4 @@
-package netwatch
+package netwatcher
 
 import (
 	"os"

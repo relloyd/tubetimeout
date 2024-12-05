@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"example.com/youtube-nfqueue/models"
-	"example.com/youtube-nfqueue/tracker"
+	"example.com/youtube-nfqueue/usage"
 	"github.com/florianl/go-nfqueue"
 	"github.com/mdlayher/netlink"
 )
@@ -19,8 +19,8 @@ type packetIPs struct {
 }
 
 type NFQueueFilter struct {
-	Nfq *nfqueue.Nfqueue
-	t   *tracker.Tracker
+	Nfq    *nfqueue.Nfqueue
+	t      *usage.Tracker
 	dstIps models.IpDomains
 	srcIps models.IpMacGroups
 }
@@ -30,7 +30,7 @@ type NFQueueFilter struct {
 // IP addresses for which to perform filtering.
 // If the packets are destined for any of the injected Ips then filtering happens based on
 // <LOGIC-TBC>
-func NewNFQueueFilter(ctx context.Context, t *tracker.Tracker) (*NFQueueFilter, error) {
+func NewNFQueueFilter(ctx context.Context, t *usage.Tracker) (*NFQueueFilter, error) {
 	var err error
 	f := &NFQueueFilter{}
 	f.dstIps.Data = make(models.MapIpDomain)

@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,43 +12,34 @@ import (
 
 	"example.com/youtube-nfqueue/config"
 	"example.com/youtube-nfqueue/domains"
-	"example.com/youtube-nfqueue/netwatch"
+	"example.com/youtube-nfqueue/netwatcher"
 	"example.com/youtube-nfqueue/nftables"
+	"example.com/youtube-nfqueue/proxy"
 	"example.com/youtube-nfqueue/queue"
-	"example.com/youtube-nfqueue/tracker"
+	"example.com/youtube-nfqueue/usage"
+	"github.com/elazarl/goproxy"
 	"github.com/kelseyhightower/envconfig"
 )
 
+// Functionality:
+//   INPUT
+//     Domains    - resolve IPs for a list of domains and supply to callbacks like NFT rules and NFQueue
+//     NetWatcher - MAC IP Groups
+//     Tracker    - count usage stats by a thing like dest IP or any string
+//   DOES STUFF
+//     NFT rules  - add NFT rules to capture traffic going to a set of dest IP addresses
+//     NFQueue    - inspect packets in user space (relies on NFT rules to receive them)
+//
 // TODO:
-//   test that blocking works by running mitm attack for my mac IP
-// TODO: implement filtering logic
-//   count time slots
-//   block after time limit
-//   time limit per MAC -- supply the MACs somehow
-// TODO: understand groups of MACs, apply time limits to groups, time limits per custom period
+//   blocking doesn't work by running mitm attacks for my RPi
+//   fire up goproxy as a transparent proxy
+//     track dest IP or domain usage
+//     if dest is for any of the knwon targets and threshold breached then (deny it, optionally drop it)
+//
 // TODO: implement another filter for return/incoming traffic from YouTube
-//   do rate limiting
+//       do rate limiting
 
-func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Load config from the environment.
-	// var debugCfg config.DebugConfig
-	// err := envconfig.Process("", &debugCfg)
-	// if err != nil {
-	// 	fmt.Println("failed to process debug config:", err)
-	// 	os.Exit(1)
-	// }
-
-	// Load app config from the environment.
-	var appCfg config.AppConfig
-	err := envconfig.Process("", &appCfg)
-	if err != nil {
-		fmt.Println("failed to process app config:", err)
-		os.Exit(1)
-	}
-
+func handleDebugging(appCfg *config.AppConfig) {
 	if appCfg.DebugConfig.DebugEnabled {
 		// Allow debug connection timeout.
 		tc := time.After(appCfg.DebugConfig.DebugTime)
@@ -61,55 +54,98 @@ func main() {
 		}
 		time.Sleep(1 * time.Second) // allow more time for debugger/dlv to attach 🤷‍♂️
 	}
+}
 
-	// Set up nft rules to send traffic to nfqueue.
-	// There won't be any rules until IPs are supplied by PeriodicResolver.
+func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Load app config from the environment.
+	var appCfg config.AppConfig
+	err := envconfig.Process("", &appCfg)
+	if err != nil {
+		fmt.Println("failed to process app config:", err)
+		os.Exit(1)
+	}
+
+	handleDebugging(&appCfg)
+
+	// NFT rules to send traffic to NFQueue. There won't be any rules until IPs are supplied by PeriodicResolver.
 	rules, err := nftables.NewNFTRules()
 	if err != nil {
 		fmt.Println("failed to setup nft rules:", err)
 		os.Exit(1)
 	}
-	fmt.Println("NFTables rules setup")
+	fmt.Println("NFTables rules created")
 
-	// Create a usage tracker.
-	t := tracker.NewTracker(appCfg.TrackerConfig.Retention, appCfg.TrackerConfig.Granularity, appCfg.TrackerConfig.Threshold, appCfg.TrackerConfig.StartDay, appCfg.TrackerConfig.StartTime)
+	// Usage tracker.
+	// t := usage.NewTracker(appCfg.TrackerConfig.Retention, appCfg.TrackerConfig.Granularity, appCfg.TrackerConfig.Threshold, appCfg.TrackerConfig.StartDay, appCfg.TrackerConfig.StartTime)
 
-	// Create our NFQueue to listen for packets in user space.
+	// NF Queue to listen to and track packets in user space.
 	nfq, err := queue.NewNFQueueFilter(ctx, t)
 	if err != nil {
 		fmt.Println("failed to setup nfqueue filter:", err)
 		os.Exit(1)
 	}
-	fmt.Println("NFQueue setup")
+	fmt.Println("NFQueue listener running")
 
 	// Register interfaces to receive updated IPs periodically.
 	domains.RegisterIPDomainReceivers(rules, nfq)
-
-	// Start a goroutine to periodically resolve the domains.
+	// Resolve the domain IPs.
 	go domains.PeriodicResolver(ctx)
 
-	// Create a new NetWatcher to get IPs and MACs from ARP scanning.
+	// NetWatcher to get IPs and MACs from ARP scanning.
 	// TODO: add the callbacks directly to the new net watcher.
-	watcher := netwatch.NewNetWatcher()
+	watcher := netwatcher.NewNetWatcher()
 	watcher.RegisterIpMacGroupReceivers(rules, nfq)
+
+	// Configure GoProxy.
+	p := goproxy.NewProxyHttpServer()
+	p.Verbose = true
+	p.OnRequest().DoFunc(proxy.Handler)
+	s := &http.Server{
+		Addr:                         ":8080",
+		Handler:                      p,
+		DisableGeneralOptionsHandler: false,
+		TLSConfig:                    nil,
+		ReadTimeout:                  30 * time.Second, // Maximum duration for reading the request body
+		ReadHeaderTimeout:            5 * time.Second,  // Time to read headers before timing out
+		WriteTimeout:                 30 * time.Second, // Maximum duration for writing the response
+		IdleTimeout:                  30 * time.Second, // Maximum amount of time to keep idle connections alive
+		MaxHeaderBytes:               1 << 20,          // Maximum size of request headers (1 MB)
+	}
+
+	// Start proxy server.
+	done := make(chan struct{}, 1)
+	go func() {
+		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			fmt.Println("Error starting proxy server:", err)
+			os.Exit(1)
+		}
+		close(done)
+	}()
 
 	// Capture SIGINT and SIGTERM to gracefully shutdown
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	<-sigs
+	fmt.Println("Signal received, shutting down...")
 
-	select {
-	case <-ctx.Done():
-		fmt.Println("Context done.")
-	case <-sigs:
-		fmt.Println("Signal received, shutting down...")
-		cancel() // clean up; call cancel before closing the nfq else it will block.
-		err = rules.Clean()
-		if err != nil {
-			fmt.Println("Error: unable to remove NFT rules")
-			os.Exit(1)
-		}
-		_ = nfq.Nfq.Close() // cancel its context above before calling Close() else it will block.
+	// Shutdown the server.
+	ctxSrv, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	if err = s.Shutdown(ctxSrv); err != nil {
+		fmt.Println("Error shutting down server:", err)
+		os.Exit(1)
 	}
+
+	// More cleanup.
+	cancel() // call cancel before closing the rules/nfq else it will block.
+	err = rules.Clean()
+	if err != nil {
+		fmt.Println("Error: unable to remove NFT rules")
+		os.Exit(1)
+	}
+	_ = nfq.Nfq.Close() // cancel its context above before calling Close() else it will block.
 
 	return
 }
