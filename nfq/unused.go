@@ -1,4 +1,4 @@
-package queue
+package nfq
 
 import (
 	"fmt"

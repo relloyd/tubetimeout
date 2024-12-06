@@ -1,4 +1,4 @@
-package nftables
+package nft
 
 import (
 	"errors"
@@ -25,11 +25,11 @@ var (
 )
 
 type NFTRules struct {
-	tableName string
-	chainName string
-	conn      *nftables.Conn
-	table     *nftables.Table
-	chain     *nftables.Chain
+	tableName      string
+	chainName      string
+	conn           *nftables.Conn
+	table          *nftables.Table
+	chain          *nftables.Chain
 	destIPs        models.IpDomains
 	srcIPMacGroups models.IpMacGroups
 }

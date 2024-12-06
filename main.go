@@ -11,11 +11,11 @@ import (
 	"time"
 
 	"example.com/youtube-nfqueue/config"
-	"example.com/youtube-nfqueue/domains"
+	"example.com/youtube-nfqueue/domain"
 	"example.com/youtube-nfqueue/netwatcher"
-	"example.com/youtube-nfqueue/nftables"
+	"example.com/youtube-nfqueue/nfq"
+	"example.com/youtube-nfqueue/nft"
 	"example.com/youtube-nfqueue/proxy"
-	"example.com/youtube-nfqueue/queue"
 	"example.com/youtube-nfqueue/usage"
 	"github.com/elazarl/goproxy"
 	"github.com/kelseyhightower/envconfig"
@@ -72,7 +72,7 @@ func main() {
 	handleDebugging(&appCfg)
 
 	// NFT rules to send traffic to NFQueue. There won't be any rules until IPs are supplied by PeriodicResolver.
-	rules, err := nftables.NewNFTRules()
+	rules, err := nft.NewNFTRules()
 	if err != nil {
 		log.Println("failed to setup nft rules:", err)
 		os.Exit(1)
@@ -83,7 +83,7 @@ func main() {
 	t := usage.NewTracker(appCfg.TrackerConfig.Retention, appCfg.TrackerConfig.Granularity, appCfg.TrackerConfig.Threshold, appCfg.TrackerConfig.StartDay, appCfg.TrackerConfig.StartTime)
 
 	// NF Queue to listen to and track packets in user space.
-	nfq, err := queue.NewNFQueueFilter(ctx, t)
+	nfq, err := nfq.NewNFQueueFilter(ctx, t)
 	if err != nil {
 		log.Println("failed to setup nfqueue filter:", err)
 		os.Exit(1)
@@ -91,9 +91,9 @@ func main() {
 	log.Println("NFQueue listener running")
 
 	// Register interfaces to receive updated IPs periodically.
-	domains.RegisterIPDomainReceivers(rules, nfq)
+	domain.RegisterIPDomainReceivers(rules, nfq)
 	// Resolve the domain IPs.
-	go domains.PeriodicResolver(ctx)
+	go domain.PeriodicResolver(ctx)
 
 	// NetWatcher to get IPs and MACs from ARP scanning.
 	// TODO: add the callbacks directly to the new net watcher.

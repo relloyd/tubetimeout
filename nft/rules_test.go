@@ -1,4 +1,4 @@
-package nftables
+package nft
 
 import (
 	"testing"

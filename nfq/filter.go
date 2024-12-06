@@ -1,4 +1,4 @@
-package queue
+package nfq
 
 import (
 	"context"
@@ -50,7 +50,7 @@ func (f *NFQueueFilter) UpdateIPDomains(newData models.MapIpDomain) {
 	f.dstIps.Data = newData
 }
 
-func (f *NFQueueFilter) UpdateIpMacGroups(newData models.MapIpMacGroup) {
+func (f *NFQueueFilter) UpdateI pMacGroups(newData models.MapIpMacGroup) {
 	// TODO: don't trust the supplied map is good to just take as we want our own copy.
 	f.srcIps.Mu.Lock()
 	defer f.srcIps.Mu.Unlock()

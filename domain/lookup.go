@@ -1,4 +1,4 @@
-package domains
+package domain
 
 import (
 	"context"
@@ -21,8 +21,8 @@ type ipDomain struct {
 }
 
 var (
-	defaultDomains            = []models.Domain{"www.youtube.com", "youtube.com", "googlevideo.com"}
-	defaultResolver           = resolver(resolveDomains)
+	defaultDomains              = []models.Domain{"www.youtube.com", "youtube.com", "googlevideo.com"}
+	defaultResolver             = resolver(resolveDomains)
 	defaultInterval             = time.Minute * 5
 	registeredIPDomainReceivers []DomainListReceiver
 	Ips                         = &models.IpDomains{Data: make(models.MapIpDomain)}
