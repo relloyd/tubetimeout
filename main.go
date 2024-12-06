@@ -40,6 +40,12 @@ import (
 //       do rate limiting
 // TODO: notify if another device hits youtube not via the proxy
 
+// TODO: add
+//  domains to groups
+//  dest IP to groups
+//  src IPs to groups
+// TODO: swap IpDomains for DestIpGroups in nfq
+
 func handleDebugging(appCfg *config.AppConfig) {
 	if appCfg.DebugConfig.DebugEnabled {
 		// Allow debug connection timeout.
