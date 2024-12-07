@@ -70,7 +70,7 @@ func main() {
 
 	handleDebugging(&appCfg)
 
-	// NFT rules to send traffic to NFQueue. There won't be any rules until IPs are supplied by PeriodicResolver.
+	// NFT rules to send traffic to NFQueue. There won't be any rules until IPs are supplied by Start.
 	rules, err := nft.NewNFTRules()
 	if err != nil {
 		log.Println("failed to setup nft rules:", err)
@@ -89,10 +89,11 @@ func main() {
 	}
 	log.Println("NFQueue listener running")
 
-	// Register interfaces to receive updated IPs periodically.
-	group.RegisterIPDomainReceivers(rules, q)
 	// Resolve the domain IPs.
-	go group.PeriodicResolver(ctx)
+	dw := group.NewDomainWatcher()
+	// Register interfaces to receive updated IPs periodically.
+	dw.RegisterIPDomainReceivers(rules, q)  // TODO sort this out!
+	dw.RegisterIPGroupReceivers( xxx  )
 
 	// NetWatcher to get IPs to MACs & GroupConfig.
 	// TODO: add the callbacks directly to the new net watcher.

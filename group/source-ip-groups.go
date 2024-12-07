@@ -36,7 +36,7 @@ type NetWatcher struct {
 // NewNetWatcher creates a new NetWatcher instance
 func NewNetWatcher() *NetWatcher {
 	return &NetWatcher{
-		ipGroups:  make(map[models.IP]models.Groups),
+		ipGroups:  make(map[models.IP][]models.Group),
 		callbacks: []MapIpGroupsReceiver{},
 	}
 }
@@ -63,7 +63,7 @@ func (nw *NetWatcher) Start(ctx context.Context, yamlPath string) {
 
 				// Compare with existing data
 				nw.mutex.Lock()
-				if !maps.EqualFunc(nw.ipGroups, newMapIpGroups, func(m1 models.Groups, m2 models.Groups) bool {
+				if !maps.EqualFunc(nw.ipGroups, newMapIpGroups, func(m1 []models.Group, m2 []models.Group) bool {
 					return slices.Equal(m1, m2)
 				}) { // if there is new arp data...
 					nw.ipGroups = newMapIpGroups
@@ -108,7 +108,7 @@ func scanNetwork(yamlPath string, arpCmd arpCommand) models.MapIpGroups {
 	}
 
 	// Initialize map
-	mig := make(map[models.IP]models.Groups)
+	mig := make(map[models.IP][]models.Group)
 
 	// Execute ARP scan
 	output, err := arpCmd()
@@ -133,7 +133,7 @@ func scanNetwork(yamlPath string, arpCmd arpCommand) models.MapIpGroups {
 			for _, gmac := range macs {
 				if gmac == arpMAC {
 					groups := mig[models.IP(ip)]
-					mig[models.IP(ip)] = append(groups, group)
+					mig[models.IP(ip)] = append(groups, models.Group(group))
 				}
 			}
 		}

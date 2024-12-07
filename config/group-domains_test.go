@@ -4,6 +4,8 @@ import (
 	"os"
 	"slices"
 	"testing"
+
+	"example.com/youtube-nfqueue/models"
 )
 
 // TestLoadGroupDomains tests the LoadGroupDomains function
@@ -12,7 +14,7 @@ func TestLoadGroupDomains(t *testing.T) {
 	tests := []struct {
 		name        string
 		yamlContent string
-		expected    GroupDomains
+		expected    models.MapGroupDomains
 		expectError bool
 	}{
 		{
@@ -25,24 +27,22 @@ groups:
   group2:
     - domain3.com
   `,
-			expected: GroupDomains{
-				Groups: map[string][]string{
-					"group1": {"domain1.com", "domain2.com"},
-					"group2": {"domain3.com"},
-				},
+			expected: models.MapGroupDomains{
+				"group1": {"domain1.com", "domain2.com"},
+				"group2": {"domain3.com"},
 			},
 			expectError: false,
 		},
 		{
 			name:        "Invalid YAML file",
 			yamlContent: `invalid YAML content`,
-			expected:    GroupDomains{},
+			expected:    models.MapGroupDomains{},
 			expectError: true,
 		},
 		{
 			name:        "Empty YAML file",
 			yamlContent: ``,
-			expected:    GroupDomains{},
+			expected:    models.MapGroupDomains{},
 			expectError: false,
 		},
 	}
@@ -65,7 +65,8 @@ groups:
 			_ = tmpFile.Close()
 
 			// Call the function under test
-			result, err := LoadGroupDomains(tmpFile.Name())
+			defaultFilePath = tmpFile.Name()
+			result, err := LoadGroupDomains()
 
 			// Check for expected errors
 			if (err != nil) != tt.expectError {
@@ -80,14 +81,14 @@ groups:
 	}
 }
 
-// Helper function to compare two GroupDomains structs
-func equalGroupDomains(a, b GroupDomains) bool {
-	if len(a.Groups) != len(b.Groups) {
+// Helper function to compare two GroupDomainsConfig structs
+func equalGroupDomains(a, b models.MapGroupDomains) bool {
+	if len(a) != len(b) {
 		return false
 	}
 
-	for key, val := range a.Groups {
-		if bVal, exists := b.Groups[key]; !exists || !slices.Equal(val, bVal) {
+	for key, val := range a {
+		if bVal, exists := b[key]; !exists || !slices.Equal(val, bVal) {
 			return false
 		}
 	}

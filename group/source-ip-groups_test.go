@@ -49,7 +49,7 @@ groups:
 	mig := scanNetwork(tempFile.Name(), mockARPCommand)
 
 	// Validate the result
-	expectedMap := map[models.IP]models.Groups{
+	expectedMap := map[models.IP]models.Group{
 		"192.168.1.10": {"group1"},
 		"192.168.1.11": {"group1"},
 		"192.168.1.12": {"group2"},
