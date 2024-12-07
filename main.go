@@ -83,7 +83,7 @@ func main() {
 	t := usage.NewTracker(appCfg.TrackerConfig.Retention, appCfg.TrackerConfig.Granularity, appCfg.TrackerConfig.Threshold, appCfg.TrackerConfig.StartDay, appCfg.TrackerConfig.StartTime)
 
 	// NF Queue to listen to and track packets in user space.
-	nfq, err := nfq.NewNFQueueFilter(ctx, t)
+	q, err := nfq.NewNFQueueFilter(ctx, t)
 	if err != nil {
 		log.Println("failed to setup nfqueue filter:", err)
 		os.Exit(1)
@@ -91,14 +91,14 @@ func main() {
 	log.Println("NFQueue listener running")
 
 	// Register interfaces to receive updated IPs periodically.
-	domain.RegisterIPDomainReceivers(rules, nfq)
+	domain.RegisterIPDomainReceivers(rules, q)
 	// Resolve the domain IPs.
 	go domain.PeriodicResolver(ctx)
 
-	// NetWatcher to get IPs and MACs from ARP scanning.
+	// NetWatcher to get IPs to MACs & Groups.
 	// TODO: add the callbacks directly to the new net watcher.
 	watcher := netwatcher.NewNetWatcher()
-	watcher.RegisterIpMacGroupReceivers(rules, nfq)
+	watcher.RegisterIpMacGroupReceivers(rules, q)
 
 	// Configure GoProxy.
 	p := goproxy.NewProxyHttpServer()
@@ -147,7 +147,7 @@ func main() {
 		log.Println("Error: unable to remove NFT rules")
 		os.Exit(1)
 	}
-	_ = nfq.Nfq.Close() // cancel its context above before calling Close() else it will block.
+	_ = q.Nfq.Close() // cancel its context above before calling Close() else it will block.
 
 	return
 }

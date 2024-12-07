@@ -1,4 +1,4 @@
-package netwatcher
+package config
 
 import (
 	"os"
@@ -33,9 +33,9 @@ groups:
 	}
 
 	// Call the function under test
-	macGroup, err := LoadMACGroups(tempFile.Name())
+	macGroup, err := LoadGroupMACs(tempFile.Name())
 	if err != nil {
-		t.Fatalf("LoadMACGroups returned an error: %v", err)
+		t.Fatalf("LoadGroupMACs returned an error: %v", err)
 	}
 
 	// Validate the result

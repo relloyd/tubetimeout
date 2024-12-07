@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"example.com/youtube-nfqueue/config"
 	"example.com/youtube-nfqueue/models"
 )
 
@@ -39,7 +40,7 @@ func checkARPAvailability() error {
 // ScanNetwork performs an ARP scan and maps MAC addresses to IPs
 func ScanNetwork(yamlPath string, arpCmd ARPCommand) models.MapIpMacGroup {
 	// Load YAML data
-	cfg, err := LoadMACGroups(yamlPath)
+	cfg, err := config.LoadGroupMACs(yamlPath)
 	if err != nil {
 		fmt.Printf("Error loading YAML: %v\n", err)
 		return nil
