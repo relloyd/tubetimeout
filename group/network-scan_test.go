@@ -1,7 +1,8 @@
-package netwatcher
+package group
 
 import (
 	"os"
+	"slices"
 	"testing"
 
 	"example.com/youtube-nfqueue/models"
@@ -32,7 +33,9 @@ groups:
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tempFile.Name()) // Clean up the temp file after the test
+	defer func(name string) {
+		_ = os.Remove(name)
+	}(tempFile.Name()) // Clean up the temp file after the test
 
 	// Write the YAML content to the file
 	if _, err := tempFile.WriteString(yamlContent); err != nil {
@@ -43,27 +46,27 @@ groups:
 	}
 
 	// Call the function under test
-	ipMap := ScanNetwork(tempFile.Name(), mockARPCommand)
+	mig := ScanNetwork(tempFile.Name(), mockARPCommand)
 
 	// Validate the result
-	expectedMap := map[models.IP]models.MACGroup{
-		"192.168.1.10": {MAC: "00:11:22:33:44:55", Group: "group1"},
-		"192.168.1.11": {MAC: "66:77:88:99:AA:BB", Group: "group1"},
-		"192.168.1.12": {MAC: "CC:DD:EE:FF:00:11", Group: "group2"},
+	expectedMap := map[models.IP]models.Groups{
+		"192.168.1.10": {"group1"},
+		"192.168.1.11": {"group1"},
+		"192.168.1.12": {"group2"},
 	}
 
-	if len(ipMap) != len(expectedMap) {
-		t.Fatalf("Expected %d entries, got %d", len(expectedMap), len(ipMap))
+	if len(mig) != len(expectedMap) {
+		t.Fatalf("Expected %d entries, got %d", len(expectedMap), len(mig))
 	}
 
-	for ip, expectedMapping := range expectedMap {
-		mapping, exists := ipMap[ip]
+	for ip, expectedGroups := range expectedMap {
+		groups, exists := mig[ip]
 		if !exists {
 			t.Errorf("IP %s not found in result", ip)
 			continue
 		}
-		if mapping != expectedMapping {
-			t.Errorf("IP %s: expected %v, got %v", ip, expectedMapping, mapping)
+		if !slices.Equal(groups, expectedGroups) {
+			t.Errorf("IP %s: expected %v, got %v", ip, expectedGroups, groups)
 		}
 	}
 }

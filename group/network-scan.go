@@ -1,4 +1,4 @@
-package netwatcher
+package group
 
 import (
 	"fmt"
@@ -38,16 +38,16 @@ func checkARPAvailability() error {
 }
 
 // ScanNetwork performs an ARP scan and maps MAC addresses to IPs
-func ScanNetwork(yamlPath string, arpCmd ARPCommand) models.MapIpMacGroup {
+func ScanNetwork(yamlPath string, arpCmd ARPCommand) models.MapIpGroups {
 	// Load YAML data
-	cfg, err := config.LoadGroupMACs(yamlPath)
+	gm, err := config.LoadGroupMACs(yamlPath)
 	if err != nil {
 		fmt.Printf("Error loading YAML: %v\n", err)
 		return nil
 	}
 
 	// Initialize map
-	ipMap := make(map[models.IP]models.MACGroup)
+	mig := make(map[models.IP]models.Groups)
 
 	// Execute ARP scan
 	output, err := arpCmd()
@@ -57,26 +57,26 @@ func ScanNetwork(yamlPath string, arpCmd ARPCommand) models.MapIpMacGroup {
 	}
 
 	// Parse ARP output
-	lines := strings.Split(output, "\n")
-	for _, line := range lines {
+	arpLines := strings.Split(output, "\n")
+	for _, line := range arpLines {
 		fields := strings.Fields(line)
 		if len(fields) < 3 { // if the line can be skipped...
 			continue
 		}
 
 		ip := strings.Trim(fields[1], "()") // field zero may be '?' as the hostnames haven't been looked up
-		mac := fields[3]
+		arpMAC := fields[3]
 
 		// Find group for MAC
-		for group, macs := range cfg.Groups {
+		for group, macs := range gm.GroupMACs {
 			for _, gmac := range macs {
-				if gmac == mac {
-					ipMap[models.IP(ip)] = models.MACGroup{MAC: mac, Group: group}
-					break
+				if gmac == arpMAC {
+					groups := mig[models.IP(ip)]
+					mig[models.IP(ip)] = append(groups, group)
 				}
 			}
 		}
 	}
 
-	return ipMap
+	return mig
 }

@@ -44,12 +44,12 @@ groups:
 		"group2": {"CC:DD:EE:FF:00:11", "22:33:44:55:66:77"},
 	}
 
-	if len(macGroup.Groups) != len(expectedGroups) {
-		t.Fatalf("Expected %d groups, got %d", len(expectedGroups), len(macGroup.Groups))
+	if len(macGroup.GroupMACs) != len(expectedGroups) {
+		t.Fatalf("Expected %d groups, got %d", len(expectedGroups), len(macGroup.GroupMACs))
 	}
 
 	for group, macs := range expectedGroups {
-		parsedMacs, ok := macGroup.Groups[group]
+		parsedMacs, ok := macGroup.GroupMACs[group]
 		if !ok {
 			t.Errorf("Group %s not found in parsed result", group)
 			continue

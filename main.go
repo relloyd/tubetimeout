@@ -11,8 +11,7 @@ import (
 	"time"
 
 	"example.com/youtube-nfqueue/config"
-	"example.com/youtube-nfqueue/domain"
-	"example.com/youtube-nfqueue/netwatcher"
+	"example.com/youtube-nfqueue/group"
 	"example.com/youtube-nfqueue/nfq"
 	"example.com/youtube-nfqueue/nft"
 	"example.com/youtube-nfqueue/proxy"
@@ -24,7 +23,7 @@ import (
 // Functionality:
 //   INPUT
 //     Domains    - resolve IPs for a list of domains and supply to callbacks like NFT rules and NFQueue
-//     NetWatcher - MAC IP Groups
+//     NetWatcher - MAC IP GroupConfig
 //     Tracker    - count usage stats by a thing like dest IP or any string
 //   DOES STUFF
 //     NFT rules  - add NFT rules to capture traffic going to a set of dest IP addresses
@@ -91,13 +90,13 @@ func main() {
 	log.Println("NFQueue listener running")
 
 	// Register interfaces to receive updated IPs periodically.
-	domain.RegisterIPDomainReceivers(rules, q)
+	group.RegisterIPDomainReceivers(rules, q)
 	// Resolve the domain IPs.
-	go domain.PeriodicResolver(ctx)
+	go group.PeriodicResolver(ctx)
 
-	// NetWatcher to get IPs to MACs & Groups.
+	// NetWatcher to get IPs to MACs & GroupConfig.
 	// TODO: add the callbacks directly to the new net watcher.
-	watcher := netwatcher.NewNetWatcher()
+	watcher := group.NewNetWatcher()
 	watcher.RegisterIpMacGroupReceivers(rules, q)
 
 	// Configure GoProxy.

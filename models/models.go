@@ -4,23 +4,25 @@ import (
 	"sync"
 )
 
-type Domain string
 type IP string
+type Domain string
+type Groups []string
+
 type MapIpDomain map[IP]Domain
-type MapIpMacGroup map[IP]MACGroup
+type MapIpGroups map[IP]Groups
+type MapDomainGroups map[Domain]Groups
 
 type IpDomains struct {
 	Data MapIpDomain
 	Mu   sync.RWMutex
 }
 
-// MACGroup contains MAC and group information
-type MACGroup struct {
-	MAC   string
-	Group string
-}
-
-type IpMacGroups struct {
-	Data MapIpMacGroup
+type IpGroups struct {
+	Data MapIpGroups
 	Mu   sync.RWMutex
 }
+
+// type Groups struct {
+// 	Groups string
+// 	MAC   string
+// }

@@ -1,8 +1,9 @@
-package netwatcher
+package group
 
 import (
 	"context"
 	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -10,12 +11,12 @@ import (
 )
 
 type Receiver interface {
-	UpdateIpMacGroups(newData models.MapIpMacGroup)
+	UpdateIpMacGroups(newData models.MapIpGroups)
 }
 
 // NetWatcher manages ARP scanning and registered callbacks
 type NetWatcher struct {
-	ipMacGroups models.MapIpMacGroup
+	ipMacGroups models.MapIpGroups
 	callbacks   []Receiver
 	mutex       sync.RWMutex
 }
@@ -23,7 +24,7 @@ type NetWatcher struct {
 // NewNetWatcher creates a new NetWatcher instance
 func NewNetWatcher() *NetWatcher {
 	return &NetWatcher{
-		ipMacGroups: make(map[models.IP]models.MACGroup),
+		ipMacGroups: make(map[models.IP]models.Groups),
 		callbacks:   []Receiver{},
 	}
 }
@@ -46,16 +47,17 @@ func (nw *NetWatcher) Start(ctx context.Context, yamlPath string) {
 				return
 			case <-ticker.C:
 				// Perform ARP scan and get updated map
-				newMap := ScanNetwork(yamlPath, ARPCmd)
+				newMapIpGroups := ScanNetwork(yamlPath, ARPCmd)
 
 				// Compare with existing data
 				nw.mutex.Lock()
-				if !maps.Equal(nw.ipMacGroups, newMap) { // if there is new arp data...
-					nw.ipMacGroups = newMap
-
+				if !maps.EqualFunc(nw.ipMacGroups, newMapIpGroups, func(m1 models.Groups, m2 models.Groups) bool {
+					return slices.Equal(m1, m2)
+				}) { // if there is new arp data...
+					nw.ipMacGroups = newMapIpGroups
 					// UpdateIPDomains all registered callbacks
 					for _, cb := range nw.callbacks {
-						cb.UpdateIpMacGroups(newMap)
+						cb.UpdateIpMacGroups(newMapIpGroups)
 					}
 				}
 				nw.mutex.Unlock()
