@@ -72,7 +72,7 @@ func (q *NFTRules) UpdateIPDomains(newData models.MapIpDomain) {
 }
 
 // UpdateIpMacGroups is a callback that saves the supplied IP addresses and updates the nft rules using them.
-func (q *NFTRules) UpdateIpMacGroups(newData models.MapIpGroups) {
+func (q *NFTRules) UpdateIpGroups(newData models.MapIpGroups) {
 	// TODO: don't trust the supplied map is good to just take as we want our own copy.
 	q.srcIPMacGroups.Mu.Lock()
 	defer q.srcIPMacGroups.Mu.Unlock()

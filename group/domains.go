@@ -9,7 +9,7 @@ import (
 	"example.com/youtube-nfqueue/models"
 )
 
-type DomainListReceiver interface {
+type MapIPDomainReceiver interface {
 	UpdateIPDomains(newIps models.MapIpDomain)
 }
 
@@ -24,7 +24,7 @@ var (
 	defaultDomains              = []models.Domain{"www.youtube.com", "youtube.com", "googlevideo.com"}
 	defaultResolver             = resolver(resolveDomains)
 	defaultInterval             = time.Minute * 5
-	registeredIPDomainReceivers []DomainListReceiver
+	registeredIPDomainReceivers []MapIPDomainReceiver
 	Ips                         = &models.IpDomains{Data: make(models.MapIpDomain)}
 )
 
@@ -100,7 +100,7 @@ func PeriodicResolver(ctx context.Context) {
 	}
 }
 
-func RegisterIPDomainReceivers(receiver ...DomainListReceiver) {
+func RegisterIPDomainReceivers(receiver ...MapIPDomainReceiver) {
 	for _, r := range receiver {
 		if r != nil {
 			registeredIPDomainReceivers = append(registeredIPDomainReceivers, r)

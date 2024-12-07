@@ -21,8 +21,3 @@ type IpGroups struct {
 	Data MapIpGroups
 	Mu   sync.RWMutex
 }
-
-// type Groups struct {
-// 	Groups string
-// 	MAC   string
-// }

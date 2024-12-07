@@ -46,7 +46,7 @@ groups:
 	}
 
 	// Call the function under test
-	mig := ScanNetwork(tempFile.Name(), mockARPCommand)
+	mig := scanNetwork(tempFile.Name(), mockARPCommand)
 
 	// Validate the result
 	expectedMap := map[models.IP]models.Groups{
