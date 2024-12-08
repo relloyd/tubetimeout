@@ -14,12 +14,16 @@ type IpGroups struct {
 	Mu   sync.RWMutex
 }
 
-type IP string
+type DomainGroups struct {
+	Data MapDomainGroups
+	Mu   sync.RWMutex
+}
+
+type Ip string
 type Domain string
 type Group string
 
 type MapGroupDomains map[Group][]Domain
-type MapIpDomain map[IP]Domain
-type MapIpGroups map[IP][]Group
+type MapIpDomain map[Ip]Domain
+type MapIpGroups map[Ip][]Group
 type MapDomainGroups map[Domain][]Group
-

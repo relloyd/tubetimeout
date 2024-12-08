@@ -5,34 +5,42 @@ import (
 	"log"
 	"maps"
 	"net"
+	"sync"
 	"time"
 
 	"example.com/youtube-nfqueue/config"
 	"example.com/youtube-nfqueue/models"
 )
 
-type MapIPDomainReceiver interface {
-	UpdateIPDomains(newIps models.MapIpDomain)
+type DestIpDomainReceiver interface {
+	UpdateDestIpDomains(newIps models.MapIpDomain)
 }
 
-type MapIPGroupReceiver interface {
-	UpdateIpGroups(newGroups models.MapIpGroups)
+type DestIpGroupReceiver interface {
+	UpdateDestIpGroups(newGroups models.MapIpGroups)
+}
+
+type DestDomainGroupReceiver interface {
+	UpdateDestDomainGroups(newGroups models.MapDomainGroups)
 }
 
 type DomainWatcher struct {
-	interval                    time.Duration
-	resolver                    resolver
-	groupDomains                models.MapGroupDomains
-	destIpDomains               models.IpDomains
-	destIpGroups                models.IpGroups
-	registeredIPDomainReceivers []MapIPDomainReceiver
-	registeredIPGroupReceivers  []MapIPGroupReceiver
+	mu                    sync.RWMutex // TODO: tidy up use of locks on maps that don't need them; make locks consistent.
+	interval              time.Duration
+	resolver              resolver
+	groupDomains          models.MapGroupDomains
+	destIpDomains         models.IpDomains
+	destIpGroups          models.IpGroups
+	destDomainGroups      models.DomainGroups
+	destIpDomainReceivers []DestIpDomainReceiver
+	destIpGroupReceivers  []DestIpGroupReceiver
+	destDomainsGroupReceivers  []DestDomainGroupReceiver
 }
 
 type resolver func(d []models.Domain) models.MapIpDomain
 
 type ipDomain struct {
-	ip     models.IP
+	ip     models.Ip
 	domain models.Domain
 }
 
@@ -40,20 +48,22 @@ var (
 	defaultInterval = time.Minute * 5
 )
 
-func (dw *DomainWatcher) RegisterIPDomainReceivers(receiver ...MapIPDomainReceiver) {
-	for _, r := range receiver {
-		if r != nil {
-			dw.registeredIPDomainReceivers = append(dw.registeredIPDomainReceivers, r)
-		}
-	}
+func (dw *DomainWatcher) RegisterDestIpDomainReceivers(receivers ...DestIpDomainReceiver) {
+	dw.mu.Lock()
+	defer dw.mu.Unlock()
+	dw.destIpDomainReceivers = append(dw.destIpDomainReceivers, receivers...)
 }
 
-func (dw *DomainWatcher) RegisterIPGroupReceivers(receiver ...MapIPGroupReceiver) {
-	for _, r := range receiver {
-		if r != nil {
-			dw.registeredIPGroupReceivers = append(dw.registeredIPGroupReceivers, r)
-		}
-	}
+func (dw *DomainWatcher) RegisterDestIpGroupReceivers(receivers ...DestIpGroupReceiver) {
+	dw.mu.Lock()
+	defer dw.mu.Unlock()
+	dw.destIpGroupReceivers = append(dw.destIpGroupReceivers, receivers...)
+}
+
+func (dw *DomainWatcher) RegisterDestDomainGroupReceivers(receivers ...DestDomainGroupReceiver) {
+	dw.mu.Lock()
+	defer dw.mu.Unlock()
+	dw.destDomainsGroupReceivers = append(dw.destDomainsGroupReceivers, receivers...)
 }
 
 func NewDomainWatcher() *DomainWatcher {
@@ -65,7 +75,7 @@ func NewDomainWatcher() *DomainWatcher {
 	}
 }
 
-// Start starts a new ticket to resolve IP addresses for the packaged domains and sends a copy to any
+// Start starts a new ticket to resolve Ip addresses for the packaged domains and sends a copy to any
 // registered receivers.
 func (dw *DomainWatcher) Start(ctx context.Context) {
 	ticker := time.NewTicker(defaultInterval)
@@ -104,6 +114,17 @@ func (dw *DomainWatcher) loadGroupDomains() {
 	if err != nil {
 		log.Fatalf("Error loading group domain YAML: %v\n", err)
 	}
+
+	// Domains for each group.
+	dw.destDomainGroups.Mu.Lock()
+	defer dw.destDomainGroups.Mu.Unlock()
+	for group, domains := range dw.groupDomains {  // for each group...
+		for _, domain := range domains {
+			// Save the domains for each group.
+			// A domain may be in more than one group so we append to the list.
+			dw.destDomainGroups.Data[domain] = append(dw.destDomainGroups.Data[domain], group)
+		}
+	}
 }
 
 func (dw *DomainWatcher) generateIPToGroups() {
@@ -132,22 +153,24 @@ func (dw *DomainWatcher) generateIPToGroups() {
 
 // notifyReceivers duplicates the cachedIPs map per receiver and sends it.
 func (dw *DomainWatcher) notifyReceivers() {
-	for _, receiver := range dw.registeredIPDomainReceivers {
+	dw.mu.RLock()
+	defer dw.mu.RUnlock()
+	for _, receiver := range dw.destIpDomainReceivers {
 		newData := make(models.MapIpDomain)
 		dw.destIpDomains.Mu.RLock()
 		for k, v := range dw.destIpDomains.Data {
 			newData[k] = v
 		}
-		receiver.UpdateIPDomains(newData)
+		receiver.UpdateDestIpDomains(newData)
 		dw.destIpDomains.Mu.RUnlock()
 	}
-	for _, gr := range dw.registeredIPGroupReceivers {
+	for _, gr := range dw.destIpGroupReceivers {
 		newData := make(models.MapIpGroups)
 		dw.destIpGroups.Mu.RLock()
 		for k, v := range dw.destIpGroups.Data {
 			newData[k] = v
 		}
-		gr.UpdateIpGroups(newData)
+		gr.UpdateDestIpGroups(newData)
 		dw.destIpGroups.Mu.RUnlock()
 	}
 }
@@ -162,7 +185,7 @@ func resolveDomains(domains []models.Domain) models.MapIpDomain {
 			continue
 		}
 		for _, ip := range ips {
-			allIPs = append(allIPs, ipDomain{ip: models.IP(ip), domain: domain})
+			allIPs = append(allIPs, ipDomain{ip: models.Ip(ip), domain: domain})
 		}
 		log.Printf("Resolved domains")
 	}

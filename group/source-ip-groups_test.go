@@ -49,7 +49,7 @@ groups:
 	mig := scanNetwork(tempFile.Name(), mockARPCommand)
 
 	// Validate the result
-	expectedMap := map[models.IP]models.Group{
+	expectedMap := map[models.Ip]models.Group{
 		"192.168.1.10": {"group1"},
 		"192.168.1.11": {"group1"},
 		"192.168.1.12": {"group2"},
@@ -62,11 +62,11 @@ groups:
 	for ip, expectedGroups := range expectedMap {
 		groups, exists := mig[ip]
 		if !exists {
-			t.Errorf("IP %s not found in result", ip)
+			t.Errorf("Ip %s not found in result", ip)
 			continue
 		}
 		if !slices.Equal(groups, expectedGroups) {
-			t.Errorf("IP %s: expected %v, got %v", ip, expectedGroups, groups)
+			t.Errorf("Ip %s: expected %v, got %v", ip, expectedGroups, groups)
 		}
 	}
 }

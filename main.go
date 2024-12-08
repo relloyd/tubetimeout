@@ -95,11 +95,11 @@ func main() {
 	}
 	log.Println("NFQueue listener running")
 
-	// Resolve the domain IPs.
+	// Resolve the domain IPs (destinations).
 	dw := group.NewDomainWatcher()
 	// Register interfaces to receive updated IPs periodically.
-	dw.RegisterIPDomainReceivers(rules, q)  // TODO sort this out!
-	dw.RegisterIPGroupReceivers( xxx  )
+	dw.RegisterDestIpDomainReceivers(rules, q) // destination IPs
+	dw.RegisterDestIpGroupReceivers( xxx  )    // source IPs
 
 	// NetWatcher to get IPs to MACs & GroupConfig.
 	// TODO: add the callbacks directly to the new net watcher.

@@ -53,55 +53,55 @@ func NewNFTRules() (*NFTRules, error) {
 	return nfq, nil
 }
 
-// UpdateIPDomains is a callback that saves the supplied IP addresses and updates the nft rules using them.
+// UpdateIPDomains is a callback that saves the supplied Ip addresses and updates the nft rules using them.
 func (q *NFTRules) UpdateIPDomains(newData models.MapIpDomain) {
 	// TODO: don't trust the supplied map is good to just take as we want our own copy.
 	q.destIPs.Mu.Lock()
 	defer q.destIPs.Mu.Unlock()
 	q.destIPs.Data = newData
 
-	var newKeys []models.IP
+	var newKeys []models.Ip
 	for k := range newData {
 		newKeys = append(newKeys, k)
 	}
 
 	err := q.sendIP4PacketsToDefaultNFQueue(newKeys)
 	if err != nil {
-		log.Printf("failed to send IP addresses to default NFQUEUE: %v\n", err)
+		log.Printf("failed to send Ip addresses to default NFQUEUE: %v\n", err)
 	}
 }
 
-// UpdateIpMacGroups is a callback that saves the supplied IP addresses and updates the nft rules using them.
-func (q *NFTRules) UpdateIpGroups(newData models.MapIpGroups) {
+// UpdateIpMacGroups is a callback that saves the supplied Ip addresses and updates the nft rules using them.
+func (q *NFTRules) UpdateSourceIpGroups(newData models.MapIpGroups) {
 	// TODO: don't trust the supplied map is good to just take as we want our own copy.
 	q.srcIPMacGroups.Mu.Lock()
 	defer q.srcIPMacGroups.Mu.Unlock()
 	q.srcIPMacGroups.Data = newData
 
-	var newKeys []models.IP
+	var newKeys []models.Ip
 	for k := range newData {
 		newKeys = append(newKeys, k)
 	}
 
-	// TODO: add src IP rules or merge with destIP rules!
+	// TODO: add src Ip rules or merge with destIP rules!
 	// err := q.sendIP4PacketsToDefaultNFQueue(newKeys)
 	// if err != nil {
-	// 	log.Printf("failed to send IP addresses to default NFQUEUE: %v\n", err)
+	// 	log.Printf("failed to send Ip addresses to default NFQUEUE: %v\n", err)
 	// }
 }
 
 // addNFTablesRule add a rule to send traffic to the NFQUEUE for this app.
 // The caller should flush the changes to the kernel after.
-func (q *NFTRules) addNFTablesRule(dAddr models.IP) error {
+func (q *NFTRules) addNFTablesRule(dAddr models.Ip) error {
 	// # iptables -I OUTPUT -p icmp -j NFQUEUE --queue-num 100
-	// Example YouTube IP address
+	// Example YouTube Ip address
 	ip := net.ParseIP(string(dAddr))
 	if ip == nil {
-		return errors.New("invalid IP address")
+		return errors.New("invalid Ip address")
 	}
 
 	if ip.To4() == nil && ip.To16() == nil { // if the address is not valid...
-		log.Printf("Skipped IP address %q as it is not IPv4 or IPv6\n", dAddr)
+		log.Printf("Skipped Ip address %q as it is not IPv4 or IPv6\n", dAddr)
 		return nil
 	}
 
@@ -113,7 +113,7 @@ func (q *NFTRules) addNFTablesRule(dAddr models.IP) error {
 		length = 4
 		ipBytes = ip.To4()
 	} else {
-		log.Printf("Skipped bad IP address (which may be IPv6) %q\n", dAddr)
+		log.Printf("Skipped bad Ip address (which may be IPv6) %q\n", dAddr)
 		return nil
 		// if ip.To16() != nil { // skip if IPv6
 		// 	log.Printf("Skipped IPv6 address %q\n", ipString)
@@ -129,7 +129,7 @@ func (q *NFTRules) addNFTablesRule(dAddr models.IP) error {
 		Table: q.table,
 		Chain: q.chain,
 		Exprs: []expr.Any{
-			// Match destination IP address
+			// Match destination Ip address
 			&expr.Payload{
 				DestRegister: 1,                             // Store the payload in register 1
 				Base:         expr.PayloadBaseNetworkHeader, // Match the network header
@@ -169,15 +169,15 @@ func (q *NFTRules) addNFTablesRule(dAddr models.IP) error {
 
 // sendIP4PacketsToDefaultNFQueue adds nftables rules to send packets to the default NFQUEUE.
 // TODO: do rule replacement atomically
-func (q *NFTRules) sendIP4PacketsToDefaultNFQueue(ips []models.IP) error {
+func (q *NFTRules) sendIP4PacketsToDefaultNFQueue(ips []models.Ip) error {
 	// Empty the default chain.
 	q.conn.FlushChain(q.chain)
-	// Add rules for each IP address.
+	// Add rules for each Ip address.
 	for _, ip := range ips {
 		if ip != "" {
 			err := q.addNFTablesRule(ip)
 			if err != nil {
-				return fmt.Errorf("failed to add nftables rule for IP address %q: %v", ip, err)
+				return fmt.Errorf("failed to add nftables rule for Ip address %q: %v", ip, err)
 			}
 		}
 	}
