@@ -12,15 +12,18 @@ import (
 	"example.com/youtube-nfqueue/models"
 )
 
+type FuncGroupDomainsLoader func() (models.MapGroupDomains, error)
+var groupDomainLoaderFunc = FuncGroupDomainsLoader(config.LoadGroupDomains)
+
 type DestIpDomainReceiver interface {
 	UpdateDestIpDomains(newIps models.MapIpDomain)
 }
 
-type DestIpGroupReceiver interface {
+type DestIpGroupsReceiver interface {
 	UpdateDestIpGroups(newGroups models.MapIpGroups)
 }
 
-type DestDomainGroupReceiver interface {
+type DestDomainGroupsReceiver interface {
 	UpdateDestDomainGroups(newGroups models.MapDomainGroups)
 }
 
@@ -33,8 +36,8 @@ type DomainWatcher struct {
 	destIpGroups          models.IpGroups
 	destDomainGroups      models.DomainGroups
 	destIpDomainReceivers []DestIpDomainReceiver
-	destIpGroupReceivers  []DestIpGroupReceiver
-	destDomainsGroupReceivers  []DestDomainGroupReceiver
+	destIpGroupReceivers      []DestIpGroupsReceiver
+	destDomainGroupsReceivers []DestDomainGroupsReceiver
 }
 
 type resolver func(d []models.Domain) models.MapIpDomain
@@ -54,16 +57,16 @@ func (dw *DomainWatcher) RegisterDestIpDomainReceivers(receivers ...DestIpDomain
 	dw.destIpDomainReceivers = append(dw.destIpDomainReceivers, receivers...)
 }
 
-func (dw *DomainWatcher) RegisterDestIpGroupReceivers(receivers ...DestIpGroupReceiver) {
+func (dw *DomainWatcher) RegisterDestIpGroupReceivers(receivers ...DestIpGroupsReceiver) {
 	dw.mu.Lock()
 	defer dw.mu.Unlock()
 	dw.destIpGroupReceivers = append(dw.destIpGroupReceivers, receivers...)
 }
 
-func (dw *DomainWatcher) RegisterDestDomainGroupReceivers(receivers ...DestDomainGroupReceiver) {
+func (dw *DomainWatcher) RegisterDestDomainGroupReceivers(receivers ...DestDomainGroupsReceiver) {
 	dw.mu.Lock()
 	defer dw.mu.Unlock()
-	dw.destDomainsGroupReceivers = append(dw.destDomainsGroupReceivers, receivers...)
+	dw.destDomainGroupsReceivers = append(dw.destDomainGroupsReceivers, receivers...)
 }
 
 func NewDomainWatcher() *DomainWatcher {
@@ -110,12 +113,12 @@ func (dw *DomainWatcher) Start(ctx context.Context) {
 
 func (dw *DomainWatcher) loadGroupDomains() {
 	var err error
-	dw.groupDomains, err = config.LoadGroupDomains()
+	dw.groupDomains, err = groupDomainLoaderFunc()
 	if err != nil {
 		log.Fatalf("Error loading group domain YAML: %v\n", err)
 	}
 
-	// Domains for each group.
+	// Setup DomainGroups.
 	dw.destDomainGroups.Mu.Lock()
 	defer dw.destDomainGroups.Mu.Unlock()
 	for group, domains := range dw.groupDomains {  // for each group...
@@ -124,6 +127,15 @@ func (dw *DomainWatcher) loadGroupDomains() {
 			// A domain may be in more than one group so we append to the list.
 			dw.destDomainGroups.Data[domain] = append(dw.destDomainGroups.Data[domain], group)
 		}
+	}
+
+	// Notify DomainGroup receivers.
+	for _, gr := range dw.destDomainGroupsReceivers {
+		newData := make(models.MapDomainGroups)
+		for k, v := range dw.destDomainGroups.Data {
+			newData[k] = v
+		}
+		gr.UpdateDestDomainGroups(newData)
 	}
 }
 

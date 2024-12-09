@@ -22,6 +22,15 @@ func init() {
 	}
 }
 
+func checkARPAvailability() error {
+	// Check if the `arp` command is available
+	_, err := exec.LookPath("arp")
+	if err != nil {
+		return fmt.Errorf("arp command not found on the system: %w", err)
+	}
+	return nil
+}
+
 type SourceIpGroupsReceiver interface {
 	UpdateSourceIpGroups(newData models.MapIpGroups)
 }
@@ -88,15 +97,6 @@ var (
 		return string(output), err
 	}
 )
-
-func checkARPAvailability() error {
-	// Check if the `arp` command is available
-	_, err := exec.LookPath("arp")
-	if err != nil {
-		return fmt.Errorf("arp command not found on the system: %w", err)
-	}
-	return nil
-}
 
 // scanNetwork performs an ARP scan and maps MAC addresses to IPs
 func scanNetwork(yamlPath string, arpCmd arpCommand) models.MapIpGroups {
