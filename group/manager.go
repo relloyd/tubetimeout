@@ -12,12 +12,13 @@ type Manager struct {
 }
 
 func NewManager() *Manager {
-	return &Manager{
+	m := &Manager{
 		sourceIpGroups:   models.IpGroups{Data: make(models.MapIpGroups)},
 		destIpGroups:     models.IpGroups{Data: make(models.MapIpGroups)},
 		destIpDomains:    models.IpDomains{Data: make(models.MapIpDomain)},
 		destDomainGroups: models.DomainGroups{Data: make(models.MapDomainGroups)},
 	}
+	return m
 }
 
 // UpdateSourceIpGroups implements the SourceIpGroupsReceiver interface.
@@ -48,6 +49,7 @@ func (m *Manager) UpdateDestDomainGroups(newData models.MapDomainGroups) {
 	m.destDomainGroups.Data = newData
 }
 
+// IsSrcIpGroupKnown checks if the source IP is known and returns the groups it belongs to.
 func (m *Manager) IsSrcIpGroupKnown(ip string) ([]models.Group, bool) {
 	m.sourceIpGroups.Mu.RLock()
 	defer m.sourceIpGroups.Mu.RUnlock()
@@ -58,6 +60,7 @@ func (m *Manager) IsSrcIpGroupKnown(ip string) ([]models.Group, bool) {
 	return groups, true
 }
 
+// IsDstIpGroupKnown checks if the destination IP is known and returns the groups it belongs to.
 func (m *Manager) IsDstIpGroupKnown(ip string) ([]models.Group, bool) {
 	m.destIpGroups.Mu.RLock()
 	defer m.destIpGroups.Mu.RUnlock()
@@ -68,6 +71,7 @@ func (m *Manager) IsDstIpGroupKnown(ip string) ([]models.Group, bool) {
 	return groups, true
 }
 
+// IsDstIpDomainKnown checks if the destination IP is known and returns the domain it belongs to.
 func (m *Manager) IsDstIpDomainKnown(ip string) (models.Domain, bool) {
 	m.destIpDomains.Mu.RLock()
 	defer m.destIpDomains.Mu.RUnlock()
@@ -75,6 +79,7 @@ func (m *Manager) IsDstIpDomainKnown(ip string) (models.Domain, bool) {
 	return domain, ok
 }
 
+// IsDstDomainGroupKnown checks if the destination domain is known and returns the groups it belongs to.
 func (m *Manager) IsDstDomainGroupKnown(domain string) ([]models.Group, bool) {
 	m.destDomainGroups.Mu.RLock()
 	defer m.destDomainGroups.Mu.RUnlock()
@@ -85,6 +90,7 @@ func (m *Manager) IsDstDomainGroupKnown(domain string) ([]models.Group, bool) {
 	return groups, true
 }
 
+// IsSrcDestIpKnown checks if the source and destination IPs are known and returns the groups they intersect.
 func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp string) ([]models.Group, bool) {
 	srcGroup, srcOk := m.IsSrcIpGroupKnown(srcIp)
 	dstGroup, dstOk := m.IsDstIpGroupKnown(dstIp)
@@ -106,6 +112,7 @@ func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp string) ([]models.Group, bool) {
 	return intersection, true
 }
 
+// IsSrcIpDestDomainKnown checks if the source IP and destination domain are known and returns the groups they intersect.
 func (m *Manager) IsSrcIpDestDomainKnown(srcIp, dstDomain string) ([]models.Group, bool) {
 	srcGroup, srcOK := m.IsSrcIpGroupKnown(srcIp)
 	dstGroup, dstOK := m.IsDstDomainGroupKnown(dstDomain)

@@ -76,35 +76,39 @@ func main() {
 
 	handleDebugging(&appCfg)
 
-	// NFT rules to send traffic to NFQueue. There won't be any rules until IPs are supplied by Start.
+	// NFT rules to send traffic to NFQueue.
+	// There won't be any NFT rules until dest IPs are supplied by manager callbacks.
 	rules, err := nft.NewNFTRules()
 	if err != nil {
-		log.Println("failed to setup nft rules:", err)
+		log.Println("Failed to setup nft rules:", err)
 		os.Exit(1)
 	}
 	log.Println("NFTables rules created")
+
+	// Group manager.
+	mgr := group.NewManager()
+
+	// Destinations.
+	dw := group.NewDomainWatcher()
+	dw.RegisterDestIpGroupReceivers(mgr)
+	dw.RegisterDestIpDomainReceivers(mgr)
+	dw.RegisterDestDomainGroupReceivers(mgr)
+
+	// Sources.
+	w := group.NewNetWatcher()
+	w.RegisterSourceIpGroupsReceivers(mgr)
 
 	// Usage tracker.
 	t := usage.NewTracker(appCfg.TrackerConfig.Retention, appCfg.TrackerConfig.Granularity, appCfg.TrackerConfig.Threshold, appCfg.TrackerConfig.StartDay, appCfg.TrackerConfig.StartTime)
 
 	// NF Queue to listen to and track packets in user space.
+	// TODO: supply manager to the NFQueue.
 	q, err := nfq.NewNFQueueFilter(ctx, t)
 	if err != nil {
 		log.Println("failed to setup nfqueue filter:", err)
 		os.Exit(1)
 	}
 	log.Println("NFQueue listener running")
-
-	// Resolve the domain IPs (destinations).
-	dw := group.NewDomainWatcher()
-	// Register interfaces to receive updated IPs periodically.
-	dw.RegisterDestIpDomainReceivers(rules, q) // destination IPs
-	dw.RegisterDestIpGroupReceivers( xxx  )    // source IPs
-
-	// NetWatcher to get IPs to MACs & GroupConfig.
-	// TODO: add the callbacks directly to the new net watcher.
-	watcher := group.NewNetWatcher()
-	watcher.RegisterIpMacGroupReceivers(rules, q)
 
 	// Configure GoProxy.
 	p := goproxy.NewProxyHttpServer()
@@ -132,7 +136,7 @@ func main() {
 		close(done)
 	}()
 
-	// Capture SIGINT and SIGTERM to gracefully shutdown
+	// Capture SIGINT and SIGTERM to gracefully shutdown.
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	<-sigs

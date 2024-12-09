@@ -50,8 +50,8 @@ func NewNetWatcher() *NetWatcher {
 	}
 }
 
-// RegisterIpMacGroupReceivers registers a callback to be called on updates
-func (nw *NetWatcher) RegisterIpMacGroupReceivers(receivers ...SourceIpGroupsReceiver) {
+// RegisterSourceIpGroupsReceivers registers a callback to be called on updates
+func (nw *NetWatcher) RegisterSourceIpGroupsReceivers(receivers ...SourceIpGroupsReceiver) {
 	nw.mutex.Lock()
 	defer nw.mutex.Unlock()
 	nw.callbacks = append(nw.callbacks, receivers...)
