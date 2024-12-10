@@ -36,15 +36,13 @@ func NewServer(m *group.Manager, t *usage.Tracker) *http.Server {
 // The returned func will return a req,nil if the request is allowed, or nil,res if the request should be denied.
 func GetHandler(m *group.Manager, t *usage.Tracker) func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 	return func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-		log.Println("Proxying request", req.RemoteAddr, req.URL)
-
-		// Get the host from the request URL.
+		// Destination of the request.
 		destDomain := req.URL.Host
 		if i := strings.Index(req.URL.Host, ":"); i != -1 { // if there is a port...
 			destDomain = req.URL.Host[:i] // trim the port.
 		}
 
-		// Get the source from the request.
+		// Source of the request.
 		srcIP := ctx.Req.RemoteAddr
 		if i := strings.Index(ctx.Req.RemoteAddr, ":"); i != -1 { // if there is a port...
 			srcIP = ctx.Req.RemoteAddr[:i] // trim the port.
