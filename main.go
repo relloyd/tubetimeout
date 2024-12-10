@@ -16,7 +16,6 @@ import (
 	"example.com/youtube-nfqueue/nft"
 	"example.com/youtube-nfqueue/proxy"
 	"example.com/youtube-nfqueue/usage"
-	"github.com/elazarl/goproxy"
 	"github.com/kelseyhightower/envconfig"
 )
 
@@ -39,10 +38,6 @@ import (
 //       do rate limiting
 // TODO: notify if another device hits youtube not via the proxy
 
-// TODO: add
-//  domains to groups
-//  dest IP to groups
-//  src IPs to groups
 // TODO: swap IpDomains for DestIpGroups in nfq
 
 func handleDebugging(appCfg *config.AppConfig) {
@@ -70,8 +65,7 @@ func main() {
 	var appCfg config.AppConfig
 	err := envconfig.Process("", &appCfg)
 	if err != nil {
-		log.Println("failed to process app config:", err)
-		os.Exit(1)
+		log.Fatalln("failed to process app config:", err)
 	}
 
 	handleDebugging(&appCfg)
@@ -80,58 +74,52 @@ func main() {
 	// There won't be any NFT rules until dest IPs are supplied by manager callbacks.
 	rules, err := nft.NewNFTRules()
 	if err != nil {
-		log.Println("Failed to setup nft rules:", err)
-		os.Exit(1)
+		log.Fatalln("Failed to setup nft rules:", err)
 	}
 	log.Println("NFTables rules created")
 
 	// Group manager.
 	mgr := group.NewManager()
+	log.Println("Group manager created")
 
 	// Destinations.
 	dw := group.NewDomainWatcher()
 	dw.RegisterDestIpGroupReceivers(mgr)
 	dw.RegisterDestIpDomainReceivers(mgr)
 	dw.RegisterDestDomainGroupReceivers(mgr)
+	dw.RegisterDestIpDomainReceivers(rules)
+	dw.Start(ctx)
+	log.Println("Destinations mapped")
 
 	// Sources.
 	w := group.NewNetWatcher()
 	w.RegisterSourceIpGroupsReceivers(mgr)
+	w.RegisterSourceIpGroupsReceivers(rules)
+	w.Start(ctx)
+	log.Println("Sources mapped")
 
 	// Usage tracker.
-	t := usage.NewTracker(appCfg.TrackerConfig.Retention, appCfg.TrackerConfig.Granularity, appCfg.TrackerConfig.Threshold, appCfg.TrackerConfig.StartDay, appCfg.TrackerConfig.StartTime)
+	t := usage.NewTracker(
+		appCfg.TrackerConfig.Retention,
+		appCfg.TrackerConfig.Granularity,
+		appCfg.TrackerConfig.Threshold,
+		appCfg.TrackerConfig.StartDay,
+		appCfg.TrackerConfig.StartTime,
+	)
 
-	// NF Queue to listen to and track packets in user space.
-	// TODO: supply manager to the NFQueue.
-	q, err := nfq.NewNFQueueFilter(ctx, t)
+	// NFQueue to listen to and track packets in user space.
+	q, err := nfq.NewNFQueueFilter(ctx, t, mgr)
 	if err != nil {
-		log.Println("failed to setup nfqueue filter:", err)
-		os.Exit(1)
+		log.Fatalln("failed to setup NFQueue filter:", err)
 	}
-	log.Println("NFQueue listener running")
+	log.Println("NFQueue listener started")
 
-	// Configure GoProxy.
-	p := goproxy.NewProxyHttpServer()
-	p.Verbose = true
-	p.OnRequest().DoFunc(proxy.Handler)
-	s := &http.Server{
-		Addr:                         ":8080",
-		Handler:                      p,
-		DisableGeneralOptionsHandler: false,
-		TLSConfig:                    nil,
-		ReadTimeout:                  30 * time.Second, // Maximum duration for reading the request body
-		ReadHeaderTimeout:            5 * time.Second,  // Time to read headers before timing out
-		WriteTimeout:                 30 * time.Second, // Maximum duration for writing the response
-		IdleTimeout:                  30 * time.Second, // Maximum amount of time to keep idle connections alive
-		MaxHeaderBytes:               1 << 20,          // Maximum size of request headers (1 MB)
-	}
-
-	// Start proxy server.
+	// Proxy server
+	s := proxy.NewServer(mgr)
 	done := make(chan struct{}, 1)
 	go func() {
 		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Println("Error starting proxy server:", err)
-			os.Exit(1)
+			log.Fatalln("Error starting proxy server:", err)
 		}
 		close(done)
 	}()
@@ -140,13 +128,12 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	<-sigs
-	log.Println("Signal received, shutting down...")
+	log.Printf("\nSignal received, shutting down...\n")
 
 	// Shutdown the server.
 	ctxSrv, cancelSrv := context.WithTimeout(context.Background(), 5*time.Second)
 	if err = s.Shutdown(ctxSrv); err != nil {
-		log.Println("Error shutting down server:", err)
-		os.Exit(1)
+		log.Fatalln("Error shutting down server:", err)
 	}
 	cancelSrv()
 
@@ -154,8 +141,7 @@ func main() {
 	cancel() // call cancel before closing the rules/nfq else it will block.
 	err = rules.Clean()
 	if err != nil {
-		log.Println("Error: unable to remove NFT rules")
-		os.Exit(1)
+		log.Fatalln("Error: unable to remove NFT rules")
 	}
 	_ = q.Nfq.Close() // cancel its context above before calling Close() else it will block.
 

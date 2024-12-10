@@ -7,14 +7,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var (
+	defaultGroupMacFilePath = "group-macs.yaml"
+)
+
 // GroupConfig represents the YAML structure
 type GroupConfig struct {
 	GroupMACs map[string][]string `yaml:"groups"` // group: [mac1, mac2, ...]
 }
 
 // LoadGroupMACs parses the YAML file
-func LoadGroupMACs(filepath string) (GroupConfig, error) {
-	yamlFile, err := os.ReadFile(filepath)
+func LoadGroupMACs() (GroupConfig, error) {
+	yamlFile, err := os.ReadFile(defaultGroupMacFilePath)
 	if err != nil {
 		return GroupConfig{}, fmt.Errorf("error reading YAML file: %w", err)
 	}

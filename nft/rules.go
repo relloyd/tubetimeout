@@ -36,32 +36,32 @@ type NFTRules struct {
 
 func NewNFTRules() (*NFTRules, error) {
 	var err error
-	nfq := &NFTRules{
+	rules := &NFTRules{
 		conn:      &nftables.Conn{},
 		tableName: defaultTableName,
 		chainName: defaultChainName,
 	}
-	nfq.table, err = getOrCreateTable(nfq.conn, nfq.tableName)
+	rules.table, err = getOrCreateTable(rules.conn, rules.tableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create nftables table: %v", err)
 	}
-	nfq.chain, err = getOrCreateChain(nfq.conn, nfq.table, nfq.chainName)
+	rules.chain, err = getOrCreateChain(rules.conn, rules.table, rules.chainName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create nftables chain: %v", err)
 	}
-	nfq.destIPs.Data = make(models.MapIpDomain)
-	return nfq, nil
+	rules.destIPs.Data = make(models.MapIpDomain)
+	return rules, nil
 }
 
-// UpdateIPDomains is a callback that saves the supplied Ip addresses and updates the nft rules using them.
-func (q *NFTRules) UpdateIPDomains(newData models.MapIpDomain) {
+// UpdateDestIpDomains is a callback that saves the supplied Ip addresses and updates the nft rules using them.
+func (q *NFTRules) UpdateDestIpDomains(newIps models.MapIpDomain) {
 	// TODO: don't trust the supplied map is good to just take as we want our own copy.
 	q.destIPs.Mu.Lock()
 	defer q.destIPs.Mu.Unlock()
-	q.destIPs.Data = newData
+	q.destIPs.Data = newIps
 
 	var newKeys []models.Ip
-	for k := range newData {
+	for k := range newIps {
 		newKeys = append(newKeys, k)
 	}
 
@@ -71,7 +71,7 @@ func (q *NFTRules) UpdateIPDomains(newData models.MapIpDomain) {
 	}
 }
 
-// UpdateIpMacGroups is a callback that saves the supplied Ip addresses and updates the nft rules using them.
+// UpdateSourceIpGroups is a callback that saves the supplied Ip addresses and updates the nft rules using them.
 func (q *NFTRules) UpdateSourceIpGroups(newData models.MapIpGroups) {
 	// TODO: don't trust the supplied map is good to just take as we want our own copy.
 	q.srcIPMacGroups.Mu.Lock()

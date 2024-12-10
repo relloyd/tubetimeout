@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
 	"time"
 
+	"example.com/youtube-nfqueue/group"
 	"example.com/youtube-nfqueue/models"
 	"example.com/youtube-nfqueue/usage"
 	"github.com/florianl/go-nfqueue"
@@ -14,15 +14,16 @@ import (
 )
 
 type packetIPs struct {
-	src net.IP
-	dst net.IP
+	src models.Ip
+	dst models.Ip
 }
 
 type NFQueueFilter struct {
-	Nfq    *nfqueue.Nfqueue
-	t      *usage.Tracker
-	dstIps models.IpDomains
-	srcIps models.IpGroups
+	Nfq *nfqueue.Nfqueue
+	t   *usage.Tracker
+	g   *group.Manager
+	// dstIps models.IpDomains
+	// srcIps models.IpGroups
 }
 
 // NewNFQueueFilter creates a new nfqueue filtering outbound packets.
@@ -30,38 +31,16 @@ type NFQueueFilter struct {
 // Ip addresses for which to perform filtering.
 // If the packets are destined for any of the injected Ips then filtering happens based on
 // <LOGIC-TBC>
-func NewNFQueueFilter(ctx context.Context, t *usage.Tracker) (*NFQueueFilter, error) {
+func NewNFQueueFilter(ctx context.Context, t *usage.Tracker, g *group.Manager) (*NFQueueFilter, error) {
 	var err error
 	f := &NFQueueFilter{}
-	f.dstIps.Data = make(models.MapIpDomain)
-	f.Nfq, err = f.startNFQueueFilter(ctx)
+	f.g = g
 	f.t = t
+	f.Nfq, err = f.startNFQueueFilter(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return f, nil
-}
-
-// UpdateIPDomains implements the IPListReceiver interface.
-func (f *NFQueueFilter) UpdateIPDomains(newData models.MapIpDomain) {
-	// TODO: don't trust the supplied map is good to just take as we want our own copy.
-	f.dstIps.Mu.Lock()
-	defer f.dstIps.Mu.Unlock()
-	f.dstIps.Data = newData
-}
-
-func (f *NFQueueFilter) UpdateSourceIpGroups(newData models.MapIpGroups) {
-	// TODO: don't trust the supplied map is good to just take as we want our own copy.
-	f.srcIps.Mu.Lock()
-	defer f.srcIps.Mu.Unlock()
-	f.srcIps.Data = newData
-}
-
-func (f *NFQueueFilter) IsDstIpKnown(ip net.IP) (models.Domain, bool) {
-	f.dstIps.Mu.RLock()
-	defer f.dstIps.Mu.RUnlock()
-	d, ok := f.dstIps.Data[models.Ip(ip.String())]
-	return d, ok
 }
 
 func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueue, error) {
@@ -110,28 +89,31 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 
 		pips, err = getPacketIPs(a)
 		if err != nil {
-			log.Println(err)
+			log.Printf("Error getting packet IPs: %v\n", err)
 			return -1
 		}
 
 		// Check if the packet is for any of the resolved IPs.
-		d, ok := f.IsDstIpKnown(pips.dst)
-		if ok { // if the packet destination Ip address is known...
-			// Remember that we saw it.
-			f.t.AddSample(pips.src.String())                 // TODO: add a source group identifier to the tracker
-			if f.t.HasExceededThreshold(pips.src.String()) { // if the threshold is exceeded for this source Ip...
-				// Drop the packet.
-				log.Printf("Dropping packet (threshold breached) from %v to %v", pips.src, d)
-				err = nf.SetVerdict(id, nfqueue.NfDrop)
-				retval = 1
-			} else { // else the threshold is not exceeded...
-				// Accept the packet.
-				log.Printf("Accepting packet from %v to %v", pips.src, d)
-				err = nf.SetVerdict(id, nfqueue.NfAccept)
+		grps, ok := f.g.IsSrcDestIpKnown(pips.src, pips.dst)
+		if ok { // if the packet source and destination IP address is known...
+			for _, grp := range grps { // for each group
+				// Remember that we saw it.
+				// TODO: add a tracker for each group as there may be many.
+				f.t.AddSample(string(grp))
+				if f.t.HasExceededThreshold(string(grp)) { // if the threshold is exceeded for this group...
+					// Drop the packet.
+					log.Printf("Dropping packet from %v to %v (threshold breached for group %v)", pips.src, pips.dst, grp)
+					err = nf.SetVerdict(id, nfqueue.NfDrop)
+					retval = 1
+				} else { // else the threshold is not exceeded...
+					// Accept the packet.
+					log.Printf("Accepting packet from %v to %v", pips.src, pips.dst)
+					err = nf.SetVerdict(id, nfqueue.NfAccept)
+				}
 			}
 		} else { // else the packet destination Ip address is not known...
 			// Accept the packet.
-			log.Println("Accepting packet to unregistered destination:", pips.dst)
+			log.Println("Accepting packet from %v to unregistered destination:", pips.src, pips.dst)
 			err = nf.SetVerdict(id, nfqueue.NfAccept)
 		}
 
@@ -173,7 +155,7 @@ func getPacketIPs(a nfqueue.Attribute) (packetIPs, error) {
 	}
 
 	return packetIPs{
-		src: payload[12:16],
-		dst: payload[16:20],
+		src: models.Ip(payload[12:16]),
+		dst: models.Ip(payload[16:20]),
 	}, nil
 }

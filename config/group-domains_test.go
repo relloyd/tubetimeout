@@ -65,7 +65,7 @@ groups:
 			_ = tmpFile.Close()
 
 			// Call the function under test
-			defaultFilePath = tmpFile.Name()
+			defaultGroupDomainsFilePath = tmpFile.Name()
 			result, err := LoadGroupDomains()
 
 			// Check for expected errors

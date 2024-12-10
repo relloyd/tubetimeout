@@ -58,7 +58,7 @@ func (nw *NetWatcher) RegisterSourceIpGroupsReceivers(receivers ...SourceIpGroup
 }
 
 // Start begins the periodic ARP scanning process and supports cancellation using context
-func (nw *NetWatcher) Start(ctx context.Context, yamlPath string) {
+func (nw *NetWatcher) Start(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Minute)
 	go func() {
 		for {
@@ -68,7 +68,7 @@ func (nw *NetWatcher) Start(ctx context.Context, yamlPath string) {
 				return
 			case <-ticker.C:
 				// Perform ARP scan and get updated map
-				newMapIpGroups := scanNetwork(yamlPath, ARPCmd)
+				newMapIpGroups := scanNetwork(ARPCmd)
 
 				// Compare with existing data
 				nw.mutex.Lock()
@@ -99,9 +99,9 @@ var (
 )
 
 // scanNetwork performs an ARP scan and maps MAC addresses to IPs
-func scanNetwork(yamlPath string, arpCmd arpCommand) models.MapIpGroups {
+func scanNetwork(arpCmd arpCommand) models.MapIpGroups {
 	// Load YAML data
-	gm, err := config.LoadGroupMACs(yamlPath)
+	gm, err := config.LoadGroupMACs()
 	if err != nil {
 		fmt.Printf("Error loading YAML: %v\n", err)
 		return nil

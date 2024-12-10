@@ -33,7 +33,8 @@ groups:
 	}
 
 	// Call the function under test
-	macGroup, err := LoadGroupMACs(tempFile.Name())
+	defaultGroupMacFilePath = tempFile.Name() // override the default file path with temp file above.
+	macGroup, err := LoadGroupMACs()
 	if err != nil {
 		t.Fatalf("LoadGroupMACs returned an error: %v", err)
 	}
