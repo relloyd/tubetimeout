@@ -47,14 +47,14 @@ func NewTracker(retention, granularity, threshold time.Duration, startDay int, s
 	}
 }
 
-// AddSample records a sample for a given device at the current time.
-func (t *Tracker) AddSample(groupId string) {
+// AddSample records a sample for a given identifier at the current time.
+func (t *Tracker) AddSample(id string) {
 	now := t.nowFunc() // Use nowFunc instead of time.Now
 
 	lastWindowStart, _ := t.calculateWindow(now)
 
 	// Get or initialize the device data.
-	data, _ := t.devices.LoadOrStore(groupId, &deviceData{
+	data, _ := t.devices.LoadOrStore(id, &deviceData{
 		samples: make([]bool, t.sampleSize),
 		// start:   now.Truncate(t.granularity),
 		start: lastWindowStart,

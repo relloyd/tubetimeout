@@ -169,6 +169,9 @@ func (q *NFTRules) addNFTablesRule(dAddr models.Ip) error {
 
 // sendIP4PacketsToDefaultNFQueue adds nftables rules to send packets to the default NFQUEUE.
 // TODO: do rule replacement atomically
+// TODO: consider if meshing source and dest IPs to create the rules offers a benefit given the cartesian
+//
+//	product will impact performance. We can probably do without it for now until we know how performant we are.
 func (q *NFTRules) sendIP4PacketsToDefaultNFQueue(ips []models.Ip) error {
 	// Empty the default chain.
 	q.conn.FlushChain(q.chain)

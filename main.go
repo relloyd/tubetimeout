@@ -82,6 +82,13 @@ func main() {
 	mgr := group.NewManager()
 	log.Println("Group manager created")
 
+	// Sources.
+	w := group.NewNetWatcher()
+	w.RegisterSourceIpGroupsReceivers(mgr)
+	w.RegisterSourceIpGroupsReceivers(rules)
+	w.Start(ctx)
+	log.Println("Sources mapped")
+
 	// Destinations.
 	dw := group.NewDomainWatcher()
 	dw.RegisterDestIpGroupReceivers(mgr)
@@ -90,13 +97,6 @@ func main() {
 	dw.RegisterDestIpDomainReceivers(rules)
 	dw.Start(ctx)
 	log.Println("Destinations mapped")
-
-	// Sources.
-	w := group.NewNetWatcher()
-	w.RegisterSourceIpGroupsReceivers(mgr)
-	w.RegisterSourceIpGroupsReceivers(rules)
-	w.Start(ctx)
-	log.Println("Sources mapped")
 
 	// Usage tracker.
 	t := usage.NewTracker(
