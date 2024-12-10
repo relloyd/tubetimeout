@@ -18,6 +18,7 @@ require (
 	github.com/josharian/native v1.1.0 // indirect
 	github.com/mdlayher/socket v0.5.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
 	golang.org/x/net v0.32.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect

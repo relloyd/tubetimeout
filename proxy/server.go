@@ -14,7 +14,8 @@ import (
 	"github.com/elazarl/goproxy"
 )
 
-func NewServer(m *group.Manager, t *usage.Tracker) *http.Server {
+
+func NewServer(m group.ManagerI, t usage.TrackerI) *http.Server {
 	proxy := goproxy.NewProxyHttpServer()
 	proxy.Verbose = true
 	proxy.OnRequest().DoFunc(GetHandler(m, t))
@@ -34,7 +35,7 @@ func NewServer(m *group.Manager, t *usage.Tracker) *http.Server {
 
 // GetHandler returns a handle func that can allow/deny requests.
 // The returned func will return a req,nil if the request is allowed, or nil,res if the request should be denied.
-func GetHandler(m *group.Manager, t *usage.Tracker) func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+func GetHandler(m group.ManagerI, t usage.TrackerI) func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 	return func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 		// Destination of the request.
 		destDomain := req.URL.Host

@@ -71,10 +71,16 @@ func (dw *DomainWatcher) RegisterDestDomainGroupReceivers(receivers ...DestDomai
 
 func NewDomainWatcher() *DomainWatcher {
 	return &DomainWatcher{
-		resolver:      resolveDomains,
-		interval:      defaultInterval,
-		destIpDomains: models.IpDomains{Data: make(models.MapIpDomain)},
-		destIpGroups:  models.IpGroups{Data: make(models.MapIpGroups)},
+		mu:                        sync.RWMutex{},
+		interval:                  defaultInterval,
+		resolver:                  resolveDomains,
+		groupDomains:              make(models.MapGroupDomains),
+		destIpDomains:             models.IpDomains{Data: make(models.MapIpDomain)},
+		destIpGroups:              models.IpGroups{Data: make(models.MapIpGroups)},
+		destDomainGroups:          models.DomainGroups{Data: make(models.MapDomainGroups)},
+		destIpDomainReceivers:     nil,
+		destIpGroupReceivers:      nil,
+		destDomainGroupsReceivers: nil,
 	}
 }
 

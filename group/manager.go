@@ -4,6 +4,10 @@ import (
 	"example.com/youtube-nfqueue/models"
 )
 
+type ManagerI interface {
+	IsSrcIpDestDomainKnown(ip models.Ip, domain models.Domain) ([]models.Group, bool)
+}
+
 type Manager struct {
 	sourceIpGroups   models.IpGroups
 	destIpGroups     models.IpGroups

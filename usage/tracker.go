@@ -12,6 +12,11 @@ type deviceData struct {
 	start   time.Time // Start time of the slice window
 }
 
+type TrackerI interface {
+	AddSample(id string)
+	HasExceededThreshold(deviceID string) bool
+}
+
 type Tracker struct {
 	devices         sync.Map      // Map of device IDs (string) to *deviceData
 	retention       time.Duration // The retention period for samples

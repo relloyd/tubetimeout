@@ -31,6 +31,10 @@ func checkARPAvailability() error {
 	return nil
 }
 
+type FuncGroupMacsLoader func() (config.GroupConfig, error)
+var groupMacsLoaderFunc = FuncGroupMacsLoader(config.LoadGroupMACs)
+
+
 type SourceIpGroupsReceiver interface {
 	UpdateSourceIpGroups(newData models.MapIpGroups)
 }
@@ -101,7 +105,7 @@ var (
 // scanNetwork performs an ARP scan and maps MAC addresses to IPs
 func scanNetwork(arpCmd arpCommand) models.MapIpGroups {
 	// Load YAML data
-	gm, err := config.LoadGroupMACs()
+	gm, err := groupMacsLoaderFunc()
 	if err != nil {
 		fmt.Printf("Error loading YAML: %v\n", err)
 		return nil

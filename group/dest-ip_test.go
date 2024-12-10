@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"example.com/youtube-nfqueue/models"
+	"github.com/stretchr/testify/assert"
 )
 
 // Mock Receiver for Testing
@@ -70,4 +71,35 @@ func TestLoadGroupDomains(t *testing.T) {
 		t.Errorf("Receiver should have been notified with %d domains, got %d", expectedDomainCount, len(mockReceiver.updatedGroups))
 	}
 	mockReceiver.mu.Unlock()
+}
+
+
+// TestNewDomainWatcher tests the NewDomainWatcher function created by AI overlords.
+func TestNewDomainWatcher(t *testing.T) {
+	// Call the function to create a new instance
+	dw := NewDomainWatcher()
+
+	// Assert each field is set up correctly
+	assert.NotNil(t, dw, "DomainWatcher instance should not be nil")
+	assert.IsType(t, &sync.RWMutex{}, &dw.mu, "mu should be a sync.RWMutex")
+	assert.Equal(t, defaultInterval, dw.interval, "interval should be set to defaultInterval")
+	assert.NotNil(t, dw.resolver, "resolver should not be nil")
+	assert.IsType(t, models.MapGroupDomains{}, dw.groupDomains, "groupDomains should be initialized as MapGroupDomains")
+	assert.NotNil(t, dw.groupDomains, "groupDomains should not be nil")
+
+	assert.IsType(t, &models.IpDomains{}, &dw.destIpDomains, "destIpDomains should be of type IpDomains")
+	assert.NotNil(t, dw.destIpDomains.Data, "destIpDomains.Data should not be nil")
+	assert.IsType(t, models.MapIpDomain{}, dw.destIpDomains.Data, "destIpDomains.Data should be of type MapIpDomain")
+
+	assert.IsType(t, &models.IpGroups{}, &dw.destIpGroups, "destIpGroups should be of type IpGroups")
+	assert.NotNil(t, dw.destIpGroups.Data, "destIpGroups.Data should not be nil")
+	assert.IsType(t, models.MapIpGroups{}, dw.destIpGroups.Data, "destIpGroups.Data should be of type MapIpGroups")
+
+	assert.IsType(t, &models.DomainGroups{}, &dw.destDomainGroups, "destDomainGroups should be of type DomainGroups")
+	assert.NotNil(t, dw.destDomainGroups.Data, "destDomainGroups.Data should not be nil")
+	assert.IsType(t, models.MapDomainGroups{}, dw.destDomainGroups.Data, "destDomainGroups.Data should be of type MapDomainGroups")
+
+	assert.Nil(t, dw.destIpDomainReceivers, "destIpDomainReceivers should be nil")
+	assert.Nil(t, dw.destIpGroupReceivers, "destIpGroupReceivers should be nil")
+	assert.Nil(t, dw.destDomainGroupsReceivers, "destDomainGroupsReceivers should be nil")
 }

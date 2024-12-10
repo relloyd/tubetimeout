@@ -2,7 +2,10 @@
 
 APP=nfqueue
 
-build:
+test:
+	go test ./...
+
+build: test
 	go build -buildvcs=false -gcflags='all=-N -l' -o $(APP) .
 
 sync:

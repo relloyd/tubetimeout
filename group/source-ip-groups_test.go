@@ -1,23 +1,28 @@
 package group
 
 import (
-	"os"
 	"slices"
 	"testing"
 
+	"example.com/youtube-nfqueue/config"
 	"example.com/youtube-nfqueue/models"
 )
 
 func TestScanNetwork(t *testing.T) {
-	// Create a sample YAML file content
-	yamlContent := `
-groups:
-  group1:
-    - 00:11:22:33:44:55
-    - 66:77:88:99:AA:BB
-  group2:
-    - CC:DD:EE:FF:00:11
-`
+	// Mock loader function
+	mockLoaderFunc := func() (config.GroupConfig, error) {
+		return config.GroupConfig{
+			GroupMACs: map[string][]string{
+				"group1": {"00:11:22:33:44:55", "66:77:88:99:AA:BB"},
+				"group2": {"CC:DD:EE:FF:00:11"},
+			},
+		}, nil
+	}
+
+	// Set the loader function to the mock
+	originalLoaderFunc := groupMacsLoaderFunc
+	defer func() { groupMacsLoaderFunc = originalLoaderFunc }()
+	groupMacsLoaderFunc = mockLoaderFunc
 
 	// Define a mock ARP command that returns a fixed output
 	mockARPCommand := func() (string, error) {
@@ -28,25 +33,8 @@ groups:
 `, nil
 	}
 
-	// Create a temporary file to hold the YAML content
-	tempFile, err := os.CreateTemp("", "test_mac_groups_*.yaml")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	defer func(name string) {
-		_ = os.Remove(name)
-	}(tempFile.Name()) // Clean up the temp file after the test
-
-	// Write the YAML content to the file
-	if _, err := tempFile.WriteString(yamlContent); err != nil {
-		t.Fatalf("Failed to write to temp file: %v", err)
-	}
-	if err := tempFile.Close(); err != nil {
-		t.Fatalf("Failed to close temp file: %v", err)
-	}
-
 	// Call the function under test
-	mig := scanNetwork(tempFile.Name(), mockARPCommand)
+	mig := scanNetwork(mockARPCommand)
 
 	// Validate the result
 	expectedMap := map[models.Ip][]models.Group{

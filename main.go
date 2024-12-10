@@ -115,7 +115,7 @@ func main() {
 	log.Println("NFQueue listener started")
 
 	// Proxy server
-	s := proxy.NewServer(mgr)
+	s := proxy.NewServer(mgr, t)
 	done := make(chan struct{}, 1)
 	go func() {
 		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

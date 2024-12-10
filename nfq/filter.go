@@ -113,7 +113,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 			}
 		} else { // else the packet destination Ip address is not known...
 			// Accept the packet.
-			log.Println("Accepting packet from %v to unregistered destination:", pips.src, pips.dst)
+			log.Printf("Accepting packet from %v to unregistered destination: %v", pips.src, pips.dst)
 			err = nf.SetVerdict(id, nfqueue.NfAccept)
 		}
 
