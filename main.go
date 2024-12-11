@@ -78,6 +78,17 @@ func main() {
 	}
 	log.Println("NFTables rules created")
 
+	// Usage tracker.
+	// TODO: reset NFT rules when MAC groups are updated.
+	t := usage.NewTracker(
+		appCfg.TrackerConfig.Retention,
+		appCfg.TrackerConfig.Granularity,
+		appCfg.TrackerConfig.Threshold,
+		appCfg.TrackerConfig.StartDay,
+		appCfg.TrackerConfig.StartTime,
+	)
+	log.Println("Usage tracker created")
+
 	// Group manager.
 	mgr := group.NewManager()
 	log.Println("Group manager created")
@@ -97,16 +108,6 @@ func main() {
 	dw.RegisterDestIpDomainReceivers(rules)
 	dw.Start(ctx)
 	log.Println("Destinations mapped")
-
-	// Usage tracker.
-	t := usage.NewTracker(
-		appCfg.TrackerConfig.Retention,
-		appCfg.TrackerConfig.Granularity,
-		appCfg.TrackerConfig.Threshold,
-		appCfg.TrackerConfig.StartDay,
-		appCfg.TrackerConfig.StartTime,
-	)
-	log.Println("Usage tracker created")
 
 	// NFQueue to listen to and track packets in user space.
 	q, err := nfq.NewNFQueueFilter(ctx, t, mgr)

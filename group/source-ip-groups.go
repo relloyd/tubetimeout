@@ -92,7 +92,7 @@ func (nw *NetWatcher) Start(ctx context.Context) {
 
 func scanNetworkAndSaveResults(nw *NetWatcher) {
 	// Perform ARP scan and get updated map
-	newMapIpGroups := scanNetwork(ARPCmd)
+	newMapIpGroups := scanNetwork(ARPCmd) // Empty map returned if no groups are set up.
 
 	// Compare with existing data
 	nw.mutex.Lock()
@@ -112,9 +112,11 @@ func scanNetworkAndSaveResults(nw *NetWatcher) {
 func scanNetwork(arpCmd arpCommand) models.MapIpGroups {
 	// Load YAML data
 	gm, err := groupMacsLoaderFunc()
-	if err != nil {
-		fmt.Printf("Error loading YAML: %v\n", err)
-		return nil
+	if err != nil { // if there is an error loading the YAML data...
+		// Log the error and assume all IPs are subject to all groups.
+		log.Printf("Error loading YAML: %v", err)
+		return make(models.MapIpGroups)
+		// TODO: why does the proxy log junk when the source IP list is empty?
 	}
 
 	// Initialize map
@@ -123,7 +125,7 @@ func scanNetwork(arpCmd arpCommand) models.MapIpGroups {
 	// Execute ARP scan
 	output, err := arpCmd()
 	if err != nil {
-		fmt.Printf("Error running ARP command: %v\n", err)
+		log.Printf("Error running ARP command: %v", err)
 		return nil
 	}
 

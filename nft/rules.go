@@ -72,6 +72,7 @@ func (q *NFTRules) UpdateDestIpDomains(newIps models.MapIpDomain) {
 }
 
 // UpdateSourceIpGroups is a callback that saves the supplied Ip addresses and updates the nft rules using them.
+// TODO: do the nft rules need to be updated with the source Ip addresses?
 func (q *NFTRules) UpdateSourceIpGroups(newData models.MapIpGroups) {
 	// TODO: don't trust the supplied map is good to just take as we want our own copy.
 	q.srcIPMacGroups.Mu.Lock()

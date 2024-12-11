@@ -87,7 +87,7 @@ func (m *Manager) IsDstIpDomainKnown(ip string) (models.Domain, bool) {
 func (m *Manager) IsDstDomainGroupKnown(domain models.Domain) ([]models.Group, bool) {
 	m.destDomainGroups.Mu.RLock()
 	defer m.destDomainGroups.Mu.RUnlock()
-	groups, ok := m.destDomainGroups.Data[models.Domain(domain)]
+	groups, ok := m.destDomainGroups.Data[domain]
 	if !ok {
 		return []models.Group{}, false
 	}
@@ -98,7 +98,7 @@ func (m *Manager) IsDstDomainGroupKnown(domain models.Domain) ([]models.Group, b
 func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool) {
 	srcGroup, srcOk := m.IsSrcIpGroupKnown(srcIp)
 	dstGroup, dstOk := m.IsDstIpGroupKnown(dstIp)
-	if !srcOk && !dstOk {
+	if !srcOk || !dstOk {
 		return []models.Group{}, false
 	}
 	// Return a list of groups where they intersect.
@@ -110,10 +110,7 @@ func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool
 			}
 		}
 	}
-	if len(intersection) == 0 {
-		return []models.Group{}, false
-	}
-	return intersection, true
+	return intersection, len(intersection) != 0  // return true if there are intersecting groups
 }
 
 // IsSrcIpDestDomainKnown checks if the source IP and destination domain are known and returns the intersection of groups.
