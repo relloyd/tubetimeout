@@ -44,9 +44,9 @@ func GetHandler(m group.ManagerI, t usage.TrackerI) func(req *http.Request, ctx 
 		}
 
 		// Source of the request.
-		srcIP := ctx.Req.RemoteAddr
-		if i := strings.Index(ctx.Req.RemoteAddr, ":"); i != -1 { // if there is a port...
-			srcIP = ctx.Req.RemoteAddr[:i] // trim the port.
+		srcIP := req.RemoteAddr
+		if i := strings.Index(req.RemoteAddr, ":"); i != -1 { // if there is a port...
+			srcIP = req.RemoteAddr[:i] // trim the port.
 		}
 
 		// Use the groups associated with the source IP and destination domain.
