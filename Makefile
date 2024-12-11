@@ -1,4 +1,6 @@
-.PHONY: build
+.PHONY: test build sync debug docker run-docker
+
+default: build
 
 APP=nfqueue
 

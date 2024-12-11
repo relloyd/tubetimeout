@@ -31,6 +31,17 @@ func checkARPAvailability() error {
 	return nil
 }
 
+// arpCommand is a function type for executing the ARP command
+type arpCommand func() (string, error)
+
+var (
+	// ARPCmd is the default ARP command
+	ARPCmd = func() (string, error) {
+		output, err := exec.Command("arp", "-n", "-a").Output() // TODO: check compatibility with Linux
+		return string(output), err
+	}
+)
+
 type FuncGroupMacsLoader func() (config.GroupConfig, error)
 var groupMacsLoaderFunc = FuncGroupMacsLoader(config.LoadGroupMACs)
 
@@ -62,7 +73,9 @@ func (nw *NetWatcher) RegisterSourceIpGroupsReceivers(receivers ...SourceIpGroup
 }
 
 // Start begins the periodic ARP scanning process and supports cancellation using context
+// TODO: add a test to check that scanNetworkAndSaveResults is called immediately and repeatedly.
 func (nw *NetWatcher) Start(ctx context.Context) {
+	scanNetworkAndSaveResults(nw)
 	ticker := time.NewTicker(1 * time.Minute)
 	go func() {
 		for {
@@ -71,36 +84,29 @@ func (nw *NetWatcher) Start(ctx context.Context) {
 				// Context was canceled, exit the loop
 				return
 			case <-ticker.C:
-				// Perform ARP scan and get updated map
-				newMapIpGroups := scanNetwork(ARPCmd)
-
-				// Compare with existing data
-				nw.mutex.Lock()
-				if !maps.EqualFunc(nw.sourceIpGroups, newMapIpGroups, func(m1 []models.Group, m2 []models.Group) bool {
-					return slices.Equal(m1, m2)
-				}) { // if there is new arp data...
-					nw.sourceIpGroups = newMapIpGroups
-					// UpdateIPDomains all registered callbacks
-					for _, cb := range nw.callbacks {
-						cb.UpdateSourceIpGroups(newMapIpGroups)
-					}
-				}
-				nw.mutex.Unlock()
+				scanNetworkAndSaveResults(nw)
 			}
 		}
 	}()
 }
 
-// arpCommand is a function type for executing the ARP command
-type arpCommand func() (string, error)
+func scanNetworkAndSaveResults(nw *NetWatcher) {
+	// Perform ARP scan and get updated map
+	newMapIpGroups := scanNetwork(ARPCmd)
 
-var (
-	// ARPCmd is the default ARP command
-	ARPCmd = func() (string, error) {
-		output, err := exec.Command("arp", "-n", "-a").Output() // TODO: check compatibility with Linux
-		return string(output), err
+	// Compare with existing data
+	nw.mutex.Lock()
+	if !maps.EqualFunc(nw.sourceIpGroups, newMapIpGroups, func(m1 []models.Group, m2 []models.Group) bool {
+		return slices.Equal(m1, m2)
+	}) { // if there is new arp data...
+		nw.sourceIpGroups = newMapIpGroups
+		// UpdateIPDomains all registered callbacks
+		for _, cb := range nw.callbacks {
+			cb.UpdateSourceIpGroups(newMapIpGroups)
+		}
 	}
-)
+	nw.mutex.Unlock()
+}
 
 // scanNetwork performs an ARP scan and maps MAC addresses to IPs
 func scanNetwork(arpCmd arpCommand) models.MapIpGroups {

@@ -205,8 +205,9 @@ func resolveDomains(domains []models.Domain) models.MapIpDomain {
 		for _, ip := range ips {
 			allIPs = append(allIPs, ipDomain{ip: models.Ip(ip), domain: domain})
 		}
-		log.Printf("Resolved domains")
 	}
+
+	log.Printf("Resolved domains")
 
 	// Remove duplicates.
 	mid := make(models.MapIpDomain)
