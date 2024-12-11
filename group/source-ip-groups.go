@@ -81,7 +81,7 @@ func (nw *NetWatcher) Start(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				// Context was canceled, exit the loop
+				ticker.Stop()
 				return
 			case <-ticker.C:
 				scanNetworkAndSaveResults(nw)

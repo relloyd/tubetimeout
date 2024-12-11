@@ -13,6 +13,7 @@ import (
 )
 
 type FuncGroupDomainsLoader func() (models.MapGroupDomains, error)
+
 var groupDomainLoaderFunc = FuncGroupDomainsLoader(config.LoadGroupDomains)
 
 type DestIpDomainReceiver interface {
@@ -28,14 +29,14 @@ type DestDomainGroupsReceiver interface {
 }
 
 type DomainWatcher struct {
-	mu                    sync.RWMutex // TODO: tidy up use of locks on maps that don't need them; make locks consistent.
-	interval              time.Duration
-	resolver              resolver
-	groupDomains          models.MapGroupDomains
-	destIpDomains         models.IpDomains
-	destIpGroups          models.IpGroups
-	destDomainGroups      models.DomainGroups
-	destIpDomainReceivers []DestIpDomainReceiver
+	mu                        sync.RWMutex // TODO: tidy up use of locks on maps that don't need them; make locks consistent.
+	interval                  time.Duration
+	resolver                  resolver
+	groupDomains              models.MapGroupDomains
+	destIpDomains             models.IpDomains
+	destIpGroups              models.IpGroups
+	destDomainGroups          models.DomainGroups
+	destIpDomainReceivers     []DestIpDomainReceiver
 	destIpGroupReceivers      []DestIpGroupsReceiver
 	destDomainGroupsReceivers []DestDomainGroupsReceiver
 }
@@ -87,34 +88,35 @@ func NewDomainWatcher() *DomainWatcher {
 // Start starts a new ticket to resolve Ip addresses for the packaged domains and sends a copy to any
 // registered receivers.
 func (dw *DomainWatcher) Start(ctx context.Context) {
-	ticker := time.NewTicker(defaultInterval)
-	defer ticker.Stop()
-
 	dw.loadGroupDomains()
-
 	// Collect all IPs for all domains in all groups.
 	for _, domains := range dw.groupDomains { // for each domain in each group...
 		m := dw.resolver(domains)
 		maps.Copy(dw.destIpDomains.Data, m)
 	}
-
 	dw.generateIPToGroups()
 	dw.notifyReceivers()
 
 	// Periodically resolve.
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			for _, domains := range dw.groupDomains {
-				m := dw.resolver(domains)
-				maps.Copy(dw.destIpDomains.Data, m)
+	ticker := time.NewTicker(defaultInterval)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				ticker.Stop()
+				return
+			case <-ticker.C:
+				dw.loadGroupDomains()
+				// Collect all IPs for all domains in all groups.
+				for _, domains := range dw.groupDomains {
+					m := dw.resolver(domains)
+					maps.Copy(dw.destIpDomains.Data, m)
+				}
+				dw.generateIPToGroups()
+				dw.notifyReceivers()
 			}
-			dw.generateIPToGroups()
-			dw.notifyReceivers()
 		}
-	}
+	}()
 }
 
 func (dw *DomainWatcher) loadGroupDomains() {
@@ -127,7 +129,7 @@ func (dw *DomainWatcher) loadGroupDomains() {
 	// Setup DomainGroups.
 	dw.destDomainGroups.Mu.Lock()
 	defer dw.destDomainGroups.Mu.Unlock()
-	for group, domains := range dw.groupDomains {  // for each group...
+	for group, domains := range dw.groupDomains { // for each group...
 		for _, domain := range domains {
 			// Save the domains for each group.
 			// A domain may be in more than one group so we append to the list.

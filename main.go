@@ -106,11 +106,12 @@ func main() {
 		appCfg.TrackerConfig.StartDay,
 		appCfg.TrackerConfig.StartTime,
 	)
+	log.Println("Usage tracker created")
 
 	// NFQueue to listen to and track packets in user space.
 	q, err := nfq.NewNFQueueFilter(ctx, t, mgr)
 	if err != nil {
-		log.Fatalln("failed to setup NFQueue filter:", err)
+		log.Fatalln("Failed to setup NFQueue filter:", err)
 	}
 	log.Println("NFQueue listener started")
 
@@ -123,6 +124,7 @@ func main() {
 		}
 		close(done)
 	}()
+	log.Println("Proxy server started")
 
 	// Capture SIGINT and SIGTERM to gracefully shutdown.
 	sigs := make(chan os.Signal, 1)
