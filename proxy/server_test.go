@@ -50,12 +50,12 @@ type MockUsageTracker struct {
 	mock.Mock
 }
 
-func (t *MockUsageTracker) AddSample(group string) {
-	t.Called(group)
+func (m *MockUsageTracker) AddSample(group string) {
+	m.Called(group)
 }
 
-func (t *MockUsageTracker) HasExceededThreshold(group string) bool {
-	args := t.Called(group)
+func (m *MockUsageTracker) HasExceededThreshold(group string) bool {
+	args := m.Called(group)
 	return args.Bool(0)
 }
 
@@ -75,9 +75,8 @@ func TestGetHandler(t *testing.T) {
 	mockGroupManager.On(
 		"IsSrcIpDestDomainKnown",
 		models.Ip("192.168.1.100"),
-		models.Domain("example.com")).Return([]models.Group{"group1", "group2"},
-		true,
-	)
+		models.Domain("example.com")).
+		Return([]models.Group{"group1", "group2"}, true)
 	mockUsageTracker.On("AddSample", "group1").Return()
 	mockUsageTracker.On("AddSample", "group2").Return()
 	mockUsageTracker.On("HasExceededThreshold", "group1").Return(false)
@@ -91,7 +90,7 @@ func TestGetHandler(t *testing.T) {
 
 	// Assertions
 	assert.Nil(t, newReq, "Request should be nil when threshold is exceeded")
-	assert.NotNil(t, resp, "Response should not be nil when threshold is exceeded")
+	assert.NotNil(t, resp, "Response should exist when threshold is exceeded")
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "Response status code should be 403")
 	body, _ := io.ReadAll(resp.Body)
 	assert.True(t, strings.Contains(string(body), "Request exploded"), "Response body should contain the expected reason")
