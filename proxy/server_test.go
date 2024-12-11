@@ -67,15 +67,13 @@ func TestGetHandler(t *testing.T) {
 	// Mock dependencies
 	mockGroupManager := new(MockGroupManager)
 	mockUsageTracker := new(MockUsageTracker)
+
+	// Mock Request and Context
 	req, _ := http.NewRequest("GET", "https://example.com/resource", nil)
 	req.RemoteAddr = "192.168.1.100:12345"
-	// ctx := &MockProxyCtx{Req: req}
 
-	// Mock behavior
-	mockGroupManager.On(
-		"IsSrcIpDestDomainKnown",
-		models.Ip("192.168.1.100"),
-		models.Domain("example.com")).
+	// Mock behavior for the unhappy path
+	mockGroupManager.On("IsSrcIpDestDomainKnown", models.Ip("192.168.1.100"), models.Domain("example.com")).
 		Return([]models.Group{"group1", "group2"}, true)
 	mockUsageTracker.On("AddSample", "group1").Return()
 	mockUsageTracker.On("AddSample", "group2").Return()
@@ -85,17 +83,46 @@ func TestGetHandler(t *testing.T) {
 	// Create the handler
 	handler := GetHandler(mockGroupManager, mockUsageTracker)
 
-	// Call the handler
+	// Unhappy path: threshold exceeded
 	newReq, resp := handler(req, nil)
 
-	// Assertions
+	// Assertions for the unhappy path
 	assert.Nil(t, newReq, "Request should be nil when threshold is exceeded")
-	assert.NotNil(t, resp, "Response should exist when threshold is exceeded")
+	assert.NotNil(t, resp, "Response should not be nil when threshold is exceeded")
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "Response status code should be 403")
 	body, _ := io.ReadAll(resp.Body)
 	assert.True(t, strings.Contains(string(body), "Request exploded"), "Response body should contain the expected reason")
 
-	// Verify interactions
+	// Verify interactions for the unhappy path
+	mockGroupManager.AssertCalled(t, "IsSrcIpDestDomainKnown", models.Ip("192.168.1.100"), models.Domain("example.com"))
+	mockUsageTracker.AssertCalled(t, "AddSample", "group1")
+	mockUsageTracker.AssertCalled(t, "AddSample", "group2")
+	mockUsageTracker.AssertCalled(t, "HasExceededThreshold", "group1")
+	mockUsageTracker.AssertCalled(t, "HasExceededThreshold", "group2")
+
+	// Mock behavior for the happy path
+	mockUsageTracker.ExpectedCalls = nil // Clear previous expectations
+	mockUsageTracker.On("AddSample", "group1").Return()
+	mockUsageTracker.On("AddSample", "group2").Return()
+	mockUsageTracker.On("HasExceededThreshold", "group1").Return(false)
+	mockUsageTracker.On("HasExceededThreshold", "group2").Return(false)
+
+	// Happy path: no thresholds exceeded
+	newReq, resp = handler(req, nil)
+
+	// Assertions for the happy path
+	assert.NotNil(t, newReq, "Request should not be nil when no thresholds are exceeded")
+	assert.Nil(t, resp, "Response should be nil when no thresholds are exceeded")
+	assert.Equal(t, req, newReq, "Returned request should match the original request")
+
+	// Verify interactions for the happy path
+	mockGroupManager.AssertCalled(t, "IsSrcIpDestDomainKnown", models.Ip("192.168.1.100"), models.Domain("example.com"))
+	mockUsageTracker.AssertCalled(t, "AddSample", "group1")
+	mockUsageTracker.AssertCalled(t, "AddSample", "group2")
+	mockUsageTracker.AssertCalled(t, "HasExceededThreshold", "group1")
+	mockUsageTracker.AssertCalled(t, "HasExceededThreshold", "group2")
+
+	// Verify all expectations were met
 	mockGroupManager.AssertExpectations(t)
 	mockUsageTracker.AssertExpectations(t)
 }
