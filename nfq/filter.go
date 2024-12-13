@@ -108,7 +108,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 					retval = 1
 				} else { // else the threshold is not exceeded...
 					// Accept the packet.
-					log.Printf("Accepting packet from %v to %v", pips.src, pips.dst)
+					log.Printf("Accepting packet from %v to %v in group %v", pips.src, pips.dst, grp)
 					err = nf.SetVerdict(id, nfqueue.NfAccept)
 				}
 			}
