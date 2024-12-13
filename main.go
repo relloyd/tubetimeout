@@ -91,7 +91,7 @@ func main() {
 	// Sources.
 	w := group.NewNetWatcher()
 	w.RegisterSourceIpGroupsReceivers(mgr)
-	w.RegisterSourceIpGroupsReceivers(rules)
+	w.RegisterSourceIpGroupsReceivers(rules) // TODO: actually use source ip groups in NFT rules or remove it from main
 	w.Start(ctx)
 	log.Println("Sources mapped")
 

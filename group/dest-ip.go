@@ -214,7 +214,7 @@ func resolveDomains(domains []models.Domain) models.MapIpDomain {
 	// Remove duplicates.
 	mid := make(models.MapIpDomain)
 	for _, ip := range allIPs {
-		mid[ip.ip] = ip.domain
+		mid[ip.ip] = ip.domain // last one wins! // TODO: understand how last one wins affects tracking when src IP and dest IPs are used, and dest IPs are in mutiple domains.
 	}
 
 	return mid
