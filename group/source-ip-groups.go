@@ -2,6 +2,7 @@ package group
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"maps"
@@ -112,11 +113,17 @@ func scanNetworkAndSaveResults(nw *NetWatcher) {
 func scanNetwork(arpCmd arpCommand) models.MapIpGroups {
 	// Load YAML data
 	gm, err := groupMacsLoaderFunc()
-	if err != nil { // if there is an error loading the YAML data...
-		// Log the error and assume all IPs are subject to all groups.
-		log.Printf("Error loading YAML: %v", err)
+	if errors.Is(err, config.ErrorGroupMacFileNotFound) { // if there is an error loading the YAML data...
+		// Log the error and configure all IPs subject to all groups.
+		log.Printf("Source IPs will be tracked individually. MAC-Groups file not configured: %v", err)
+		managerModeMatchAllSourceIps = true
 		return make(models.MapIpGroups)
-		// TODO: why does the proxy log junk when the source IP list is empty?
+	} else if err != nil {
+		log.Printf("Source IPs will be tracked individually. Unexpected error loading MAC-Groups: %v", err)
+		managerModeMatchAllSourceIps = true
+		return make(models.MapIpGroups)
+	} else {
+		managerModeMatchAllSourceIps = false
 	}
 
 	// Initialize map

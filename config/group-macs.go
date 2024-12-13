@@ -8,6 +8,7 @@ import (
 )
 
 var (
+	ErrorGroupMacFileNotFound = fmt.Errorf("group-macs file not found")
 	defaultGroupMacFilePath = "group-macs.yaml"
 )
 
@@ -20,8 +21,7 @@ type GroupConfig struct {
 func LoadGroupMACs() (GroupConfig, error) {
 	yamlFile, err := os.ReadFile(defaultGroupMacFilePath)
 	if err != nil {
-		return GroupConfig{}, fmt.Errorf("error reading YAML file: %w", err)
-		// TODO: find a way to return a default group that contains everything, or do we want to return nothing and have the caller handle it?
+		return GroupConfig{}, fmt.Errorf("%w: %v", ErrorGroupMacFileNotFound, err)
 	}
 
 	var gc GroupConfig

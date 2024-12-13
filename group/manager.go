@@ -1,7 +1,14 @@
 package group
 
 import (
+	"fmt"
+
 	"example.com/youtube-nfqueue/models"
+)
+
+var (
+	// managerModeMatchAllSourceIps is a flag to determine if the manager should match all source IPs (true) or aim for the intersection of source dest groups determined by source desk IPs (false).
+	managerModeMatchAllSourceIps = false
 )
 
 type ManagerI interface {
@@ -114,13 +121,26 @@ func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool
 }
 
 // IsSrcIpDestDomainKnown checks if the source IP and destination domain are known and returns the intersection of groups.
+// TODO: test IsSrcIpDestDomainKnown
 func (m *Manager) IsSrcIpDestDomainKnown(srcIp models.Ip, dstDomain models.Domain) ([]models.Group, bool) {
+	if managerModeMatchAllSourceIps { // if the manager should match all source IPs as if they're in their own group...
+		// Check if the destination domain is known.
+		_, ok := m.IsDstDomainGroupKnown(dstDomain)
+		if ok { // if the destination domain is known...
+			// Return the source IP and dest domain as a meta group.
+			return []models.Group{models.Group(fmt.Sprintf("%v:%v", srcIp, dstDomain))}, true
+		} else {
+			// The destination domain is not known.
+			return []models.Group{}, false
+		}
+	}
+
+	// Aim to return the intersection of groups determined by the source IP and destination domain.
 	srcGroup, srcOK := m.IsSrcIpGroupKnown(srcIp)
 	dstGroup, dstOK := m.IsDstDomainGroupKnown(dstDomain)
 	if !srcOK || !dstOK {
 		return []models.Group{}, false
 	}
-	// Return a list of groups where they intersect by src and dest.
 	var intersection []models.Group
 	for _, src := range srcGroup {
 		for _, dst := range dstGroup {

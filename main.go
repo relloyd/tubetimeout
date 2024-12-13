@@ -28,17 +28,12 @@ import (
 //     NFT rules  - add NFT rules to capture traffic going to a set of dest IP addresses
 //     NFQueue    - inspect packets in user space (relies on NFT rules to receive them)
 //
-// TODO:
-//   blocking doesn't work by running mitm attacks for my RPi
-//   fire up goproxy as a transparent proxy
-//     track dest IP or domain usage
-//     if dest is for any of the knwon targets and threshold breached then (deny it, optionally drop it)
+// TODO: blocking doesn't work by running mitm attacks for my RPi
 //
 // TODO: implement another filter for return/incoming traffic from YouTube
 //       do rate limiting
-// TODO: notify if another device hits youtube not via the proxy
 
-// TODO: swap IpDomains for DestIpGroups in nfq
+// TODO: notify if another device hits youtube not via the proxy
 
 func handleDebugging(appCfg *config.AppConfig) {
 	if appCfg.DebugConfig.DebugEnabled {
