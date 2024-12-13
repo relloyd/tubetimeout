@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"time"
 
 	"example.com/youtube-nfqueue/group"
@@ -14,8 +15,8 @@ import (
 )
 
 type packetIPs struct {
-	src models.Ip
-	dst models.Ip
+	src net.IP
+	dst net.IP
 }
 
 type NFQueueFilter struct {
@@ -94,7 +95,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 		}
 
 		// Check if the packet is for any of the resolved IPs.
-		grps, ok := f.g.IsSrcDestIpKnown(pips.src, pips.dst)
+		grps, ok := f.g.IsSrcDestIpKnown(models.Ip(pips.src.String()), models.Ip(pips.dst.String()))
 		if ok { // if the packet source and destination IP address is known...
 			for _, grp := range grps { // for each group
 				// Remember that we saw it.
@@ -155,7 +156,7 @@ func getPacketIPs(a nfqueue.Attribute) (packetIPs, error) {
 	}
 
 	return packetIPs{
-		src: models.Ip(payload[12:16]),
-		dst: models.Ip(payload[16:20]),
+		src: payload[12:16],
+		dst: payload[16:20],
 	}, nil
 }
