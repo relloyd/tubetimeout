@@ -242,7 +242,7 @@ func getOrCreateChain(conn *nftables.Conn, table *nftables.Table, chainName stri
 		Name:     chainName,
 		Table:    table,
 		Type:     nftables.ChainTypeFilter,
-		Hooknum:  nftables.ChainHookOutput,
+		Hooknum:  nftables.ChainHookForward, // input chain is for packets destined for the local machine; forward chain is for packets that are being routed through the local machine; output chain is for packets originating from the local machine
 		Priority: nftables.ChainPriorityFilter,
 	}
 	if !chainExists(conn, table.Name) { // TODO: decide if we want to delete/replace the chain if it exists already
