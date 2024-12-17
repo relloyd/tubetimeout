@@ -10,8 +10,9 @@ const (
 )
 
 type AppConfig struct {
-	DebugConfig  DebugConfig   `envconfig:"DEBUG"`
+	DebugConfig   DebugConfig   `envconfig:"DEBUG"`
 	TrackerConfig TrackerConfig `envconfig:"TRACKER"`
+	FilterConfig  FilterConfig  `envconfig:"FILTER"`
 }
 
 type DebugConfig struct {
@@ -30,4 +31,8 @@ type TrackerConfig struct {
 	StartDay int `envconfig:"START_DAY" default:"5"` // Friday
 	// StartTime is the duration past midnight to start the window.
 	StartTime time.Duration `envconfig:"START_TIME" default:"12h"` // 12 PM
+}
+
+type FilterConfig struct {
+	PacketDelayMs int `envconfig:"PACKET_DELAY_MS" default:"200"`
 }

@@ -105,7 +105,7 @@ func main() {
 	log.Println("Destinations mapped")
 
 	// NFQueue to listen to and track packets in user space.
-	q, err := nfq.NewNFQueueFilter(ctx, t, mgr)
+	q, err := nfq.NewNFQueueFilter(ctx, appCfg, t, mgr)
 	if err != nil {
 		log.Fatalln("Failed to setup NFQueue filter:", err)
 	}

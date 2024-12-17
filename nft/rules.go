@@ -227,7 +227,8 @@ func getOrCreateTable(conn *nftables.Conn, tableName string) (*nftables.Table, e
 	var err error
 	table := &nftables.Table{
 		Family: nftables.TableFamilyIPv4, // TODO: work out if we can use family inet instead for both ip4 and ip16 addresses
-		Name:   tableName,
+		// NOTE: Family: nftables.TableFamilyINet doesn't work for both IPv4 and IPv6 addresses (it produces lower-level rules)
+		Name: tableName,
 	}
 	if !tableExists(conn, tableName) { // TODO: decide if we want to delete/replace the table if it exists already
 		conn.AddTable(table)

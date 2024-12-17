@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"time"
 
+	"example.com/youtube-nfqueue/config"
 	"example.com/youtube-nfqueue/group"
 	"example.com/youtube-nfqueue/models"
 	"example.com/youtube-nfqueue/usage"
@@ -32,21 +34,21 @@ type NFQueueFilter struct {
 // Ip addresses for which to perform filtering.
 // If the packets are destined for any of the injected Ips then filtering happens based on
 // <LOGIC-TBC>
-func NewNFQueueFilter(ctx context.Context, t *usage.Tracker, g *group.Manager) (*NFQueueFilter, error) {
+func NewNFQueueFilter(ctx context.Context, cfg config.AppConfig, t *usage.Tracker, g *group.Manager) (*NFQueueFilter, error) {
 	var err error
 	f := &NFQueueFilter{}
 	f.g = g
 	f.t = t
-	f.Nfq, err = f.startNFQueueFilter(ctx)
+	f.Nfq, err = f.startNFQueueFilter(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
 	return f, nil
 }
 
-func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueue, error) {
-	// Set configuration options for nfqueue
-	config := nfqueue.Config{
+func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg config.AppConfig) (*nfqueue.Nfqueue, error) {
+	// Open a new NFQueue
+	nf, err := nfqueue.Open(&nfqueue.Config{
 		NetNS:        0,
 		NfQueue:      100,
 		MaxQueueLen:  0xFF,
@@ -58,10 +60,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 		WriteTimeout: 15 * time.Millisecond,
 		// WriteTimeout: 15 * time.Second,
 		// Logger:       &log.Logger{},
-	}
-
-	// Open a new nfqueue
-	nf, err := nfqueue.Open(&config)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("could not open nfqueue socket: %v", err)
 	}
@@ -95,17 +94,24 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context) (*nfqueue.Nfqueu
 		}
 
 		// Check if the packet is for any of the resolved IPs.
+		// TODO: add a tracker for each group as there may be many.
 		grps, ok := f.g.IsSrcDestIpKnown(models.Ip(pips.src.String()), models.Ip(pips.dst.String()))
-		if ok { // if the packet source and destination IP address is known...
-			for _, grp := range grps { // for each group
+		if ok { // if the packet source and destination IP address are known...
+			for _, grp := range grps { // for each group...
 				// Remember that we saw it.
-				// TODO: add a tracker for each group as there may be many.
 				f.t.AddSample(string(grp))
 				if f.t.HasExceededThreshold(string(grp)) { // if the threshold is exceeded for this group...
-					// Drop the packet.
-					log.Printf("Dropping packet from %v to %v (threshold breached for group %v)", pips.src, pips.dst, grp)
-					err = nf.SetVerdict(id, nfqueue.NfDrop)
-					retval = 1
+					if rand.Float32() < 0.2 { // if we should drop the packet by 20% chance...
+						log.Printf("Dropping packet from %v to %v (threshold breached for group %v)", pips.src, pips.dst, grp)
+						err = nf.SetVerdict(id, nfqueue.NfDrop)
+						retval = 1
+					} else { // else introduce a delay for the remaining packets...
+						if cfg.FilterConfig.PacketDelayMs > 0 {
+							log.Printf("Delaying packet from %v to %v (threshold breached for group %v)", pips.src, pips.dst, grp)
+							time.Sleep(time.Duration(cfg.FilterConfig.PacketDelayMs) * time.Millisecond) // Delay of 200ms
+						}
+						err = nf.SetVerdict(id, nfqueue.NfAccept)
+					}
 				} else { // else the threshold is not exceeded...
 					// Accept the packet.
 					log.Printf("Accepting packet from %v to %v in group %v", pips.src, pips.dst, grp)
