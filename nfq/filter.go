@@ -73,7 +73,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg config.AppCo
 	fnPacketHandler := func(a nfqueue.Attribute) int {
 		var err error
 		var pips packetIPs
-		var retval = 0 // 0 to accept, 1 to drop, -1 to stop receiving messages
+		var retval = 0 // 0 to continue the loop; 1 to exit cleanly; -1 to stop receiving messages
 
 		id := *a.PacketID
 
@@ -104,7 +104,6 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg config.AppCo
 					if rand.Float32() < 0.2 { // if we should drop the packet by 20% chance...
 						log.Printf("Dropping packet from %v to %v (threshold breached for group %v)", pips.src, pips.dst, grp)
 						err = nf.SetVerdict(id, nfqueue.NfDrop)
-						retval = 1
 					} else { // else introduce a delay for the remaining packets...
 						if cfg.FilterConfig.PacketDelayMs > 0 {
 							log.Printf("Delaying packet from %v to %v (threshold breached for group %v)", pips.src, pips.dst, grp)
@@ -126,8 +125,9 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg config.AppCo
 
 		if err != nil {
 			log.Printf("Error setting verdict: %v", err)
-			retval = -1
+			retval = 1 // 1 to exit clean; -1 to signal error; 0 to continue
 		}
+
 		return retval
 	}
 
