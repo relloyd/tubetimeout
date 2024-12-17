@@ -122,11 +122,6 @@ func main() {
 	}()
 	log.Println("Proxy server started")
 
-	// Capture SIGINT and SIGTERM to gracefully shutdown.
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	<-sigs
-	log.Printf("\nSignal received, shutting down...\n")
 
 	// Shutdown the server.
 	ctxSrv, cancelSrv := context.WithTimeout(context.Background(), 5*time.Second)
@@ -134,6 +129,13 @@ func main() {
 		log.Fatalln("Error shutting down server:", err)
 	}
 	cancelSrv()
+
+	// Capture SIGINT and SIGTERM to gracefully shutdown.
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	<-sigs
+	log.Printf("\nSignal received, shutting down...\n")
+
 
 	// More cleanup.
 	cancel() // call cancel before closing the rules/nfq else it will block.
