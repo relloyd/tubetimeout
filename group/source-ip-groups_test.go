@@ -58,3 +58,6 @@ func TestScanNetwork(t *testing.T) {
 		}
 	}
 }
+
+// TODO: test that the callback is called when the ARP scan is triggered
+//  and for when the MAC-Group mapping is empty and we default to every IP

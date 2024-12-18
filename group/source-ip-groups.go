@@ -97,9 +97,10 @@ func scanNetworkAndSaveResults(nw *NetWatcher) {
 
 	// Compare with existing data
 	nw.mutex.Lock()
-	if !maps.EqualFunc(nw.sourceIpGroups, newMapIpGroups, func(m1 []models.Group, m2 []models.Group) bool {
+	if managerModeMatchAllSourceIps || !maps.EqualFunc(nw.sourceIpGroups, newMapIpGroups, func(m1 []models.Group, m2 []models.Group) bool {
 		return slices.Equal(m1, m2)
-	}) { // if there is new arp data...
+	}) { // if there is new arp data or if we are defaulting to all source IPs...
+		// TODO: stop always notifying everyone when in managerModeMatchAllSourceIps mode.
 		nw.sourceIpGroups = newMapIpGroups
 		// Send IpGroups to all registered callbacks.
 		for _, cb := range nw.callbacks {

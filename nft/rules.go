@@ -82,6 +82,7 @@ func NewNFTRules() (*NFTRules, error) {
 		Name:    rules.nameSetRemote,
 		Table:   rules.table,
 		KeyType: nftables.TypeIPAddr,
+		
 	}
 	err = rules.conn.AddSet(rules.setRemote, nil) // start with empty sets so we can update them later
 	if err != nil {
@@ -113,8 +114,8 @@ func (q *NFTRules) UpdateDestIpDomains(newData models.MapIpDomain) {
 	// Convert to set elements and save.
 	var newIps []nftables.SetElement
 	for k := range newData {
-		ip := net.ParseIP(string(k))
-		if ip != nil && ip.To4() != nil {
+		ip := net.ParseIP(string(k)).To4()
+		if ip != nil {
 			newIps = append(newIps, nftables.SetElement{Key: ip})
 		} else {
 			log.Printf("NFT destination IP callback discarded IPv6 address %v", k)
@@ -167,37 +168,40 @@ func (q *NFTRules) updateIpSets() error {
 		return fmt.Errorf("remote IPs aren't ready")
 	}
 
-	// Clear all existing local IP in the set.
-	existingSetLocalIps, err := q.conn.GetSetElements(q.setLocal)
-	if err != nil {
-		return fmt.Errorf("unable to get existing local IPs from set: %w", err)
-	}
-	log.Printf("Existing local IPs in set: %v", existingSetLocalIps)
-	err = q.conn.SetDeleteElements(q.setLocal, existingSetLocalIps)
-	if err != nil {
-		return fmt.Errorf("unable to delete local set contents: %w", err)
-	}
-
-	// Clear all existing remote IPs in the set.
-	existingSetRemoteIps, err := q.conn.GetSetElements(q.setRemote)
-	if err != nil {
-		return fmt.Errorf("unable to get existing local IPs from set: %w", err)
-	}
-	log.Printf("Existing remote IPs in set: %v", existingSetLocalIps)
-	err = q.conn.SetDeleteElements(q.setLocal, existingSetRemoteIps)
-	if err != nil {
-		return fmt.Errorf("unable to delete remote set contents: %w", err)
-	}
+	// // Clear all existing local IP in the set.
+	// existingSetLocalIps, err := q.conn.GetSetElements(q.setLocal)
+	// if err != nil {
+	// 	return fmt.Errorf("unable to get existing local IPs from set: %w", err)
+	// }
+	// log.Printf("Existing local IPs in set: %v", existingSetLocalIps)
+	// err = q.conn.SetDeleteElements(q.setLocal, existingSetLocalIps)
+	// if err != nil {
+	// 	return fmt.Errorf("unable to delete local set contents: %w", err)
+	// }
+	//
+	// // Clear all existing remote IPs in the set.
+	// existingSetRemoteIps, err := q.conn.GetSetElements(q.setRemote)
+	// if err != nil {
+	// 	return fmt.Errorf("unable to get existing local IPs from set: %w", err)
+	// }
+	// log.Printf("Existing remote IPs in set: %v", existingSetLocalIps)
+	// err = q.conn.SetDeleteElements(q.setLocal, existingSetRemoteIps)
+	// if err != nil {
+	// 	return fmt.Errorf("unable to delete remote set contents: %w", err)
+	// }
 
 	// Add IPs to sets.
-	err = q.conn.SetAddElements(q.setLocal, q.localIPs)
+	for _, v := range q.localIPs {
+		log.Printf("localIPs: %v", net.IP(v.Key).String())
+	}
+	err := q.conn.SetAddElements(q.setLocal, q.localIPs)
 	if err != nil {
 		return fmt.Errorf("unable to add new local IPs to set: %w", err)
 	}
-	err = q.conn.SetAddElements(q.setRemote, q.remoteIPs)
-	if err != nil {
-		return fmt.Errorf("unable to add new remote IPs to set: %w", err)
-	}
+	// err = q.conn.SetAddElements(q.setRemote, q.remoteIPs)
+	// if err != nil {
+	// 	return fmt.Errorf("unable to add new remote IPs to set: %w", err)
+	// }
 
 	// Flush changes to the kernel.
 	if err := q.conn.Flush(); err != nil {

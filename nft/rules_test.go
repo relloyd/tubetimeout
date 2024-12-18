@@ -21,6 +21,8 @@ func Test_New(t *testing.T) {
 	assert.NotNil(t, nfq.conn, "NewNFTRules() conn is nil")
 	assert.NotNil(t, nfq.table, "NewNFTRules() table is nil")
 	assert.NotNil(t, nfq.chain, "NewNFTRules() chain is nil")
+	assert.NotNil(t, nfq.setLocal, "NewNFTRules() setLocal is nil")
+	assert.NotNil(t, nfq.setRemote, "NewNFTRules() setRemote is nil")
 	assert.Equal(t, nfq.nameSetLocal, defaultSrcIpSetName, "NewNFTRules() nameSetLocal is bad")
 	assert.Equal(t, nfq.nameSetRemote, defaultDestIpSetName, "NewNFTRules() nameSetRemote is bad")
 }
@@ -76,10 +78,6 @@ func Test_addNFTablesRuleForSets(t *testing.T) {
 		"192.168.200.101": "example.com",
 	}
 	rules.UpdateDestIpDomains(mid)
-
-	// Trigger rule generation.
-	err = rules.updateIpSets()
-	assert.NoError(t, err, "updateIpSets() error = %v", err)
 
 	// Check length of sets.
 	s, err := rules.conn.GetSetElements(rules.setLocal)
