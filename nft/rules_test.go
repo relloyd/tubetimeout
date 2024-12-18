@@ -24,8 +24,8 @@ func Test_SendIP4PacketsToDefaultNFQueue(t *testing.T) {
 	assert.NoError(t, err, "NewNFTRules() error = %v", err)
 
 	// Add a single rule.
-	err = nfq.addNFTablesRule("10.20.30.1") // add any old rule
-	assert.NoError(t, err, "addNFTablesRule() error = %v", err)
+	err = nfq.addNFTablesRuleForSingleDestAddr("10.20.30.1") // add any old rule
+	assert.NoError(t, err, "addNFTablesRuleForSingleDestAddr() error = %v", err)
 	err = nfq.conn.Flush()
 	assert.NoError(t, err, "Flush() error = %v", err)
 
@@ -36,13 +36,13 @@ func Test_SendIP4PacketsToDefaultNFQueue(t *testing.T) {
 	assert.Equal(t, 1, len(r), "expected 1 rule")
 
 	// Add empty rules list which should cause chain flush.
-	err = nfq.sendIP4PacketsToDefaultNFQueue([]models.Ip{}) // send empty Ip list to cause empty rules.
-	assert.NoError(t, err, "sendIP4PacketsToDefaultNFQueue() error = %v", err)
+	err = nfq.updateIpSets([]models.Ip{}) // send empty Ip list to cause empty rules.
+	assert.NoError(t, err, "updateIpSets() error = %v", err)
 
 	// Check length of chain rules.
 	r, err = nfq.conn.GetRules(nfq.table, nfq.chain)
 	assert.NoError(t, err, "conn.GetRules() error = %v", err)
-	assert.Equal(t, 0, len(r), "sendIP4PacketsToDefaultNFQueue() chain should be empty")
+	assert.Equal(t, 0, len(r), "updateIpSets() chain should be empty")
 }
 
 func Test_Clean(t *testing.T) {

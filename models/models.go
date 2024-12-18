@@ -4,11 +4,6 @@ import (
 	"sync"
 )
 
-type IpSlice struct {
-	Data []Ip
-	Mu   sync.RWMutex
-}
-
 type IpDomains struct {
 	Data MapIpDomain
 	Mu   sync.RWMutex

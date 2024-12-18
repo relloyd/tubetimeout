@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sync"
 
 	"example.com/youtube-nfqueue/models"
 	"github.com/google/nftables"
@@ -19,19 +20,24 @@ func init() {
 }
 
 var (
-	defaultTableName = "crazydeer-table"
-	defaultChainName = "crazydeer-chain"
-	defaultQueueNum  = uint16(100)
+	defaultTableName    = "crazydeer-table"
+	defaultChainName    = "crazydeer-chain"
+	defaultQueueNumDest = uint16(100) // TODO: do we need one queue per NFT rule?
+	// defaultQueueNumSrcDest = uint16(101)
+	// defaultQueueNumDestSrc = uint16(102)
 )
 
 type NFTRules struct {
+	conn      *nftables.Conn
 	tableName string
 	chainName string
-	conn      *nftables.Conn
 	table     *nftables.Table
 	chain     *nftables.Chain
-	destIPs   models.IpSlice
-	srcIPs    models.IpSlice
+	setLocal  *nftables.Set
+	setRemote *nftables.Set
+	remoteIPs []nftables.SetElement
+	localIPs  []nftables.SetElement
+	mu        sync.Mutex
 }
 
 func NewNFTRules() (*NFTRules, error) {
@@ -40,61 +46,206 @@ func NewNFTRules() (*NFTRules, error) {
 		conn:      &nftables.Conn{},
 		tableName: defaultTableName,
 		chainName: defaultChainName,
+		localIPs:  make([]nftables.SetElement, 0),
+		remoteIPs: make([]nftables.SetElement, 0),
 	}
+
 	rules.table, err = getOrCreateTable(rules.conn, rules.tableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create nftables table: %v", err)
 	}
+
 	rules.chain, err = getOrCreateChain(rules.conn, rules.table, rules.chainName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create nftables chain: %v", err)
 	}
-	rules.destIPs.Data = make([]models.Ip, 0) // start with empty data
-	rules.srcIPs.Data = make([]models.Ip, 0)
+
+	// Create empty IP address sets.
+	localSetName := "local_ip_set"
+	remoteSetName := "remote_ip_set"
+
+	// Create local IP address set.
+	rules.setLocal = &nftables.Set{
+		Name:    localSetName,
+		Table:   rules.table,
+		KeyType: nftables.TypeIPAddr,
+	}
+	err = rules.conn.AddSet(rules.setLocal, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create local IP set")
+	}
+
+	// Create remote IP address set.
+	rules.setRemote = &nftables.Set{
+		Name:    remoteSetName,
+		Table:   rules.table,
+		KeyType: nftables.TypeIPAddr,
+	}
+	err = rules.conn.AddSet(rules.setRemote, nil) // start with empty sets so we can update them later
+	if err != nil {
+		return nil, fmt.Errorf("failed to create remote IP set")
+	}
+
+	// Create NFTables rules for src-dest and dest-src combinations.
+	err = rules.addNFTablesRuleForSets(defaultQueueNumDest, localSetName, remoteSetName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create NFT rule for src-dest combination")
+	}
+	err = rules.addNFTablesRuleForSets(defaultQueueNumDest, remoteSetName, localSetName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create NFT rule for dest-src combination")
+	}
+
+	// Flush changes to the kernel.
+	if err = rules.conn.Flush(); err != nil {
+		return nil, fmt.Errorf("failed to flush nftables rules: %v", err)
+	}
+
 	return rules, nil
 }
 
 // UpdateDestIpDomains is a callback that saves the supplied Ip addresses and updates the nft rules using them.
 func (q *NFTRules) UpdateDestIpDomains(newData models.MapIpDomain) {
-	// Convert to slice and save.
-	var newIps []models.Ip
+	// Convert to set elements and save.
+	var newIps []nftables.SetElement
 	for k := range newData {
-		newIps = append(newIps, k)
+		ip := net.ParseIP(string(k))
+		if ip != nil && ip.To4() != nil {
+			newIps = append(newIps, nftables.SetElement{Key: ip})
+		} else {
+			log.Printf("NFT destination IP callback discarded IPv6 address %v", k)
+		}
 	}
-	// Save the new Ip addresses.
-	q.destIPs.Mu.Lock()
-	defer q.destIPs.Mu.Unlock()
-	q.destIPs.Data = newIps
+
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.remoteIPs = newIps
+
 	// Refresh the NFTables rules.
-	err := q.sendIP4PacketsToDefaultNFQueue()
+	err := q.updateIpSets()
 	if err != nil {
-		log.Printf("failed to send Ip addresses to default NFQUEUE: %v\n", err)
+		log.Printf("NFT destination IP callback failed to update set IP addresses: %v", err)
 	}
 }
 
 // UpdateSourceIpGroups is a callback that saves the supplied Ip addresses and updates the nft rules using them.
-// TODO: do the nft rules need to be updated with the source Ip addresses?
 func (q *NFTRules) UpdateSourceIpGroups(newData models.MapIpGroups) {
-	// Convert to slice and save.
-	var newIps []models.Ip
+	// Convert to set elements and save.
+	var newIps []nftables.SetElement
 	for k := range newData {
-		newIps = append(newIps, k)
+		ip := net.ParseIP(string(k))
+		if ip != nil && ip.To4() != nil {
+			newIps = append(newIps, nftables.SetElement{Key: ip})
+		} else {
+			log.Printf("NFT source IP callback discarded IPv6 address %v", k)
+		}
 	}
-	// Save the new Ip addresses.
-	q.destIPs.Mu.Lock()
-	defer q.destIPs.Mu.Unlock()
-	q.destIPs.Data = newIps
-	// Refresh the NFTables rules.
-	err := q.sendIP4PacketsToDefaultNFQueue() // TODO: make this do the right thing
+
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.localIPs = newIps
+
+	err := q.updateIpSets()
 	if err != nil {
-		log.Printf("failed to send Ip addresses to default NFQUEUE: %v\n", err)
+		log.Printf("NFT source IP callback failed to update set IP addresses: %v", err)
 	}
 }
 
-// addNFTablesRule add a rule to send traffic to the NFQUEUE for this app.
+// updateIpSets adds nftables rules to send packets to the default NFQs.
+// This should be done under a mutex since it reads the NFTRules srcIps and destIps.
+func (q *NFTRules) updateIpSets() error {
+	if len(q.localIPs) == 0 || len(q.remoteIPs) == 0 {
+		return fmt.Errorf("src/dest IPs aren't ready")
+	}
+
+	// Clear the existing IP sets.
+	existingSetLocalIps, err := q.conn.GetSetElements(q.setLocal)
+	if err != nil {
+		return fmt.Errorf("unable to get existing local IPs from set: %w", err)
+	}
+	err = q.conn.SetDeleteElements(q.setLocal, existingSetLocalIps)
+	if err != nil {
+		return fmt.Errorf("unable to delete local set contents: %w", err)
+	}
+
+	existingSetRemoteIps, err := q.conn.GetSetElements(q.setRemote)
+	if err != nil {
+		return fmt.Errorf("unable to get existing local IPs from set: %w", err)
+	}
+	err = q.conn.SetDeleteElements(q.setLocal, existingSetRemoteIps)
+	if err != nil {
+		return fmt.Errorf("unable to delete remote set contents: %w", err)
+	}
+
+	// Add IPs to sets.
+	err = q.conn.SetAddElements(q.setLocal, q.localIPs)
+	if err != nil {
+		return fmt.Errorf("unable to add new local IPs to set: %w", err)
+	}
+	err = q.conn.SetAddElements(q.setRemote, q.remoteIPs)
+	if err != nil {
+		return fmt.Errorf("unable to add new remote IPs to set: %w", err)
+	}
+
+	// Flush changes to the kernel.
+	if err := q.conn.Flush(); err != nil {
+		return fmt.Errorf("failed to flush nftables sets: %v", err)
+	}
+	return nil
+}
+
+// addNFTablesRuleSet creates NFTables rules by creating a rule that sends traffic to the given NFQueue number.
+// It uses a set for each of the source and dest IP slices supplied.
 // The caller should flush the changes to the kernel after.
 // # iptables -I OUTPUT -p icmp -j NFQUEUE --queue-num 100
-func (q *NFTRules) addNFTablesRule(dAddr models.Ip) error {
+func (q *NFTRules) addNFTablesRuleForSets(nfqNumber uint16, srcSetName, destSetName string) error {
+	// Add a rule to match traffic from YouTube IPs to destination hosts
+	rule := &nftables.Rule{
+		Table: q.table,
+		Chain: q.chain,
+		Exprs: []expr.Any{
+			// Extract the source IP address into register 1
+			&expr.Payload{
+				DestRegister: 1,                             // Store in register 1
+				Base:         expr.PayloadBaseNetworkHeader, // Network header
+				Offset:       12,                            // Offset 12 for IPv4 source IP
+				Len:          4,                             // Length: 4 bytes for IPv4 address
+			},
+			// Check if the source IP is in the YouTube IP set
+			&expr.Lookup{
+				SourceRegister: 1,
+				SetName:        srcSetName,
+			},
+			// Extract the destination IP address into register 2
+			&expr.Payload{
+				DestRegister: 2,                             // Store in register 2
+				Base:         expr.PayloadBaseNetworkHeader, // Network header
+				Offset:       16,                            // Offset 16 for IPv4 destination IP
+				Len:          4,                             // Length: 4 bytes for IPv4 address
+			},
+			// Check if the destination IP is in the destination hosts set
+			&expr.Lookup{
+				SourceRegister: 2,
+				SetName:        destSetName,
+			},
+			// Send matching packets to NFQUEUE for further processing
+			&expr.Queue{
+				Num:   nfqNumber,
+				Total: 1,
+				Flag:  0, // 0 = block; use expr.QueueFlagBypass (1) to bypass if the net filter is not running or if the queue is full
+			},
+		},
+	}
+	q.conn.AddRule(rule)
+	return nil
+}
+
+// addNFTablesRuleForSingleDestAddr adds a rule to send traffic to the NFQUEUE for this app.
+// This accepts one destination IP address and creates a rule for it in the table/chain found in the bound struct.
+// The caller should flush the changes to the kernel after.
+// It uses the default queue number.
+// # iptables -I OUTPUT -p icmp -j NFQUEUE --queue-num 100
+func (q *NFTRules) addNFTablesRuleForSingleDestAddr(dAddr models.Ip) error {
 	ip := net.ParseIP(string(dAddr))
 	if ip == nil {
 		return errors.New("invalid net IP address")
@@ -137,155 +288,14 @@ func (q *NFTRules) addNFTablesRule(dAddr models.Ip) error {
 
 			// // Send matched packets to NFQUEUE
 			&expr.Queue{
-				Num:   defaultQueueNum, // NFQUEUE number
-				Total: 1,               // Single queue
-				Flag:  0,               // 0 = block; use expr.QueueFlagBypass (1) to bypass if the net filter is not running or if the queue is full
+				Num:   defaultQueueNumDest, // NFQUEUE number
+				Total: 1,                   // Single queue
+				Flag:  0,                   // 0 = block; use expr.QueueFlagBypass (1) to bypass if the net filter is not running or if the queue is full
 			},
 		},
 	}
 	q.conn.AddRule(rule)
 	return nil
-}
-
-// addNFTablesRuleSet add a rule to send traffic to the NFQUEUE for this app.
-// The caller should flush the changes to the kernel after.
-// # iptables -I OUTPUT -p icmp -j NFQUEUE --queue-num 100
-func (q *NFTRules) addNFTablesRuleSet() error {
-	// Create a set for YouTube IPs
-	remoteSet := &nftables.Set{
-		Name:    "public_ips",
-		Table:   q.table,
-		KeyType: nftables.TypeIPAddr,
-	}
-	err := q.conn.AddSet(remoteSet, []nftables.SetElement{
-		{Key: net.ParseIP("203.0.113.1")},
-		{Key: net.ParseIP("203.0.113.2")},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to add remote IP set: %v", err)
-	}
-
-	// Create a set for destination hosts
-	destSet := &nftables.Set{
-		Name:    "network_ips",
-		Table:   q.table,
-		KeyType: nftables.TypeIPAddr,
-	}
-	err = q.conn.AddSet(destSet, []nftables.SetElement{
-		{Key: net.ParseIP("192.168.1.10")}, // Replace with your network IPs
-		{Key: net.ParseIP("192.168.1.11")},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to add destination host set: %v", err)
-	}
-
-	// Add a rule to match traffic from YouTube IPs to destination hosts
-	rule := &nftables.Rule{
-		Table: q.table,
-		Chain: q.chain,
-		Exprs: []expr.Any{
-			// Extract the source IP address into register 1
-			&expr.Payload{
-				DestRegister: 1,                             // Store in register 1
-				Base:         expr.PayloadBaseNetworkHeader, // Network header
-				Offset:       12,                            // Offset 12 for IPv4 source IP
-				Len:          4,                             // Length: 4 bytes for IPv4 address
-			},
-			// Check if the source IP is in the YouTube IP set
-			&expr.Lookup{
-				SourceRegister: 1,
-				SetName:        "youtube_ips",
-				Table:          table.Name,
-			},
-			// Extract the destination IP address into register 2
-			&expr.Payload{
-				DestRegister: 2,                             // Store in register 2
-				Base:         expr.PayloadBaseNetworkHeader, // Network header
-				Offset:       16,                            // Offset 16 for IPv4 destination IP
-				Len:          4,                             // Length: 4 bytes for IPv4 address
-			},
-			// Check if the destination IP is in the destination hosts set
-			&expr.Lookup{
-				SourceRegister: 2,
-				SetName:        "dest_hosts",
-				Table:          table.Name,
-			},
-			// Send matching packets to NFQUEUE for further processing
-			&expr.Queue{
-				Num:   0, // NFQUEUE number
-				Total: 1,
-			},
-		},
-	}
-	c.AddRule(rule)
-
-	var offset, length uint32
-	var ipBytes []byte
-
-	if ip.To4() != nil {
-		offset = 16
-		length = 4
-		ipBytes = ip.To4()
-	} else {
-		if ip.To16() != nil {
-			log.Printf("Skipped IP6 address %q\n", dAddr)
-		} else {
-			log.Printf("Skipped bad IP address %q\n", dAddr)
-		}
-		return nil
-	}
-
-	// Add a rule to send traffic to NFQUEUE
-	rule := &nftables.Rule{
-		Table: q.table,
-		Chain: q.chain,
-		Exprs: []expr.Any{
-			// Match destination Ip address
-			&expr.Payload{
-				DestRegister: 1,                             // Store the payload in register 1
-				Base:         expr.PayloadBaseNetworkHeader, // Match the network header
-				Offset:       offset,
-				Len:          length,
-				// TODO: handle IPv6 in nftables rules
-			},
-			&expr.Cmp{
-				Op:       expr.CmpOpEq,
-				Register: 1,
-				Data:     ipBytes,
-			},
-
-			// // Send matched packets to NFQUEUE
-			&expr.Queue{
-				Num:   defaultQueueNum, // NFQUEUE number
-				Total: 1,               // Single queue
-				Flag:  0,               // 0 = block; use expr.QueueFlagBypass (1) to bypass if the net filter is not running or if the queue is full
-			},
-		},
-	}
-	q.conn.AddRule(rule)
-	return nil
-}
-
-// sendIP4PacketsToDefaultNFQueue adds nftables rules to send packets to the default NFQUEUE.
-// TODO: do rule set replacement atomically
-func (q *NFTRules) sendIP4PacketsToDefaultNFQueue() error {
-	// Empty the default chain.
-	q.conn.FlushChain(q.chain)
-	// Add rules for each Ip address.
-	err := q.addNFTablesRuleSet()
-	if err != nil {
-		return fmt.Errorf("failed to add nftables rule for Ip address %q: %v", ip, err)
-	}
-	// Flush changes to the kernel.
-	if err := q.conn.Flush(); err != nil {
-		return fmt.Errorf("failed to flush nftables rules: %v", err)
-	}
-	return nil
-}
-
-// Clean deletes the nftables table and therefore all its chains and rules.
-func (q *NFTRules) Clean() error {
-	return deleteTable(q.conn, q.table.Name)
 }
 
 func tableExists(conn *nftables.Conn, tableName string) bool {
@@ -356,3 +366,31 @@ func deleteTable(conn *nftables.Conn, tableName string) error {
 	}
 	return nil
 }
+
+// Clean deletes the nftables table and therefore all its chains and rules.
+func (q *NFTRules) Clean() error {
+	return deleteTable(q.conn, q.table.Name)
+}
+
+// // getDiffAMinusB returns all elements in a that are not in b.
+// func getDiffAMinusB[T comparable](a, b []T) []T {
+// 	var diff []T
+// 	for _, item := range a {
+// 		// Check if item is not in b
+// 		if !slices.Contains(b, item) {
+// 			diff = append(diff, item)
+// 		}
+// 	}
+// 	return diff
+// }
+//
+// func getSetIps(c *nftables.Conn, set *nftables.Set) ([]models.Ip, error) {
+// 	elems, err := c.GetSetElements(set)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("failed to get set elements: %+v", set)
+// 	}
+// 	var ips []models.Ip
+// 	for _, v := range elems {
+// 		ips = append(ips, models.Ip(net.IP(v.Key).String()))
+// 	}
+// }
