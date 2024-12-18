@@ -44,8 +44,8 @@ var (
 )
 
 type FuncGroupMacsLoader func() (config.GroupConfig, error)
-var groupMacsLoaderFunc = FuncGroupMacsLoader(config.LoadGroupMACs)
 
+var groupMacsLoaderFunc = FuncGroupMacsLoader(config.LoadGroupMACs)
 
 type SourceIpGroupsReceiver interface {
 	UpdateSourceIpGroups(newData models.MapIpGroups)
@@ -101,7 +101,7 @@ func scanNetworkAndSaveResults(nw *NetWatcher) {
 		return slices.Equal(m1, m2)
 	}) { // if there is new arp data...
 		nw.sourceIpGroups = newMapIpGroups
-		// UpdateIPDomains all registered callbacks
+		// Send IpGroups to all registered callbacks.
 		for _, cb := range nw.callbacks {
 			cb.UpdateSourceIpGroups(newMapIpGroups)
 		}

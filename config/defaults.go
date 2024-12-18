@@ -13,6 +13,7 @@ type AppConfig struct {
 	DebugConfig   DebugConfig   `envconfig:"DEBUG"`
 	TrackerConfig TrackerConfig `envconfig:"TRACKER"`
 	FilterConfig  FilterConfig  `envconfig:"FILTER"`
+	ProxyConfig   ProxyConfig   `envconfig:"PROXY"`
 }
 
 type DebugConfig struct {
@@ -35,4 +36,8 @@ type TrackerConfig struct {
 
 type FilterConfig struct {
 	PacketDelayMs int `envconfig:"PACKET_DELAY_MS" default:"200"`
+}
+
+type ProxyConfig struct {
+	ProxyEnabled bool `envconfig:"ENABLED" default:"false"`
 }

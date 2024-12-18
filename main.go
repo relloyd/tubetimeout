@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -35,6 +36,8 @@ import (
 
 // TODO: notify if another device hits youtube not via the proxy
 
+type cleanupFunc func() error
+
 func handleDebugging(appCfg *config.AppConfig) {
 	if appCfg.DebugConfig.DebugEnabled {
 		// Allow debug connection timeout.
@@ -56,6 +59,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	var cleanupFuncs []cleanupFunc
+
 	// Load app config from the environment.
 	var appCfg config.AppConfig
 	err := envconfig.Process("", &appCfg)
@@ -74,7 +79,6 @@ func main() {
 	log.Println("NFTables rules created")
 
 	// Usage tracker.
-	// TODO: reset NFT rules when MAC groups are updated.
 	t := usage.NewTracker(
 		appCfg.TrackerConfig.Retention,
 		appCfg.TrackerConfig.Granularity,
@@ -91,7 +95,7 @@ func main() {
 	// Sources.
 	w := group.NewNetWatcher()
 	w.RegisterSourceIpGroupsReceivers(mgr)
-	w.RegisterSourceIpGroupsReceivers(rules) // TODO: actually use source ip groups in NFT rules or remove it from main
+	w.RegisterSourceIpGroupsReceivers(rules)
 	w.Start(ctx)
 	log.Println("Sources mapped")
 
@@ -111,24 +115,41 @@ func main() {
 	}
 	log.Println("NFQueue listener started")
 
-	// Proxy server
-	s := proxy.NewServer(mgr, t)
-	done := make(chan struct{}, 1)
-	go func() {
-		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalln("Error starting proxy server:", err)
+	// Cleanup functions.
+	cleanupFuncs = append(cleanupFuncs, func() error {
+		cancel() // call cancel before closing NFQ else it will block!
+		err = rules.Clean()
+		if err != nil {
+			return fmt.Errorf("error removing NFT rules: %w", err)
 		}
-		close(done)
-	}()
-	log.Println("Proxy server started")
+		err = q.Nfq.Close() // cancel its context above before calling Close() else it will block.
+		if err != nil {
+			return fmt.Errorf("error closing NFQ: %w", err)
+		}
+		return nil
+	})
 
+	// Proxy server start.
+	if appCfg.ProxyConfig.ProxyEnabled {
+		s := proxy.NewServer(mgr, t)
+		go func() {
+			if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Fatalln("Error starting proxy server:", err)
+			}
+			log.Println("Proxy server quit")
+		}()
+		log.Println("Proxy server started")
 
-	// Shutdown the server.
-	ctxSrv, cancelSrv := context.WithTimeout(context.Background(), 5*time.Second)
-	if err = s.Shutdown(ctxSrv); err != nil {
-		log.Fatalln("Error shutting down server:", err)
+		cleanupFuncs = append(cleanupFuncs, func() error {
+			// Shutdown the proxy server.
+			ctxSrv, cancelSrv := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancelSrv()
+			if err = s.Shutdown(ctxSrv); err != nil {
+				return fmt.Errorf("error shutting down proxy server: %w", err)
+			}
+			return nil
+		})
 	}
-	cancelSrv()
 
 	// Capture SIGINT and SIGTERM to gracefully shutdown.
 	sigs := make(chan os.Signal, 1)
@@ -136,14 +157,16 @@ func main() {
 	<-sigs
 	log.Printf("\nSignal received, shutting down...\n")
 
-
-	// More cleanup.
-	cancel() // call cancel before closing the rules/nfq else it will block.
-	err = rules.Clean()
-	if err != nil {
-		log.Fatalln("Error: unable to remove NFT rules")
+	// Cleanup and exit.
+	failure := false
+	for _, f := range cleanupFuncs {
+		if err := f(); err != nil {
+			log.Printf("Error during cleanup: %v", err)
+			failure = true
+		}
 	}
-	_ = q.Nfq.Close() // cancel its context above before calling Close() else it will block.
-
+	if failure {
+		os.Exit(1)
+	}
 	return
 }

@@ -28,26 +28,30 @@ var (
 )
 
 type NFTRules struct {
-	conn      *nftables.Conn
-	tableName string
-	chainName string
-	table     *nftables.Table
-	chain     *nftables.Chain
-	setLocal  *nftables.Set
-	setRemote *nftables.Set
-	remoteIPs []nftables.SetElement
-	localIPs  []nftables.SetElement
-	mu        sync.Mutex
+	conn          *nftables.Conn
+	tableName     string
+	chainName     string
+	table         *nftables.Table
+	chain         *nftables.Chain
+	nameSetLocal  string
+	nameSetRemote string
+	setLocal      *nftables.Set
+	setRemote     *nftables.Set
+	remoteIPs     []nftables.SetElement
+	localIPs      []nftables.SetElement
+	mu            sync.Mutex
 }
 
 func NewNFTRules() (*NFTRules, error) {
 	var err error
 	rules := &NFTRules{
-		conn:      &nftables.Conn{},
-		tableName: defaultTableName,
-		chainName: defaultChainName,
-		localIPs:  make([]nftables.SetElement, 0),
-		remoteIPs: make([]nftables.SetElement, 0),
+		conn:          &nftables.Conn{},
+		tableName:     defaultTableName,
+		chainName:     defaultChainName,
+		nameSetLocal:  "local_ip_set",
+		nameSetRemote: "remote_ip_set",
+		localIPs:      make([]nftables.SetElement, 0),
+		remoteIPs:     make([]nftables.SetElement, 0),
 	}
 
 	rules.table, err = getOrCreateTable(rules.conn, rules.tableName)
@@ -60,13 +64,9 @@ func NewNFTRules() (*NFTRules, error) {
 		return nil, fmt.Errorf("failed to create nftables chain: %v", err)
 	}
 
-	// Create empty IP address sets.
-	localSetName := "local_ip_set"
-	remoteSetName := "remote_ip_set"
-
 	// Create local IP address set.
 	rules.setLocal = &nftables.Set{
-		Name:    localSetName,
+		Name:    rules.nameSetLocal,
 		Table:   rules.table,
 		KeyType: nftables.TypeIPAddr,
 	}
@@ -77,7 +77,7 @@ func NewNFTRules() (*NFTRules, error) {
 
 	// Create remote IP address set.
 	rules.setRemote = &nftables.Set{
-		Name:    remoteSetName,
+		Name:    rules.nameSetRemote,
 		Table:   rules.table,
 		KeyType: nftables.TypeIPAddr,
 	}
@@ -87,11 +87,11 @@ func NewNFTRules() (*NFTRules, error) {
 	}
 
 	// Create NFTables rules for src-dest and dest-src combinations.
-	err = rules.addNFTablesRuleForSets(defaultQueueNumDest, localSetName, remoteSetName)
+	err = rules.addNFTablesRuleForSets(defaultQueueNumDest, rules.nameSetLocal, rules.nameSetRemote)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create NFT rule for src-dest combination")
 	}
-	err = rules.addNFTablesRuleForSets(defaultQueueNumDest, remoteSetName, localSetName)
+	err = rules.addNFTablesRuleForSets(defaultQueueNumDest, rules.nameSetRemote, rules.nameSetLocal)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create NFT rule for dest-src combination")
 	}
@@ -124,7 +124,7 @@ func (q *NFTRules) UpdateDestIpDomains(newData models.MapIpDomain) {
 	// Refresh the NFTables rules.
 	err := q.updateIpSets()
 	if err != nil {
-		log.Printf("NFT destination IP callback failed to update set IP addresses: %v", err)
+		log.Printf("NFT callback with new destination IPs failed to update set IP addresses: %v", err)
 	}
 }
 
@@ -147,7 +147,7 @@ func (q *NFTRules) UpdateSourceIpGroups(newData models.MapIpGroups) {
 
 	err := q.updateIpSets()
 	if err != nil {
-		log.Printf("NFT source IP callback failed to update set IP addresses: %v", err)
+		log.Printf("NFT callback with new source IPs failed to update set IP addresses: %v", err)
 	}
 }
 
@@ -158,7 +158,7 @@ func (q *NFTRules) updateIpSets() error {
 		return fmt.Errorf("src/dest IPs aren't ready")
 	}
 
-	// Clear the existing IP sets.
+	// Clear all existing local IP in the set.
 	existingSetLocalIps, err := q.conn.GetSetElements(q.setLocal)
 	if err != nil {
 		return fmt.Errorf("unable to get existing local IPs from set: %w", err)
@@ -168,6 +168,7 @@ func (q *NFTRules) updateIpSets() error {
 		return fmt.Errorf("unable to delete local set contents: %w", err)
 	}
 
+	// Clear all existing remote IPs in the set.
 	existingSetRemoteIps, err := q.conn.GetSetElements(q.setRemote)
 	if err != nil {
 		return fmt.Errorf("unable to get existing local IPs from set: %w", err)
