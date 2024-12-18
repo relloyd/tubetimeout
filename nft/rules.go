@@ -19,10 +19,12 @@ func init() {
 	}
 }
 
-var (
-	defaultTableName    = "crazydeer-table"
-	defaultChainName    = "crazydeer-chain"
-	defaultQueueNumDest = uint16(100) // TODO: do we need one queue per NFT rule?
+const (
+	defaultTableName     = "crazydeer-table"
+	defaultChainName     = "crazydeer-chain"
+	defaultQueueNumDest  = uint16(100) // TODO: do we need one queue per NFT rule?
+	defaultSrcIpSetName  = "local_ip_set"
+	defaultDestIpSetName = "remote_ip_set"
 	// defaultQueueNumSrcDest = uint16(101)
 	// defaultQueueNumDestSrc = uint16(102)
 )
@@ -48,8 +50,8 @@ func NewNFTRules() (*NFTRules, error) {
 		conn:          &nftables.Conn{},
 		tableName:     defaultTableName,
 		chainName:     defaultChainName,
-		nameSetLocal:  "local_ip_set",
-		nameSetRemote: "remote_ip_set",
+		nameSetLocal:  defaultSrcIpSetName,
+		nameSetRemote: defaultDestIpSetName,
 		localIPs:      make([]nftables.SetElement, 0),
 		remoteIPs:     make([]nftables.SetElement, 0),
 	}
@@ -106,6 +108,8 @@ func NewNFTRules() (*NFTRules, error) {
 
 // UpdateDestIpDomains is a callback that saves the supplied Ip addresses and updates the nft rules using them.
 func (q *NFTRules) UpdateDestIpDomains(newData models.MapIpDomain) {
+	log.Printf("NFT callback with new destination IPs: %v", newData)
+
 	// Convert to set elements and save.
 	var newIps []nftables.SetElement
 	for k := range newData {
@@ -124,12 +128,14 @@ func (q *NFTRules) UpdateDestIpDomains(newData models.MapIpDomain) {
 	// Refresh the NFTables rules.
 	err := q.updateIpSets()
 	if err != nil {
-		log.Printf("NFT callback with new destination IPs failed to update set IP addresses: %v", err)
+		log.Printf("NFT callback with new destination IPs couldn't make the update: %v", err)
 	}
 }
 
 // UpdateSourceIpGroups is a callback that saves the supplied Ip addresses and updates the nft rules using them.
 func (q *NFTRules) UpdateSourceIpGroups(newData models.MapIpGroups) {
+	log.Printf("NFT callback with new source IPs: %v", newData)
+
 	// Convert to set elements and save.
 	var newIps []nftables.SetElement
 	for k := range newData {
@@ -147,15 +153,18 @@ func (q *NFTRules) UpdateSourceIpGroups(newData models.MapIpGroups) {
 
 	err := q.updateIpSets()
 	if err != nil {
-		log.Printf("NFT callback with new source IPs failed to update set IP addresses: %v", err)
+		log.Printf("NFT callback with new source IPs couldn't make the update: %v", err)
 	}
 }
 
 // updateIpSets adds nftables rules to send packets to the default NFQs.
 // This should be done under a mutex since it reads the NFTRules srcIps and destIps.
 func (q *NFTRules) updateIpSets() error {
-	if len(q.localIPs) == 0 || len(q.remoteIPs) == 0 {
-		return fmt.Errorf("src/dest IPs aren't ready")
+	if len(q.localIPs) == 0 {
+		return fmt.Errorf("local IPs aren't ready")
+	}
+	if len(q.remoteIPs) == 0 {
+		return fmt.Errorf("remote IPs aren't ready")
 	}
 
 	// Clear all existing local IP in the set.
@@ -163,6 +172,7 @@ func (q *NFTRules) updateIpSets() error {
 	if err != nil {
 		return fmt.Errorf("unable to get existing local IPs from set: %w", err)
 	}
+	log.Printf("Existing local IPs in set: %v", existingSetLocalIps)
 	err = q.conn.SetDeleteElements(q.setLocal, existingSetLocalIps)
 	if err != nil {
 		return fmt.Errorf("unable to delete local set contents: %w", err)
@@ -173,6 +183,7 @@ func (q *NFTRules) updateIpSets() error {
 	if err != nil {
 		return fmt.Errorf("unable to get existing local IPs from set: %w", err)
 	}
+	log.Printf("Existing remote IPs in set: %v", existingSetLocalIps)
 	err = q.conn.SetDeleteElements(q.setLocal, existingSetRemoteIps)
 	if err != nil {
 		return fmt.Errorf("unable to delete remote set contents: %w", err)
@@ -286,7 +297,6 @@ func (q *NFTRules) addNFTablesRuleForSingleDestAddr(dAddr models.Ip) error {
 				Register: 1,
 				Data:     ipBytes,
 			},
-
 			// // Send matched packets to NFQUEUE
 			&expr.Queue{
 				Num:   defaultQueueNumDest, // NFQUEUE number
