@@ -97,6 +97,8 @@ func scanNetworkAndSaveResults(nw *NetWatcher) {
 
 	// Compare with existing data
 	nw.mutex.Lock()
+	// TODO: return all IPs if there is an error loading the YAML data.
+	xxxx
 	if managerModeMatchAllSourceIps || !maps.EqualFunc(nw.sourceIpGroups, newMapIpGroups, func(m1 []models.Group, m2 []models.Group) bool {
 		return slices.Equal(m1, m2)
 	}) { // if there is new arp data or if we are defaulting to all source IPs...

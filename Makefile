@@ -2,7 +2,7 @@
 
 default: build
 
-APP=nfqueue
+APP=tt
 PACKAGE_TO_TEST=./nft
 FUNC_TO_TEST=Test_addNFTablesRuleForSets
 
@@ -13,7 +13,7 @@ build:
 	go build -buildvcs=false -gcflags='all=-N -l' -o $(APP) .
 
 sync:
-	rsync -auv --delete-after --exclude=.git ./ root@tubetimeout:nfqueue/
+	rsync -auv --delete-after --exclude=.git ./ root@tubetimeout:tubetimeout/
 
 debug: build
 	DEBUG_ENABLED=true dlv exec --headless --continue --accept-multiclient --listen=:56268 --api-version=2 $(APP)

@@ -20,11 +20,11 @@ func init() {
 }
 
 const (
-	defaultTableName     = "crazydeer-table"
-	defaultChainName     = "crazydeer-chain"
-	defaultQueueNumDest  = uint16(100) // TODO: do we need one queue per NFT rule?
+	defaultTableName     = "tubetimeout-table"
+	defaultChainName     = "tubetimeout-chain"
 	defaultSrcIpSetName  = "local_ip_set"
 	defaultDestIpSetName = "remote_ip_set"
+	defaultQueueNumDest  = uint16(100) // TODO: do we need one queue per NFT rule?
 	// defaultQueueNumSrcDest = uint16(101)
 	// defaultQueueNumDestSrc = uint16(102)
 )
@@ -205,6 +205,8 @@ func (q *NFTRules) updateIpSets() error {
 	if err := q.conn.Flush(); err != nil {
 		return fmt.Errorf("failed to flush nftables sets: %v", err)
 	}
+
+	log.Printf("NFT rules updated with %d local IPs and %d remote IPs", len(q.localIPs), len(q.remoteIPs))
 	return nil
 }
 
