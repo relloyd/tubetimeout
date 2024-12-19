@@ -16,6 +16,10 @@ import (
 	"example.com/youtube-nfqueue/models"
 )
 
+const (
+	defaultGroupName = "default"
+)
+
 func init() {
 	err := checkARPAvailability()
 	if err != nil {
@@ -98,7 +102,6 @@ func scanNetworkAndSaveResults(nw *NetWatcher) {
 	// Compare with existing data
 	nw.mutex.Lock()
 	// TODO: return all IPs if there is an error loading the YAML data.
-	xxxx
 	if managerModeMatchAllSourceIps || !maps.EqualFunc(nw.sourceIpGroups, newMapIpGroups, func(m1 []models.Group, m2 []models.Group) bool {
 		return slices.Equal(m1, m2)
 	}) { // if there is new arp data or if we are defaulting to all source IPs...
@@ -120,14 +123,14 @@ func scanNetwork(arpCmd arpCommand) models.MapIpGroups {
 		// Log the error and configure all IPs subject to all groups.
 		log.Printf("Source IPs will be tracked individually. MAC-Groups file not configured: %v", err)
 		managerModeMatchAllSourceIps = true
-		return make(models.MapIpGroups)
 	} else if err != nil {
 		log.Printf("Source IPs will be tracked individually. Unexpected error loading MAC-Groups: %v", err)
 		managerModeMatchAllSourceIps = true
-		return make(models.MapIpGroups)
 	} else {
 		managerModeMatchAllSourceIps = false
 	}
+	// TODO: add tests to check that managerModeMatchAllSourceIps is set correctly when the YAML file is missing or has an error.
+	// TODO: add tests to check that managerModeMatchAllSourceIps is set correctly when the YAML file is added.
 
 	// Initialize map
 	mig := make(map[models.Ip][]models.Group)
@@ -147,15 +150,20 @@ func scanNetwork(arpCmd arpCommand) models.MapIpGroups {
 			continue
 		}
 
-		ip := strings.Trim(fields[1], "()") // field zero may be '?' as the hostnames haven't been looked up
+		arpIp := strings.Trim(fields[1], "()") // field zero may be '?' as the hostnames haven't been looked up
 		arpMAC := fields[3]
 
-		// Find group for MAC
-		for group, macs := range gm.GroupMACs {
-			for _, gmac := range macs {
-				if gmac == arpMAC {
-					groups := mig[models.Ip(ip)]
-					mig[models.Ip(ip)] = append(groups, models.Group(group))
+		if managerModeMatchAllSourceIps && gm.GroupMACs == nil { // if there are no groups of MACs found...
+			// Set each source IP into the default group.
+			mig[models.Ip(arpIp)] = []models.Group{defaultGroupName}
+		} else {
+			// Find group for MAC
+			for group, macs := range gm.GroupMACs {
+				for _, gmac := range macs {
+					if gmac == arpMAC {
+						groups := mig[models.Ip(arpIp)]                             // retrieve existing groups for the IP.
+						mig[models.Ip(arpIp)] = append(groups, models.Group(group)) // append the new group to the existing groups.
+					}
 				}
 			}
 		}
