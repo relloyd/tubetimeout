@@ -55,8 +55,9 @@ func TestScanNetwork(t *testing.T) {
 			t.Errorf("Ip %s: expected %v, got %v", ip, expectedGroups, groups)
 		}
 	}
-	
+
 	// Test the case where the group-macs file is not found.
+	// Expect all IPs to be in the default group.
 	groupMacsLoaderFunc = func() (config.GroupConfig, error) {
 		return config.GroupConfig{}, config.ErrorGroupMacFileNotFound
 	}

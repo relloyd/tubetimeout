@@ -16,6 +16,13 @@ import (
 	"github.com/mdlayher/netlink"
 )
 
+const (
+	packetDirectionOutbound packetDirection = "outbound"
+	packetDirectionInbound  packetDirection = "inbound"
+)
+
+type packetDirection string
+
 type packetIPs struct {
 	src net.IP
 	dst net.IP
@@ -25,8 +32,6 @@ type NFQueueFilter struct {
 	Nfq *nfqueue.Nfqueue
 	t   *usage.Tracker
 	g   *group.Manager
-	// dstIps models.IpDomains
-	// srcIps models.IpGroups
 }
 
 // NewNFQueueFilter creates a new nfqueue filtering outbound packets.
@@ -39,28 +44,33 @@ func NewNFQueueFilter(ctx context.Context, cfg config.AppConfig, t *usage.Tracke
 	f := &NFQueueFilter{}
 	f.g = g
 	f.t = t
-	f.Nfq, err = f.startNFQueueFilter(ctx, cfg)
+	f.Nfq, err = f.startNFQueueFilter(ctx, cfg.FilterConfig.PacketDelayMs, cfg.FilterConfig.OutboundQueueNumber, packetDirectionOutbound)
+	if err != nil {
+		return nil, err
+	}
+	f.Nfq, err = f.startNFQueueFilter(ctx, cfg.FilterConfig.PacketDelayMs, cfg.FilterConfig.InboundQueueNumber, packetDirectionInbound)
 	if err != nil {
 		return nil, err
 	}
 	return f, nil
 }
 
-func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg config.AppConfig) (*nfqueue.Nfqueue, error) {
+func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, packetDelay int, queueNumber uint16, mode packetDirection) (*nfqueue.Nfqueue, error) {
 	// Open a new NFQueue
 	nf, err := nfqueue.Open(&nfqueue.Config{
 		NetNS:        0,
-		NfQueue:      100,
+		NfQueue:      queueNumber,
 		MaxQueueLen:  0xFF,
 		MaxPacketLen: 0xFFFF,
 		Copymode:     nfqueue.NfQnlCopyPacket,
 		Flags:        0,
+		WriteTimeout: 15 * time.Millisecond, // TODO: align timeout with packet delay ms
 		// AfFamily:     0,
 		// ReadTimeout:  0,
-		WriteTimeout: 15 * time.Millisecond,
 		// WriteTimeout: 15 * time.Second,
 		// Logger:       &log.Logger{},
 	})
+
 	if err != nil {
 		return nil, fmt.Errorf("could not open nfqueue socket: %v", err)
 	}
@@ -95,34 +105,45 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg config.AppCo
 
 		// Check if the packet is for any of the resolved IPs.
 		// TODO: add a tracker for each group as there may be many.
-		grps, ok := f.g.IsSrcDestIpKnown(models.Ip(pips.src.String()), models.Ip(pips.dst.String()))
-		if ok { // if the packet source and destination IP address are known...
-			for _, grp := range grps { // for each group...
-				// Remember that we saw it.
-				f.t.AddSample(string(grp))
-				if f.t.HasExceededThreshold(string(grp)) { // if the threshold is exceeded for this group...
-					if rand.Float32() < 0.2 { // if we should drop the packet by 20% chance...
-						log.Printf("Dropping packet from %v to %v (threshold breached for group %v)", pips.src, pips.dst, grp)
-						err = nf.SetVerdict(id, nfqueue.NfDrop)
-					} else { // else introduce a delay for the remaining packets...
-						if cfg.FilterConfig.PacketDelayMs > 0 {
-							log.Printf("Delaying packet from %v to %v (threshold breached for group %v)", pips.src, pips.dst, grp)
-							time.Sleep(time.Duration(cfg.FilterConfig.PacketDelayMs) * time.Millisecond) // Delay of 200ms
-						}
-						err = nf.SetVerdict(id, nfqueue.NfAccept)
-					}
-				} else { // else the threshold is not exceeded...
-					// Accept the packet.
-					log.Printf("Accepting packet from %v to %v in group %v", pips.src, pips.dst, grp)
-					err = nf.SetVerdict(id, nfqueue.NfAccept)
-				}
-			}
-		} else { // else the packet destination Ip address is not known...
-			// Accept the packet.
-			log.Printf("Accepting packet from %v to unregistered destination: %v", pips.src, pips.dst)
-			err = nf.SetVerdict(id, nfqueue.NfAccept)
+		var groups []models.Group
+		var ok bool
+		var direction, decision string
+		var verdict = nfqueue.NfAccept
+
+		if mode == packetDirectionOutbound { // if the mode is outbound...
+			// Check if the source and destination Ip addresses are known.
+			groups, ok = f.g.IsSrcDestIpKnown(models.Ip(pips.src.String()), models.Ip(pips.dst.String()))
+			direction = "outbound"
+		} else { // else if the mode is inbound...
+			// Expect the source and destination to be reversed.
+			// Source IPs will be the public IPs that we added to our destination mapping.
+			// Destinations IPs will be the local network.
+			groups, ok = f.g.IsSrcDestIpKnown(models.Ip(pips.dst.String()), models.Ip(pips.src.String()))
+			direction = "inbound"
 		}
 
+		if ok { // if the packet IPs are known...
+			for _, grp := range groups { // for each group...
+				decision = "Accept" // assume success
+				f.t.AddSample(string(grp)) // remember that we saw it
+				if f.t.HasExceededThreshold(string(grp)) { // if the threshold is exceeded for this group...
+					if rand.Float32() < 0.2 { // if we should drop the packet by 20% chance...
+						decision = "Drop"
+						verdict = nfqueue.NfDrop
+					} else { // else introduce a delay for the packet and accept...
+						if packetDelay > 0 {
+							decision = "Delay"
+							time.Sleep(time.Duration(packetDelay) * time.Millisecond) // Delay of 200ms
+						}
+					}
+				} // else accept the packet as the threshold is not exceeded...
+				log.Printf("%v %v packet from %v to %v (group %v)", decision, direction, pips.src, pips.dst, grp)
+			}
+		} else { // else accept the packet since the src/dest are not known...
+			log.Printf("Accepting packet from %v to unregistered destination %v", pips.src, pips.dst)
+		}
+
+		err = nf.SetVerdict(id, verdict)
 		if err != nil {
 			log.Printf("Error setting verdict: %v", err)
 			retval = 1 // 1 to exit clean; -1 to signal error; 0 to continue

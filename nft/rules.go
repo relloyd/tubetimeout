@@ -8,6 +8,7 @@ import (
 	"os"
 	"sync"
 
+	"example.com/youtube-nfqueue/config"
 	"example.com/youtube-nfqueue/models"
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
@@ -24,9 +25,7 @@ const (
 	defaultChainName     = "tubetimeout-chain"
 	defaultSrcIpSetName  = "local_ip_set"
 	defaultDestIpSetName = "remote_ip_set"
-	defaultQueueNumDest  = uint16(100) // TODO: do we need one queue per NFT rule?
-	// defaultQueueNumSrcDest = uint16(101)
-	// defaultQueueNumDestSrc = uint16(102)
+	defaultQueueNumDest  = uint16(100) // defaultQueueNumDest only used by unused code 🤣
 )
 
 type NFTRules struct {
@@ -44,7 +43,7 @@ type NFTRules struct {
 	mu            sync.Mutex
 }
 
-func NewNFTRules() (*NFTRules, error) {
+func NewNFTRules(cfg *config.AppConfig) (*NFTRules, error) {
 	var err error
 	rules := &NFTRules{
 		conn:          &nftables.Conn{},
@@ -91,11 +90,11 @@ func NewNFTRules() (*NFTRules, error) {
 	}
 
 	// Create NFTables rules for src-dest and dest-src combinations.
-	err = rules.addNFTablesRuleForSets(defaultQueueNumDest, rules.nameSetLocal, rules.nameSetRemote)
+	err = rules.addNFTablesRuleForSets(cfg.FilterConfig.OutboundQueueNumber, rules.nameSetLocal, rules.nameSetRemote)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create NFT rule for src-dest combination")
 	}
-	err = rules.addNFTablesRuleForSets(defaultQueueNumDest, rules.nameSetRemote, rules.nameSetLocal)
+	err = rules.addNFTablesRuleForSets(cfg.FilterConfig.InboundQueueNumber, rules.nameSetRemote, rules.nameSetLocal)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create NFT rule for dest-src combination")
 	}

@@ -101,9 +101,10 @@ func (t *Tracker) HasExceededThreshold(deviceID string) bool {
 	for _, seen := range dd.samples {
 		if seen {
 			count++
-			log.Printf("Seen %v count %v", deviceID, count)
 		}
 	}
+
+	log.Printf("Seen %v count %v", deviceID, count)
 
 	return time.Duration(count)*t.granularity >= t.threshold
 }

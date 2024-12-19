@@ -68,11 +68,13 @@ func main() {
 		log.Fatalln("failed to process app config:", err)
 	}
 
+	log.Printf("outbound queue = %v; inbound queue = %v", appCfg.FilterConfig.OutboundQueueNumber, appCfg.FilterConfig.InboundQueueNumber)
+
 	handleDebugging(&appCfg)
 
 	// NFT rules to send traffic to NFQueue.
 	// There won't be any NFT rules until dest IPs are supplied by manager callbacks.
-	rules, err := nft.NewNFTRules()
+	rules, err := nft.NewNFTRules(&appCfg)
 	if err != nil {
 		log.Fatalln("Failed to setup nft rules:", err)
 	}

@@ -35,7 +35,9 @@ type TrackerConfig struct {
 }
 
 type FilterConfig struct {
-	PacketDelayMs int `envconfig:"PACKET_DELAY_MS" default:"200"`
+	PacketDelayMs       int    `envconfig:"PACKET_DELAY_MS" default:"200"`
+	OutboundQueueNumber uint16 `envconfig:"OUTBOUND_QUEUE_NUMBER" default:"100"`
+	InboundQueueNumber  uint16 `envconfig:"INBOUND_QUEUE_NUMBER" default:"101"`
 }
 
 type ProxyConfig struct {
