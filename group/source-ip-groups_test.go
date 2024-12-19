@@ -6,6 +6,7 @@ import (
 
 	"example.com/youtube-nfqueue/config"
 	"example.com/youtube-nfqueue/models"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestScanNetwork(t *testing.T) {
@@ -42,11 +43,30 @@ func TestScanNetwork(t *testing.T) {
 		"192.168.1.11": {"group1"},
 		"192.168.1.12": {"group2"},
 	}
+	assert.Equal(t, len(expectedMap), len(mig), "Number of entries in the map")
 
-	if len(mig) != len(expectedMap) {
-		t.Fatalf("Expected %d entries, got %d", len(expectedMap), len(mig))
+	for ip, expectedGroups := range expectedMap {
+		groups, exists := mig[ip]
+		if !exists {
+			t.Errorf("Ip %s not found in result", ip)
+			continue
+		}
+		if !slices.Equal(groups, expectedGroups) {
+			t.Errorf("Ip %s: expected %v, got %v", ip, expectedGroups, groups)
+		}
 	}
-
+	
+	// Test the case where the group-macs file is not found.
+	groupMacsLoaderFunc = func() (config.GroupConfig, error) {
+		return config.GroupConfig{}, config.ErrorGroupMacFileNotFound
+	}
+	mig = scanNetwork(mockARPCommand)
+	expectedMap = map[models.Ip][]models.Group{
+		"192.168.1.10": {defaultGroupName},
+		"192.168.1.11": {defaultGroupName},
+		"192.168.1.12": {defaultGroupName},
+	}
+	assert.Equal(t, len(expectedMap), len(mig), "Number of entries in the map")
 	for ip, expectedGroups := range expectedMap {
 		groups, exists := mig[ip]
 		if !exists {
