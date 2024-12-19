@@ -2,6 +2,7 @@ package nft
 
 import (
 	"fmt"
+	"net"
 	"testing"
 
 	"example.com/youtube-nfqueue/models"
@@ -53,7 +54,7 @@ func Test_addNFTablesRuleForSingleDestAddr(t *testing.T) {
 }
 
 func Test_addNFTablesRuleForSets(t *testing.T) {
-	// t.Cleanup(cleanupFunc)
+	t.Cleanup(cleanupFunc)
 
 	rules, err := NewNFTRules()
 	assert.NoError(t, err, "NewNFTRules() error = %v", err)
@@ -74,27 +75,42 @@ func Test_addNFTablesRuleForSets(t *testing.T) {
 	rules.UpdateSourceIpGroups(mig)
 
 	mid := models.MapIpDomain{
-		"192.168.200.100": "example.com",
-		"192.168.200.101": "example.com",
+		"192.168.100.102": "example.com",
+		"192.168.100.103": "example.com",
 	}
 	rules.UpdateDestIpDomains(mid)
 
-	// Check length of sets.
-	s, err := rules.conn.GetSetElements(rules.setLocal)
-	assert.Equal(t, 2, len(s), "number of IPs in set")
-	for _, v := range s {
-		_, ok := mig[models.Ip(v.Key)]
+	// Check length of local set.
+	elem, err := rules.conn.GetSetElements(rules.setLocal)
+	assert.NoError(t, err, "local rule set error = %v", err)
+	assert.Equal(t, 2, len(elem), "number of IPs in set")
+	for _, e := range elem {
+		_, ok := mig[models.Ip(net.IP(e.Key).String())]
 		assert.True(t, ok, "IP not found in local IP set")
 	}
 
-	s, err = rules.conn.GetSetElements(rules.setRemote)
-	assert.Equal(t, 2, len(s), "number of IPs in set")
-	for _, v := range s {
-		_, ok := mid[models.Ip(v.Key)]
+	// Check length of remote set.
+	elem, err = rules.conn.GetSetElements(rules.setRemote)
+	assert.NoError(t, err, "remote rule set error = %v", err)
+	assert.Equal(t, 2, len(elem), "number of IPs in set")
+	for _, e := range elem {
+		_, ok := mid[models.Ip(net.IP(e.Key).String())]
 		assert.True(t, ok, "IP not found in remote IP set")
 	}
 
-	// TODO: test that when we add more IPs to the sets, the rules are updated and not duplicated.
+	// Test that when we add more IPs to the sets, the rules are fully replaced.
+	rules.localIPs = []nftables.SetElement{{Key: net.ParseIP("192.168.200.100").To4()}}
+	rules.remoteIPs = []nftables.SetElement{{Key: net.ParseIP("192.168.200.101").To4()}}
+	err = rules.updateIpSets()
+	assert.NoError(t, err, "updateIpSets() error = %v", err)
+
+	elem, err = rules.conn.GetSetElements(rules.setLocal)
+	assert.NoError(t, err, "local rule set error = %v", err)
+	assert.Equal(t, 1, len(elem), "number of IPs in local set")
+
+	elem, err = rules.conn.GetSetElements(rules.setRemote)
+	assert.NoError(t, err, "remote rule set error = %v", err)
+	assert.Equal(t, 1, len(elem), "number of IPs in remote set")
 
 	// TODO: find a way to assert the rule is using IP sets.
 }
