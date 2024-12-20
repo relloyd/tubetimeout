@@ -41,21 +41,42 @@ type NFQueueFilter struct {
 // <LOGIC-TBC>
 func NewNFQueueFilter(ctx context.Context, cfg config.AppConfig, t *usage.Tracker, g *group.Manager) (*NFQueueFilter, error) {
 	var err error
+
+	if cfg.FilterConfig.PacketDropPercentage < 0 || cfg.FilterConfig.PacketDropPercentage > 1 {
+		return nil, fmt.Errorf("packet drop percentage must be between 0 and 100")
+	}
+
 	f := &NFQueueFilter{}
 	f.g = g
 	f.t = t
-	f.Nfq, err = f.startNFQueueFilter(ctx, cfg.FilterConfig.PacketDelayMs, cfg.FilterConfig.OutboundQueueNumber, packetDirectionOutbound)
+	f.Nfq, err = f.startNFQueueFilter(
+		ctx,
+		cfg.FilterConfig.PacketDelayMs,
+		cfg.FilterConfig.PacketJitterMs,
+		cfg.FilterConfig.PacketDropPercentage,
+		cfg.FilterConfig.PacketDropUDP,
+		cfg.FilterConfig.OutboundQueueNumber,
+		packetDirectionOutbound,
+	)
 	if err != nil {
 		return nil, err
 	}
-	f.Nfq, err = f.startNFQueueFilter(ctx, cfg.FilterConfig.PacketDelayMs, cfg.FilterConfig.InboundQueueNumber, packetDirectionInbound)
+	f.Nfq, err = f.startNFQueueFilter(
+		ctx,
+		cfg.FilterConfig.PacketDelayMs,
+		cfg.FilterConfig.PacketJitterMs,
+		cfg.FilterConfig.PacketDropPercentage,
+		cfg.FilterConfig.PacketDropUDP,
+		cfg.FilterConfig.InboundQueueNumber,
+		packetDirectionInbound,
+	)
 	if err != nil {
 		return nil, err
 	}
 	return f, nil
 }
 
-func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, packetDelay int, queueNumber uint16, mode packetDirection) (*nfqueue.Nfqueue, error) {
+func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, packetDelay, packetJitter time.Duration, packetDropPercentage float32, dropUDP bool, queueNumber uint16, mode packetDirection) (*nfqueue.Nfqueue, error) {
 	// Open a new NFQueue
 	nf, err := nfqueue.Open(&nfqueue.Config{
 		NetNS:        0,
@@ -109,6 +130,14 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, packetDelay int,
 		var ok bool
 		var direction, decision string
 		var verdict = nfqueue.NfAccept
+		var proto = "proto-unknown"
+
+		protocol := (*a.Payload)[9] // Protocol field in IPv4
+		if protocol == 6 {
+			proto = "TCP"
+		} else if protocol == 17 {
+			proto = "UDP"
+		}
 
 		if mode == packetDirectionOutbound { // if the mode is outbound...
 			// Check if the source and destination Ip addresses are known.
@@ -124,23 +153,23 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, packetDelay int,
 
 		if ok { // if the packet IPs are known...
 			for _, grp := range groups { // for each group...
-				decision = "Accept" // assume success
-				f.t.AddSample(string(grp)) // remember that we saw it
+				decision = "Accept"                        // assume success
+				f.t.AddSample(string(grp))                 // remember that we saw it
 				if f.t.HasExceededThreshold(string(grp)) { // if the threshold is exceeded for this group...
-					if rand.Float32() < 0.2 { // if we should drop the packet by 20% chance...
+					if rand.Float32() < packetDropPercentage || (proto == "UDP" && dropUDP) { // if we should drop the packet...
 						decision = "Drop"
 						verdict = nfqueue.NfDrop
 					} else { // else introduce a delay for the packet and accept...
 						if packetDelay > 0 {
 							decision = "Delay"
-							time.Sleep(time.Duration(packetDelay) * time.Millisecond) // Delay of 200ms
+							time.Sleep(applyJitter(packetDelay, packetJitter)) // Delay the packet
 						}
 					}
 				} // else accept the packet as the threshold is not exceeded...
-				log.Printf("%v %v packet from %v to %v (group %v)", decision, direction, pips.src, pips.dst, grp)
+				log.Printf("%v %v %v packet from %v to %v (group %v)", decision, direction, proto, pips.src, pips.dst, grp)
 			}
 		} else { // else accept the packet since the src/dest are not known...
-			log.Printf("Accepting packet from %v to unregistered destination %v", pips.src, pips.dst)
+			log.Printf("Accepting %v packet from %v to unregistered destination %v", proto, pips.src, pips.dst)
 		}
 
 		err = nf.SetVerdict(id, verdict)
@@ -186,4 +215,17 @@ func getPacketIPs(a nfqueue.Attribute) (packetIPs, error) {
 		src: payload[12:16],
 		dst: payload[16:20],
 	}, nil
+}
+
+// applyJitter generates a random delay based on a base delay and jitter range.
+// Suggest ms values for baseDelayMs and jitterRangeMs.
+func applyJitter(baseDelayMs, jitterRangeMs time.Duration) time.Duration {
+	// Generate a random jitter in the range [-jitterRange, +jitterRange]
+	jitter := time.Duration((rand.Float64()*2 - 1) * float64(jitterRangeMs))
+	totalDelay := baseDelayMs + jitter
+	// Ensure the delay is not negative
+	if totalDelay < 0 {
+		totalDelay = 0
+	}
+	return totalDelay
 }

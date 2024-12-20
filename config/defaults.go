@@ -17,8 +17,10 @@ type AppConfig struct {
 }
 
 type DebugConfig struct {
-	DebugEnabled bool          `envconfig:"ENABLED" default:"false"`
-	DebugTime    time.Duration `envconfig:"TIME_SECONDS" default:"30s"`
+	// DebugEnabled when set true allows time for a dlv debug session to be started before continuing main.
+	DebugEnabled bool `envconfig:"ENABLED" default:"false"`
+	// DebugTime is the delay before starting main in which time you should connect a dlv debugging session.
+	DebugTime time.Duration `envconfig:"TIME_SECONDS" default:"30s"`
 }
 
 type TrackerConfig struct {
@@ -35,9 +37,12 @@ type TrackerConfig struct {
 }
 
 type FilterConfig struct {
-	PacketDelayMs       int    `envconfig:"PACKET_DELAY_MS" default:"200"`
-	OutboundQueueNumber uint16 `envconfig:"OUTBOUND_QUEUE_NUMBER" default:"100"`
-	InboundQueueNumber  uint16 `envconfig:"INBOUND_QUEUE_NUMBER" default:"101"`
+	PacketDelayMs        time.Duration `envconfig:"PACKET_DELAY_MS" default:"100ms"`
+	PacketJitterMs       time.Duration `envconfig:"PACKET_DELAY_JITTER_MS" default:"50ms"`
+	PacketDropPercentage float32       `envconfig:"PACKET_DROP_PCT" default:"0.4"`
+	PacketDropUDP        bool          `envconfig:"PACKET_DROP_UDP" default:"true"`
+	OutboundQueueNumber  uint16        `envconfig:"OUTBOUND_QUEUE_NUMBER" default:"100"`
+	InboundQueueNumber   uint16        `envconfig:"INBOUND_QUEUE_NUMBER" default:"101"`
 }
 
 type ProxyConfig struct {
