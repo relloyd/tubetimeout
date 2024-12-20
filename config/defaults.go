@@ -27,7 +27,7 @@ type TrackerConfig struct {
 	// Granularity is the sampling resolution.
 	Granularity time.Duration `envconfig:"GRANULARITY" default:"1m"`
 	// Threshold is duration for exceeding conditions.
-	Threshold time.Duration `envconfig:"THRESHOLD" default:"2m"`
+	Threshold time.Duration `envconfig:"THRESHOLD" default:"1m"`
 	// StartDay is the day of the week to start the window.
 	StartDay int `envconfig:"START_DAY" default:"5"` // Friday
 	// StartTime is the duration past midnight to start the window.
