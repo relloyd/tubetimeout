@@ -21,11 +21,12 @@ func init() {
 }
 
 const (
-	defaultTableName     = "tubetimeout-table"
-	defaultChainName     = "tubetimeout-chain"
-	defaultSrcIpSetName  = "local_ip_set"
-	defaultDestIpSetName = "remote_ip_set"
-	defaultQueueNumDest  = uint16(100) // defaultQueueNumDest only used by unused code 🤣
+	defaultTableName       = "tubetimeout-table"
+	defaultChainName       = "tubetimeout-chain"
+	defaultSrcIpSetName    = "local_ip_set"
+	defaultDestIpSetName   = "remote_ip_set"
+	defaultProtocolSetName = "protocol_set"
+	defaultQueueNumDest    = uint16(100) // defaultQueueNumDest only used by unused code 🤣
 )
 
 type NFTRules struct {
@@ -38,6 +39,7 @@ type NFTRules struct {
 	nameSetRemote string
 	setLocal      *nftables.Set
 	setRemote     *nftables.Set
+	setProto      *nftables.Set
 	remoteIPs     []nftables.SetElement
 	localIPs      []nftables.SetElement
 	mu            sync.Mutex
@@ -63,6 +65,20 @@ func NewNFTRules(cfg *config.AppConfig) (*NFTRules, error) {
 	rules.chain, err = getOrCreateChain(rules.conn, rules.table, rules.chainName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create nftables chain: %v", err)
+	}
+
+	// Create TCP/UDP set.
+	rules.setProto = &nftables.Set{
+		Name:    defaultProtocolSetName,
+		Table:   rules.table,
+		KeyType: nftables.TypeInetProto,
+	}
+	err = rules.conn.AddSet(rules.setProto, []nftables.SetElement{
+		{Key: []byte{6}},  // TCP
+		{Key: []byte{17}}, // UDP
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create protocol set")
 	}
 
 	// Create local IP address set.
@@ -242,6 +258,18 @@ func (q *NFTRules) addNFTablesRuleForSets(nfqNumber uint16, srcSetName, destSetN
 			&expr.Lookup{
 				SourceRegister: 2,
 				SetName:        destSetName,
+			},
+			// Extract the protocol into register 3
+			&expr.Payload{
+				DestRegister: 3,                             // Store in register 3
+				Base:         expr.PayloadBaseNetworkHeader, // Network header
+				Offset:       9,                             // Protocol field offset in IPv4 header
+				Len:          1,                             // Length: 1 byte
+			},
+			// Check if the protocol is in the protocol set
+			&expr.Lookup{
+				SourceRegister: 3,
+				SetName:        q.setProto.Name,
 			},
 			// Send matching packets to NFQUEUE for further processing
 			&expr.Queue{
