@@ -11,6 +11,51 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestNewTracker(t *testing.T) {
+	ctx := context.Background()
+
+	// Generate some sample data to load into the tracker.
+	devices, tmpFile, err := saveSomeSamples(t)
+	assert.NoError(t, err, "Failed to save samples")
+
+	// Case 1: Create a tracker with a 1-hour retention, 10-minute threshold, and 1-minute granularity.
+	cfg := &config.TrackerConfig{
+		Retention:   1 * time.Hour,
+		Threshold:   10 * time.Minute,
+		Granularity: 1 * time.Minute,
+		SampleFilePath: tmpFile.Name(),
+		SampleFileSaveInterval: 50*time.Millisecond,
+	}
+
+	// Mock the file saver func.
+	savedFileCount := 0
+	fnDefaultSaveSamples = func(path string, devices *sync.Map) error {
+		savedFileCount++
+		return nil
+	}
+
+	tracker := NewTracker(ctx, cfg)
+
+	assert.NotNil(t, tracker, "NewTracker returned nil")
+	assert.NotNil(t, tracker.devices, "NewTracker did not initialize devices map")
+	assert.Equal(t, cfg.Retention, tracker.retention, "NewTracker did not set retention")
+	assert.Equal(t, cfg.Granularity, tracker.granularity, "NewTracker did not set granularity")
+	assert.Equal(t, cfg.Threshold, tracker.threshold, "NewTracker did not set threshold")
+	assert.NotNil(t, tracker.nowFunc, "NewTracker did not set a default nowFunc")
+	
+	// Test that the tracker loads the same samples that we saved.
+	devices.Range(func(key, value interface{}) bool {
+		tdv, ok := tracker.devices.Load(key)
+		assert.True(t, ok, "NewTracker did not load samples from file")
+		assert.Equal(t, value, tdv, "NewTracker did not load samples from file")
+		return true
+	})
+
+	// Test that the saveSamplesPeriodically goroutine was started.
+	time.Sleep(50*time.Millisecond)
+	assert.GreaterOrEqual(t, savedFileCount,1 , "saveSamplesPeriodically goroutine was not started")
+}
+
 func TestHasExceededThreshold(t *testing.T) {
 	ctx := context.Background()
 
@@ -311,14 +356,10 @@ func TestCalculateWindow(t *testing.T) {
 	}
 }
 
-// TestSaveAndLoadSamples tests saving and loading samples to/from a file.
-func TestSaveAndLoadSamples(t *testing.T) {
+func saveSomeSamples(t *testing.T) (*sync.Map, *os.File, error) {
 	// Create a temporary file for testing.
 	tmpFile, err := os.CreateTemp("", "samples_test_*.json")
 	assert.NoError(t, err, "Failed to create temp file")
-	defer func(name string) {
-		_ = os.Remove(name)
-	}(tmpFile.Name()) // Clean up after test
 
 	// Create sample data.
 	devices := &sync.Map{}
@@ -333,8 +374,15 @@ func TestSaveAndLoadSamples(t *testing.T) {
 		mu:      &sync.Mutex{},
 	})
 
-	// Test SaveSamples
 	err = saveSamples(tmpFile.Name(), devices)
+
+	return devices, tmpFile, err
+}
+
+// TestSaveAndLoadSamples tests saving and loading samples to/from a file.
+func TestSaveAndLoadSamples(t *testing.T) {
+	// Test SaveSamples
+	_, tmpFile, err := saveSomeSamples(t)
 	assert.NoError(t, err, "Failed to save samples")
 
 	// Test LoadSamples

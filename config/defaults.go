@@ -36,6 +36,8 @@ type TrackerConfig struct {
 	StartTime time.Duration `envconfig:"START_TIME" default:"12h"` // 12 PM
 	// SampleFilePath is the path to the file to save/read the device ID samples from.
 	SampleFilePath string `envconfig:"FILE_PATH" default:"samples.json"`
+	// SampleFileSaveInterval
+	SampleFileSaveInterval time.Duration `envconfig:"SAVE_INTERVAL" default:"1m"`
 }
 
 type FilterConfig struct {

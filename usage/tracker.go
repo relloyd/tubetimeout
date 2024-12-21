@@ -12,6 +12,10 @@ import (
 	"example.com/youtube-nfqueue/config"
 )
 
+type saveSamplesFunc func(string, *sync.Map) error
+
+var fnDefaultSaveSamples = saveSamplesFunc(saveSamples)
+
 type deviceData struct {
 	mu      *sync.Mutex
 	samples []bool    // Slice of fixed size to represent the rotating window
@@ -75,14 +79,26 @@ func NewTracker(ctx context.Context, cfg *config.TrackerConfig) *Tracker {
 	}
 
 	// Save samples to the file on context cancellation.
-	// go func(ctx context.Context, devices *sync.Map) {
-	// 	<-ctx.Done()
-	// 	if err := saveSamples(cfg.SampleFilePath, devices); err != nil {
-	// 		log.Printf("Failed to save samples to file: %v", err)
-	// 	}
-	// }(ctx, t.devices)
+	go saveSamplesPeriodically(ctx, t.devices, cfg.SampleFilePath, cfg.SampleFileSaveInterval)
 
 	return t
+}
+
+func saveSamplesPeriodically(ctx context.Context, devices *sync.Map, filePath string, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	fn := func() {
+		if err := fnDefaultSaveSamples(filePath, devices); err != nil {
+			log.Printf("Failed to save samples to file: %v", err)
+		}
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			fn()
+		case <-ticker.C:
+			fn()
+		}
+	}
 }
 
 func loadSamples(path string) (*sync.Map, error) {
