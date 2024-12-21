@@ -68,8 +68,6 @@ func main() {
 		log.Fatalln("failed to process app config:", err)
 	}
 
-	log.Printf("outbound queue = %v; inbound queue = %v", appCfg.FilterConfig.OutboundQueueNumber, appCfg.FilterConfig.InboundQueueNumber)
-
 	handleDebugging(&appCfg)
 
 	// NFT rules to send traffic to NFQueue.

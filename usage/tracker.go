@@ -96,6 +96,7 @@ func NewTracker(ctx context.Context, cfg *config.TrackerConfig) (*Tracker, error
 func saveSamplesPeriodically(ctx context.Context, devicesToSave *sync.Map, filePath string, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	fn := func() {
+		// TODO: save samples safely by using a temporary file and renaming it.
 		if err := fnSaveSamples(filePath, devicesToSave); err != nil {
 			log.Printf("Failed to save samples to file: %v", err)
 		} else {
