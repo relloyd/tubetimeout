@@ -49,8 +49,8 @@ func NewTracker(ctx context.Context, cfg *config.TrackerConfig) *Tracker {
 	}
 
 	if cfg.Retention < 24*time.Hour || cfg.StartTime > cfg.Retention {
-		cfg.StartTime = 0 // default to midnight
-		cfg.Granularity = 0
+		cfg.StartDay = 0
+		cfg.StartTime = 0
 	}
 
 	t := &Tracker{
