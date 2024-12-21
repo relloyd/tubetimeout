@@ -34,6 +34,8 @@ type TrackerConfig struct {
 	StartDay int `envconfig:"START_DAY" default:"5"` // Friday
 	// StartTime is the duration past midnight to start the window.
 	StartTime time.Duration `envconfig:"START_TIME" default:"12h"` // 12 PM
+	// SampleFilePath is the path to the file to save/read the device ID samples from.
+	SampleFilePath string `envconfig:"FILE_PATH" default:"samples.json"`
 }
 
 type FilterConfig struct {

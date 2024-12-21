@@ -1,13 +1,19 @@
 package usage
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
+
+	"example.com/youtube-nfqueue/config"
 )
 
 type deviceData struct {
-	mu      sync.Mutex
+	mu      *sync.Mutex
 	samples []bool    // Slice of fixed size to represent the rotating window
 	start   time.Time // Start time of the slice window
 }
@@ -18,7 +24,7 @@ type TrackerI interface {
 }
 
 type Tracker struct {
-	devices         sync.Map      // Map of device IDs (string) to *deviceData
+	devices         *sync.Map      // Map of device IDs (string) to *deviceData
 	retention       time.Duration // The retention period for samples
 	granularity     time.Duration // The time granularity for sampling
 	threshold       time.Duration // The threshold duration for exceeding conditions
@@ -29,27 +35,92 @@ type Tracker struct {
 }
 
 // NewTracker initializes a Tracker with preallocated slices for each device.
-func NewTracker(retention, granularity, threshold time.Duration, startDay int, startTime time.Duration) *Tracker {
-	sampleSize := int(retention / granularity)
+func NewTracker(ctx context.Context, cfg *config.TrackerConfig) *Tracker {
+	sampleSize := int(cfg.Retention / cfg.Granularity)
 
-	if retention > 7*24*time.Hour {
-		retention = 7 * 24 * time.Hour
+	if cfg.Retention > 7*24*time.Hour {
+		cfg.Retention = 7 * 24 * time.Hour
 	}
 
-	if retention < 24*time.Hour || startTime > retention {
-		startDay = 0
-		startTime = 0
+	if cfg.Retention < 24*time.Hour || cfg.StartTime > cfg.Retention {
+		cfg.StartTime = 0
+		cfg.Granularity = 0
 	}
 
-	return &Tracker{
-		retention:       retention,
-		granularity:     granularity,
-		threshold:       threshold,
+	t := &Tracker{
+		retention:       cfg.Retention,
+		granularity:     cfg.Granularity,
+		threshold:       cfg.Threshold,
 		sampleSize:      sampleSize,
-		windowStartDay:  startDay,
-		windowStartTime: startTime,
+		windowStartDay:  cfg.StartDay,
+		windowStartTime: cfg.StartTime,
 		nowFunc:         time.Now, // Default to time.Now
 	}
+
+	// Load existing sample data from the file.
+	if cfg.SampleFilePath != "" {
+		if s, err := loadSamples(cfg.SampleFilePath); err != nil {
+			log.Printf("Failed to load samples from file: %v", err)
+		} else {
+			// Load the samples into the devices map.
+			t.devices = s
+		}
+	}
+
+	// Save samples to the file on context cancellation.
+	go func(ctx context.Context, devices *sync.Map) {
+		<-ctx.Done()
+		if err := saveSamples(cfg.SampleFilePath, devices); err != nil {
+			log.Printf("Failed to save samples to file: %v", err)
+		}
+	}(ctx, t.devices)
+
+	return t
+}
+
+func loadSamples(path string) (*sync.Map, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("usage samples file does not exist: %v", err)
+	}
+
+	// File exists, load the samples.
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read samples from file: %v", err)
+	}
+
+	// Unmarshall the device data.
+	loadedData := make(map[string]deviceData)
+	err = json.Unmarshal(b, &loadedData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal samples: %v", err)
+	}
+
+	// Convert the map to a sync.Map.
+	m := &sync.Map{}
+	for k, v := range loadedData {
+		m.Store(k, v)
+	}
+
+	return m, nil
+}
+
+func saveSamples(path string, devices *sync.Map) error {
+	// Convert the sync.Map to a map.
+	samples := make(map[string]deviceData)
+	devices.Range(func(k, v interface{}) bool {
+		samples[k.(string)] = v.(deviceData)
+		return true
+	})
+
+	// Marshal the samples.
+	b, err := json.Marshal(samples)
+	if err != nil {
+		return err
+	}
+
+	// Write the samples to the file.
+	return os.WriteFile(path, b, 0644)
 }
 
 // AddSample records a sample for a given identifier at the current time.
@@ -59,7 +130,7 @@ func (t *Tracker) AddSample(id string) {
 	lastWindowStart, _ := t.calculateWindow(now)
 
 	// Get or initialize the device data.
-	data, _ := t.devices.LoadOrStore(id, &deviceData{
+	data, _ := t.devices.LoadOrStore(id, deviceData{
 		samples: make([]bool, t.sampleSize),
 		// start:   now.Truncate(t.granularity),
 		start: lastWindowStart,
