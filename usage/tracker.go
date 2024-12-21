@@ -18,13 +18,19 @@ type deviceData struct {
 	start   time.Time // Start time of the slice window
 }
 
+// deviceDataDTO is used to save/load deviceData{}. It is a DTO to avoid saving the mutex.
+type deviceDataDTO struct {
+	Samples []bool    `json:"samples"`
+	Start   time.Time `json:"start"`
+}
+
 type TrackerI interface {
 	AddSample(id string)
 	HasExceededThreshold(deviceID string) bool
 }
 
 type Tracker struct {
-	devices         *sync.Map      // Map of device IDs (string) to *deviceData
+	devices         *sync.Map     // Map of device IDs (string) to *deviceData
 	retention       time.Duration // The retention period for samples
 	granularity     time.Duration // The time granularity for sampling
 	threshold       time.Duration // The threshold duration for exceeding conditions
@@ -43,11 +49,12 @@ func NewTracker(ctx context.Context, cfg *config.TrackerConfig) *Tracker {
 	}
 
 	if cfg.Retention < 24*time.Hour || cfg.StartTime > cfg.Retention {
-		cfg.StartTime = 0
+		cfg.StartTime = 0 // default to midnight
 		cfg.Granularity = 0
 	}
 
 	t := &Tracker{
+		devices:         &sync.Map{},
 		retention:       cfg.Retention,
 		granularity:     cfg.Granularity,
 		threshold:       cfg.Threshold,
@@ -68,12 +75,12 @@ func NewTracker(ctx context.Context, cfg *config.TrackerConfig) *Tracker {
 	}
 
 	// Save samples to the file on context cancellation.
-	go func(ctx context.Context, devices *sync.Map) {
-		<-ctx.Done()
-		if err := saveSamples(cfg.SampleFilePath, devices); err != nil {
-			log.Printf("Failed to save samples to file: %v", err)
-		}
-	}(ctx, t.devices)
+	// go func(ctx context.Context, devices *sync.Map) {
+	// 	<-ctx.Done()
+	// 	if err := saveSamples(cfg.SampleFilePath, devices); err != nil {
+	// 		log.Printf("Failed to save samples to file: %v", err)
+	// 	}
+	// }(ctx, t.devices)
 
 	return t
 }
@@ -83,37 +90,47 @@ func loadSamples(path string) (*sync.Map, error) {
 		return nil, fmt.Errorf("usage samples file does not exist: %v", err)
 	}
 
-	// File exists, load the samples.
+	// Read file contents.
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read samples from file: %v", err)
 	}
 
-	// Unmarshall the device data.
-	loadedData := make(map[string]deviceData)
+	// Unmarshal into DTO.
+	loadedData := make(map[string]deviceDataDTO)
 	err = json.Unmarshal(b, &loadedData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal samples: %v", err)
 	}
 
-	// Convert the map to a sync.Map.
+	// Convert DTO to sync.Map.
 	m := &sync.Map{}
 	for k, v := range loadedData {
-		m.Store(k, v)
+		m.Store(k, &deviceData{
+			// mu:      &sync.Mutex{}, // Reinitialize the mutex
+			samples: v.Samples,
+			start:   v.Start,
+			mu:      &sync.Mutex{},
+		})
 	}
 
 	return m, nil
 }
 
 func saveSamples(path string, devices *sync.Map) error {
-	// Convert the sync.Map to a map.
-	samples := make(map[string]deviceData)
+	// Prepare the DTO map.
+	samples := make(map[string]deviceDataDTO)
+
 	devices.Range(func(k, v interface{}) bool {
-		samples[k.(string)] = v.(deviceData)
+		data := v.(*deviceData)
+		samples[k.(string)] = deviceDataDTO{
+			Samples: data.samples,
+			Start:   data.start,
+		}
 		return true
 	})
 
-	// Marshal the samples.
+	// Marshal the DTO map.
 	b, err := json.Marshal(samples)
 	if err != nil {
 		return err
@@ -130,10 +147,10 @@ func (t *Tracker) AddSample(id string) {
 	lastWindowStart, _ := t.calculateWindow(now)
 
 	// Get or initialize the device data.
-	data, _ := t.devices.LoadOrStore(id, deviceData{
+	data, _ := t.devices.LoadOrStore(id, &deviceData{
 		samples: make([]bool, t.sampleSize),
-		// start:   now.Truncate(t.granularity),
-		start: lastWindowStart,
+		start:   lastWindowStart,
+		mu:      &sync.Mutex{},
 	})
 
 	dd := data.(*deviceData)

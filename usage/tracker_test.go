@@ -1,23 +1,35 @@
 package usage
 
 import (
+	"context"
+	"os"
+	"sync"
 	"testing"
 	"time"
+
+	"example.com/youtube-nfqueue/config"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHasExceededThreshold(t *testing.T) {
+	ctx := context.Background()
+
 	// Setup: Create a tracker with a 1-hour retention, 10-minute threshold, and 1-minute granularity.
-	retention := 1 * time.Hour
-	threshold := 10 * time.Minute
-	granularity := 1 * time.Minute
-	tracker := NewTracker(retention, granularity, threshold, 0, 0)
+	cfg := &config.TrackerConfig{
+		Retention:   1 * time.Hour,
+		Threshold:   10 * time.Minute,
+		Granularity: 1 * time.Minute,
+	}
+
+	tracker := NewTracker(ctx, cfg)
 
 	// Simulate a device data structure with pre-allocated samples.
-	startTime := time.Now().Truncate(granularity)
+	startTime := time.Now().Truncate(cfg.Granularity)
 	deviceID := "test-device"
 	deviceData := &deviceData{
 		samples: make([]bool, tracker.sampleSize),
 		start:   startTime,
+		mu: 	&sync.Mutex{},
 	}
 
 	// Add device data to the tracker.
@@ -70,16 +82,21 @@ func TestHasExceededThreshold(t *testing.T) {
 }
 
 func TestAddSample(t *testing.T) {
+	ctx := context.Background()
+
 	// Setup: Create a tracker with 1-hour retention and 1-minute granularity.
-	retention := 1 * time.Hour
-	granularity := 1 * time.Minute
-	threshold := 10 * time.Minute
-	tracker := NewTracker(retention, granularity, threshold, 0, 0)
+	cfg := &config.TrackerConfig{
+		Retention:   1 * time.Hour,
+		Granularity: 1 * time.Minute,
+		Threshold:   10 * time.Minute,
+	}
+
+	tracker := NewTracker(ctx, cfg)
 
 	deviceID := "test-device"
 
 	// Mock current time to control time progression in tests.
-	now := time.Now().Truncate(granularity)
+	now := time.Now().Truncate(cfg.Granularity)
 
 	// Override time.Now function in the tracker to use the mocked time.
 	tracker.nowFunc = func() time.Time {
@@ -101,7 +118,7 @@ func TestAddSample(t *testing.T) {
 	}
 
 	// Case 2: Add a sample at a later time within the same hour.
-	now = now.Add(5 * granularity) // Advance time by 5 minutes.
+	now = now.Add(5 * cfg.Granularity) // Advance time by 5 minutes.
 	tracker.AddSample(deviceID)
 
 	index = tracker.getIndex(now, dd.start)
@@ -110,8 +127,8 @@ func TestAddSample(t *testing.T) {
 	}
 
 	// Case 3: Add a sample after the retention period has passed.
-	now = now.Add(retention)    // Advance time by 1 hour.
-	tracker.AddSample(deviceID) // This should reset the whole buffer and record a new one.
+	now = now.Add(cfg.Retention) // Advance time by 1 hour.
+	tracker.AddSample(deviceID)  // This should reset the whole buffer and record a new one.
 	// Case 3a: Verify that the device data was reinitialized.
 	data, ok = tracker.devices.Load(deviceID)
 	if !ok {
@@ -125,18 +142,18 @@ func TestAddSample(t *testing.T) {
 	}
 
 	// Case 4: Add multiple samples in rapid succession.
-	now = now.Add(2 * granularity) // Advance time by 2 minutes.
+	now = now.Add(2 * cfg.Granularity) // Advance time by 2 minutes.
 	for i := 0; i < 3; i++ {
 		tracker.AddSample(deviceID)
 		index = tracker.getIndex(now, dd.start)
 		if !dd.samples[index] {
 			t.Errorf("AddSample failed to mark the sample at index %d on iteration %d", index, i)
 		}
-		now = now.Add(granularity) // Advance time by 1 minute for next iteration.
+		now = now.Add(cfg.Granularity) // Advance time by 1 minute for next iteration.
 	}
 
 	// Case 5: Add a sample with a large time jump forward.
-	now = now.Add(2 * retention) // Advance time by 2 hours.
+	now = now.Add(2 * cfg.Retention) // Advance time by 2 hours.
 	tracker.AddSample(deviceID)
 	// Case 5a: Verify that the device data was reinitialized.
 	data, ok = tracker.devices.Load(deviceID)
@@ -152,10 +169,14 @@ func TestAddSample(t *testing.T) {
 }
 
 func TestGetIndex(t *testing.T) {
+	ctx := context.Background()
+
 	// Setup: Create a tracker with a 1-hour retention and 1-minute granularity.
-	retention := 1 * time.Hour
-	granularity := 1 * time.Minute
-	tracker := NewTracker(retention, granularity, 0, 0, 0)
+	cfg := &config.TrackerConfig{
+		Retention:   1 * time.Hour,
+		Granularity: 1 * time.Minute,
+	}
+	tracker := NewTracker(ctx, cfg)
 
 	startTime := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
 
@@ -163,11 +184,11 @@ func TestGetIndex(t *testing.T) {
 		now      time.Time
 		expected int
 	}{
-		{startTime.Add(0 * granularity), 0},
-		{startTime.Add(1 * granularity), 1},
-		{startTime.Add(59 * granularity), 59},
-		{startTime.Add(60 * granularity), 0},  // Wraps around.
-		{startTime.Add(-1 * granularity), 59}, // Negative time wraps to last index.
+		{startTime.Add(0 * cfg.Granularity), 0},
+		{startTime.Add(1 * cfg.Granularity), 1},
+		{startTime.Add(59 * cfg.Granularity), 59},
+		{startTime.Add(60 * cfg.Granularity), 0},  // Wraps around.
+		{startTime.Add(-1 * cfg.Granularity), 59}, // Negative time wraps to last index.
 	}
 
 	for _, test := range tests {
@@ -179,10 +200,15 @@ func TestGetIndex(t *testing.T) {
 }
 
 func TestSyncWindow(t *testing.T) {
+	ctx := context.Background()
+
 	// Setup - Create a tracker with a 1-hour retention and 1-minute granularity.
-	retention := 1 * time.Hour
-	granularity := 1 * time.Minute
-	tracker := NewTracker(retention, granularity, 0, 0, 0) // No threshold needed for this test.
+	cfg := &config.TrackerConfig{
+		Granularity: 1 * time.Minute,
+		Retention:   1 * time.Hour,
+	}
+
+	tracker := NewTracker(ctx, cfg) // No threshold needed for this test.
 
 	// Simulate a device data structure.
 	// startTime := time.Now().Truncate(granularity)
@@ -204,7 +230,7 @@ func TestSyncWindow(t *testing.T) {
 	}
 
 	// Case 2: Elapsed time exceeds retention (expect the buffer to be reset).
-	exceedTime := startTime.Add(2 * retention)
+	exceedTime := startTime.Add(2 * cfg.Retention)
 	tracker.syncWindow(deviceData, exceedTime)
 	expectedNewTime, _ := tracker.calculateWindow(exceedTime)
 	for i, v := range deviceData.samples {
@@ -212,7 +238,7 @@ func TestSyncWindow(t *testing.T) {
 			t.Errorf("syncWindow failed to reset the buffer at index %d", i)
 		}
 	}
-	if !deviceData.start.Equal(exceedTime.Truncate(granularity)) {
+	if !deviceData.start.Equal(exceedTime.Truncate(cfg.Granularity)) {
 		t.Errorf("syncWindow did not update the start time correctly. Got %v, want %v", deviceData.start, expectedNewTime)
 	}
 }
@@ -283,4 +309,76 @@ func TestCalculateWindow(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSaveAndLoadSamples tests saving and loading samples to/from a file.
+func TestSaveAndLoadSamples(t *testing.T) {
+	// Create a temporary file for testing.
+	tmpFile, err := os.CreateTemp("", "samples_test_*.json")
+	assert.NoError(t, err, "Failed to create temp file")
+	defer func(name string) {
+		_ = os.Remove(name)
+	}(tmpFile.Name()) // Clean up after test
+
+	// Create sample data.
+	devices := &sync.Map{}
+	devices.Store("device1", &deviceData{
+		samples: []bool{true, false, true, false},
+		start:   time.Now().UTC(),
+		mu:      &sync.Mutex{},
+	})
+	devices.Store("device2", &deviceData{
+		samples: []bool{false, true, false, true},
+		start:   time.Now().Add(-time.Hour).UTC(),
+		mu:      &sync.Mutex{},
+	})
+
+	// Test SaveSamples
+	err = saveSamples(tmpFile.Name(), devices)
+	assert.NoError(t, err, "Failed to save samples")
+
+	// Test LoadSamples
+	loadedDevices, err := loadSamples(tmpFile.Name())
+	assert.NoError(t, err, "Failed to load samples")
+
+	// Verify loaded data.
+	loadedDevice1, _ := loadedDevices.Load("device1")
+	loadedDevice2, _ := loadedDevices.Load("device2")
+
+	// Type assertion
+	ld1 := loadedDevice1.(*deviceData)
+	ld2 := loadedDevice2.(*deviceData)
+
+	// Validate device1
+	assert.Equal(t, []bool{true, false, true, false}, ld1.samples, "Device1 samples mismatch")
+	assert.WithinDuration(t, ld1.start, time.Now(), time.Minute, "Device1 start time mismatch")
+
+	// Validate device2
+	assert.Equal(t, []bool{false, true, false, true}, ld2.samples, "Device2 samples mismatch")
+	assert.WithinDuration(t, ld2.start, time.Now().Add(-time.Hour), time.Minute, "Device2 start time mismatch")
+}
+
+// TestLoadNonExistentFile tests loading from a non-existent file.
+func TestLoadNonExistentFile(t *testing.T) {
+	_, err := loadSamples("nonexistent_file.json")
+	assert.Error(t, err, "Expected error for non-existent file")
+}
+
+// TestCorruptFile tests loading from a corrupted file.
+func TestCorruptFile(t *testing.T) {
+	// Create a temporary corrupt file.
+	tmpFile, err := os.CreateTemp("", "corrupt_test_*.json")
+	assert.NoError(t, err, "Failed to create temp file")
+	defer func(name string) {
+		_ = os.Remove(name)
+	}(tmpFile.Name()) // Clean up after test
+
+	// Write invalid JSON content.
+	_, err = tmpFile.WriteString("{invalid_json}")
+	assert.NoError(t, err, "Failed to write corrupt data")
+	_ = tmpFile.Close()
+
+	// Try loading the corrupt file.
+	_, err = loadSamples(tmpFile.Name())
+	assert.Error(t, err, "Expected error for corrupt file")
 }
