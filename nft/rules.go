@@ -21,14 +21,13 @@ func init() {
 }
 
 const (
-	defaultTableName           = "tubetimeout-table"
-	defaultFilterChainName     = "filter"
-	defaultNATChainName        = "postrouting"
-	defaultSrcIpSetName        = "local_ip_set"
-	defaultDestIpSetName       = "remote_ip_set"
-	defaultProtocolSetName     = "protocol_set"
-	defaultQueueNumDest        = uint16(100) // defaultQueueNumDest only used by unused code 🤣
-	markRegister           uint32 = 4
+	defaultTableName       = "tubetimeout-table"
+	defaultFilterChainName = "filter"
+	defaultNATChainName    = "postrouting"
+	defaultSrcIpSetName    = "local_ip_set"
+	defaultDestIpSetName   = "remote_ip_set"
+	defaultProtocolSetName = "protocol_set"
+	defaultQueueNumDest    = uint16(100) // defaultQueueNumDest only used by unused code 🤣
 )
 
 type Rules struct {
@@ -74,29 +73,37 @@ func NewNFTRules(cfg *config.AppConfig) (*Rules, error) {
 		return nil, fmt.Errorf("failed to create nftables NAT chain: %v", err)
 	}
 
+	// // Get the interface index for "wlan0"
+	// oif, err := net.InterfaceByName("wlan0") // TODO: make masquerading interface configurable
+	// if err != nil {
+	// 	panic(err)
+	// }
+
 	// Add NAT in post routing chain, to rewrite source IP address. This should be masquerading.
 	rules.conn.AddRule(&nftables.Rule{
 		Table: rules.table,
 		Chain: nat,
 		Exprs: []expr.Any{
-			&expr.Meta{
-				Key:      expr.MetaKeyMARK,
-				Register: markRegister, // match the register that the mark was written to below.
-			},
-			&expr.Cmp{
-				Op:       expr.CmpOpEq,
-				Register: markRegister,       // match the register that the mark was written to below.
-				Data:     []byte{1, 0, 0, 0}, // match the mark 1
-			},
-			&expr.Meta{
-				Key:      expr.MetaKeyOIFNAME, // Match interface name
-				Register: 1,
-			},
-			&expr.Cmp{
-				Op:       expr.CmpOpEq,
-				Register: 1,
-				Data:     []byte("wlan0\x00"), // "wlan0" null-terminated
-			},
+			// &expr.Meta{
+			// 	Key:      expr.MetaKeyOIF, // Match interface name
+			// 	Register: 2,
+			// },
+			// &expr.Cmp{
+			// 	Op:       expr.CmpOpEq,
+			// 	Register: 2,
+			// 	Data:     []byte{byte(oif.Index), 0, 0, 0}, // Match index   // []byte("wlan0\x00"), // "wlan0" null-terminated
+			// },
+			// TODO: figure out how to mark packets by using tracing!
+			// &expr.Meta{
+			// 	Key:            expr.MetaKeyMARK,
+			// 	Register:       1,
+			// 	SourceRegister: true,
+			// },
+			// &expr.Cmp{
+			// 	Op:       expr.CmpOpEq,
+			// 	Register: 1,
+			// 	Data:     []byte{1, 0, 0, 0}, // match the mark 1
+			// },
 			&expr.Masq{},
 		},
 	})
@@ -305,15 +312,16 @@ func (q *Rules) addNFTablesRuleForSets(nfqNumber uint16, srcSetName, destSetName
 				SourceRegister: 3,
 				SetName:        q.setProto.Name,
 			},
-			// Add a mark to the packet.
-			&expr.Meta{
-				Key:      expr.MetaKeyMARK,
-				Register: markRegister,
-			},
-			&expr.Immediate{
-				Register: markRegister,
-				Data:     []byte{1, 0, 0, 0}, // Set mark 1
-			},
+			// TODO: figure out how to mark packets by using tracing!
+			// // Add a mark to the packet.
+			// &expr.Meta{
+			// 	Key:            expr.MetaKeyMARK,
+			// 	Register:       4,
+			// },
+			// &expr.Immediate{
+			// 	Register: 4,
+			// 	Data:     []byte{1, 0, 0, 0}, // Set a mark; see also the reading of this mark in the NAT chain.
+			// },
 			// Send matching packets to NFQUEUE for further processing
 			&expr.Queue{
 				Num:   nfqNumber,
