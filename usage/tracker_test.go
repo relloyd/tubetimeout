@@ -29,13 +29,19 @@ func TestNewTracker(t *testing.T) {
 
 	// Mock the file saver func.
 	savedFileCount := 0
-	fnDefaultSaveSamples = func(path string, devices *sync.Map) error {
+	fnSaveSamples = func(path string, devices *sync.Map) error {
 		savedFileCount++
 		return nil
 	}
 
-	tracker := NewTracker(ctx, cfg)
+	// Mock the file path getter func.
+	fnGetTrackerConfigFile = func(path string) (string, error) {
+		return path, nil
+	}
 
+	tracker, err := NewTracker(ctx, cfg)
+
+	assert.NoError(t, err, "NewTracker failed")
 	assert.NotNil(t, tracker, "NewTracker returned nil")
 	assert.NotNil(t, tracker.devices, "NewTracker did not initialize devices map")
 	assert.Equal(t, cfg.Retention, tracker.retention, "NewTracker did not set retention")
@@ -66,7 +72,8 @@ func TestHasExceededThreshold(t *testing.T) {
 		Granularity: 1 * time.Minute,
 	}
 
-	tracker := NewTracker(ctx, cfg)
+	tracker, err := NewTracker(ctx, cfg)
+	assert.NoError(t, err, "NewTracker failed")
 
 	// Simulate a device data structure with pre-allocated samples.
 	startTime := time.Now().Truncate(cfg.Granularity)
@@ -136,7 +143,8 @@ func TestAddSample(t *testing.T) {
 		Threshold:   10 * time.Minute,
 	}
 
-	tracker := NewTracker(ctx, cfg)
+	tracker, err := NewTracker(ctx, cfg)
+	assert.NoError(t, err, "NewTracker failed")
 
 	deviceID := "test-device"
 
@@ -221,7 +229,8 @@ func TestGetIndex(t *testing.T) {
 		Retention:   1 * time.Hour,
 		Granularity: 1 * time.Minute,
 	}
-	tracker := NewTracker(ctx, cfg)
+	tracker, err := NewTracker(ctx, cfg)
+	assert.NoError(t, err, "NewTracker failed")
 
 	startTime := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
 
@@ -253,7 +262,8 @@ func TestSyncWindow(t *testing.T) {
 		Retention:   1 * time.Hour,
 	}
 
-	tracker := NewTracker(ctx, cfg) // No threshold needed for this test.
+	tracker, err := NewTracker(ctx, cfg) // No threshold needed for this test.
+	assert.NoError(t, err, "NewTracker failed")
 
 	// Simulate a device data structure.
 	// startTime := time.Now().Truncate(granularity)

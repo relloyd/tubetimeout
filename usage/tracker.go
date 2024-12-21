@@ -13,8 +13,10 @@ import (
 )
 
 type saveSamplesFunc func(string, *sync.Map) error
+var fnSaveSamples = saveSamplesFunc(saveSamples)
 
-var fnDefaultSaveSamples = saveSamplesFunc(saveSamples)
+type getConfigFileFunc func(string) (string, error)
+var fnGetTrackerConfigFile = getConfigFileFunc(config.CreateAppHomeDirForConfigFile)
 
 type deviceData struct {
 	mu      *sync.Mutex
@@ -45,7 +47,7 @@ type Tracker struct {
 }
 
 // NewTracker initializes a Tracker with preallocated slices for each device.
-func NewTracker(ctx context.Context, cfg *config.TrackerConfig) *Tracker {
+func NewTracker(ctx context.Context, cfg *config.TrackerConfig) (*Tracker, error) {
 	sampleSize := int(cfg.Retention / cfg.Granularity)
 
 	if cfg.Retention > 7*24*time.Hour {
@@ -68,26 +70,30 @@ func NewTracker(ctx context.Context, cfg *config.TrackerConfig) *Tracker {
 		nowFunc:         time.Now, // Default to time.Now
 	}
 
-	// Load existing sample data from the file.
-	if cfg.SampleFilePath != "" {
-		if s, err := loadSamples(cfg.SampleFilePath); err != nil {
+	// Load & save existing sample data.
+	if cfg.SampleFilePath != "" { // TODO: test when SampleFilePath is empty
+		configFile, err := fnGetTrackerConfigFile(cfg.SampleFilePath)
+		if err != nil {
+			return nil, err
+		}
+		s, err := loadSamples(configFile)
+		if err != nil {
 			log.Printf("Failed to load samples from file: %v", err)
 		} else {
 			// Load the samples into the devices map.
 			t.devices = s
 		}
+		// Save samples to the file on context cancellation.
+		go saveSamplesPeriodically(ctx, t.devices, cfg.SampleFilePath, cfg.SampleFileSaveInterval)
 	}
 
-	// Save samples to the file on context cancellation.
-	go saveSamplesPeriodically(ctx, t.devices, cfg.SampleFilePath, cfg.SampleFileSaveInterval)
-
-	return t
+	return t, nil
 }
 
-func saveSamplesPeriodically(ctx context.Context, devices *sync.Map, filePath string, interval time.Duration) {
+func saveSamplesPeriodically(ctx context.Context, devicesToSave *sync.Map, filePath string, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	fn := func() {
-		if err := fnDefaultSaveSamples(filePath, devices); err != nil {
+		if err := fnSaveSamples(filePath, devicesToSave); err != nil {
 			log.Printf("Failed to save samples to file: %v", err)
 		}
 	}

@@ -74,20 +74,17 @@ func main() {
 
 	// NFT rules to send traffic to NFQueue.
 	// There won't be any NFT rules until dest IPs are supplied by manager callbacks.
-	rules, err := nft.NewNFTRules(&appCfg)
+	rules, err := nft.NewNFTRules(&appCfg.FilterConfig)
 	if err != nil {
 		log.Fatalln("Failed to setup nft rules:", err)
 	}
 	log.Println("NFTables rules created")
 
 	// Usage tracker.
-	t := usage.NewTracker(
-		appCfg.TrackerConfig.Retention,
-		appCfg.TrackerConfig.Granularity,
-		appCfg.TrackerConfig.Threshold,
-		appCfg.TrackerConfig.StartDay,
-		appCfg.TrackerConfig.StartTime,
-	)
+	t, err := usage.NewTracker(ctx, &appCfg.TrackerConfig)
+	if err != nil {
+		log.Fatalln("Failed to setup usage tracker:", err)
+	}
 	log.Println("Usage tracker created")
 
 	// Group manager.

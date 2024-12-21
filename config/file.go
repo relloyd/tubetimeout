@@ -1,9 +1,32 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 )
+
+func CreateAppHomeDirForConfigFile(fileName string) (string, error) {
+	// Get the home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	// Construct the app-specific directory path
+	appDir := filepath.Join(homeDir, AppHomeDir)
+
+	// Ensure the directory exists
+	if err := os.MkdirAll(appDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create app directory: %v", err)
+	}
+
+	// Construct the full path for the file
+	filePath := filepath.Join(appDir, fileName)
+	return filePath, nil
+}
+
 
 func safeWriteViaTemp(filePath string, data string) {
 	tempPath := filePath + ".tmp"

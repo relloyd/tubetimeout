@@ -46,7 +46,7 @@ type Rules struct {
 	mu            sync.Mutex
 }
 
-func NewNFTRules(cfg *config.AppConfig) (*Rules, error) {
+func NewNFTRules(cfg *config.FilterConfig) (*Rules, error) {
 	var err error
 	rules := &Rules{
 		conn:          &nftables.Conn{},
@@ -147,11 +147,11 @@ func NewNFTRules(cfg *config.AppConfig) (*Rules, error) {
 	}
 
 	// Create NFTables rules for src-dest and dest-src combinations.
-	err = rules.addNFTablesRuleForSets(cfg.FilterConfig.OutboundQueueNumber, rules.nameSetLocal, rules.nameSetRemote)
+	err = rules.addNFTablesRuleForSets(cfg.OutboundQueueNumber, rules.nameSetLocal, rules.nameSetRemote)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create NFT rule for src-dest combination")
 	}
-	err = rules.addNFTablesRuleForSets(cfg.FilterConfig.InboundQueueNumber, rules.nameSetRemote, rules.nameSetLocal)
+	err = rules.addNFTablesRuleForSets(cfg.InboundQueueNumber, rules.nameSetRemote, rules.nameSetLocal)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create NFT rule for dest-src combination")
 	}

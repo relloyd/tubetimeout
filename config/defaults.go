@@ -5,8 +5,7 @@ import (
 )
 
 const (
-// DefaultConfigFile is the default configuration file path.
-// DefaultConfigFile = ".tubetimeout/config.yaml"
+	AppHomeDir = ".tubetimeout"
 )
 
 type AppConfig struct {
