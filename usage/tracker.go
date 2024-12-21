@@ -13,9 +13,11 @@ import (
 )
 
 type saveSamplesFunc func(string, *sync.Map) error
+
 var fnSaveSamples = saveSamplesFunc(saveSamples)
 
 type getConfigFileFunc func(string) (string, error)
+
 var fnGetTrackerConfigFile = getConfigFileFunc(config.CreateAppHomeDirForConfigFile)
 
 type deviceData struct {
@@ -71,7 +73,7 @@ func NewTracker(ctx context.Context, cfg *config.TrackerConfig) (*Tracker, error
 	}
 
 	// Load & save existing sample data.
-	if cfg.SampleFilePath != "" { // TODO: test when SampleFilePath is empty
+	if cfg.SampleFilePath != "" { // TODO: test when SampleFilePath is empty that no files are saved
 		configFile, err := fnGetTrackerConfigFile(cfg.SampleFilePath)
 		if err != nil {
 			return nil, err
@@ -81,10 +83,11 @@ func NewTracker(ctx context.Context, cfg *config.TrackerConfig) (*Tracker, error
 			log.Printf("Failed to load samples from file: %v", err)
 		} else {
 			// Load the samples into the devices map.
+			log.Printf("Samples loaded from file: %q", configFile)
 			t.devices = s
 		}
 		// Save samples to the file on context cancellation.
-		go saveSamplesPeriodically(ctx, t.devices, cfg.SampleFilePath, cfg.SampleFileSaveInterval)
+		go saveSamplesPeriodically(ctx, t.devices, configFile, cfg.SampleFileSaveInterval)
 	}
 
 	return t, nil
@@ -95,12 +98,13 @@ func saveSamplesPeriodically(ctx context.Context, devicesToSave *sync.Map, fileP
 	fn := func() {
 		if err := fnSaveSamples(filePath, devicesToSave); err != nil {
 			log.Printf("Failed to save samples to file: %v", err)
+		} else {
+			log.Printf("Saved samples to file %q", filePath)
 		}
 	}
 	for {
 		select {
-		case <-ctx.Done():
-			fn()
+		case <-ctx.Done(): // TODO: implement a "done" chan to save usage samples on exit safely.
 		case <-ticker.C:
 			fn()
 		}
@@ -109,7 +113,7 @@ func saveSamplesPeriodically(ctx context.Context, devicesToSave *sync.Map, fileP
 
 func loadSamples(path string) (*sync.Map, error) {
 	if _, err := os.Stat(path); err != nil {
-		return nil, fmt.Errorf("usage samples file does not exist: %v", err)
+		return nil, fmt.Errorf("usage samples file %q does not exist", path)
 	}
 
 	// Read file contents.
