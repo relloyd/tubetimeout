@@ -21,15 +21,17 @@ func init() {
 }
 
 const (
-	defaultTableName       = "tubetimeout-table"
-	defaultChainName       = "tubetimeout-chain"
-	defaultSrcIpSetName    = "local_ip_set"
-	defaultDestIpSetName   = "remote_ip_set"
-	defaultProtocolSetName = "protocol_set"
-	defaultQueueNumDest    = uint16(100) // defaultQueueNumDest only used by unused code 🤣
+	defaultTableName           = "tubetimeout-table"
+	defaultFilterChainName     = "filter"
+	defaultNATChainName        = "postrouting"
+	defaultSrcIpSetName        = "local_ip_set"
+	defaultDestIpSetName       = "remote_ip_set"
+	defaultProtocolSetName     = "protocol_set"
+	defaultQueueNumDest        = uint16(100) // defaultQueueNumDest only used by unused code 🤣
+	markRegister           uint32 = 4
 )
 
-type NFTRules struct {
+type Rules struct {
 	conn          *nftables.Conn
 	tableName     string
 	chainName     string
@@ -45,12 +47,12 @@ type NFTRules struct {
 	mu            sync.Mutex
 }
 
-func NewNFTRules(cfg *config.AppConfig) (*NFTRules, error) {
+func NewNFTRules(cfg *config.AppConfig) (*Rules, error) {
 	var err error
-	rules := &NFTRules{
+	rules := &Rules{
 		conn:          &nftables.Conn{},
 		tableName:     defaultTableName,
-		chainName:     defaultChainName,
+		chainName:     defaultFilterChainName,
 		nameSetLocal:  defaultSrcIpSetName,
 		nameSetRemote: defaultDestIpSetName,
 		localIPs:      make([]nftables.SetElement, 0),
@@ -62,10 +64,42 @@ func NewNFTRules(cfg *config.AppConfig) (*NFTRules, error) {
 		return nil, fmt.Errorf("failed to create nftables table: %v", err)
 	}
 
-	rules.chain, err = getOrCreateChain(rules.conn, rules.table, rules.chainName)
+	rules.chain, err = getOrCreateFilterChain(rules.conn, rules.table, rules.chainName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create nftables chain: %v", err)
 	}
+
+	nat, err := getOrCreateNATPostRoutingChain(rules.conn, rules.table, defaultNATChainName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create nftables NAT chain: %v", err)
+	}
+
+	// Add NAT in post routing chain, to rewrite source IP address. This should be masquerading.
+	rules.conn.AddRule(&nftables.Rule{
+		Table: rules.table,
+		Chain: nat,
+		Exprs: []expr.Any{
+			&expr.Meta{
+				Key:      expr.MetaKeyMARK,
+				Register: markRegister, // match the register that the mark was written to below.
+			},
+			&expr.Cmp{
+				Op:       expr.CmpOpEq,
+				Register: markRegister,       // match the register that the mark was written to below.
+				Data:     []byte{1, 0, 0, 0}, // match the mark 1
+			},
+			&expr.Meta{
+				Key:      expr.MetaKeyOIFNAME, // Match interface name
+				Register: 1,
+			},
+			&expr.Cmp{
+				Op:       expr.CmpOpEq,
+				Register: 1,
+				Data:     []byte("wlan0\x00"), // "wlan0" null-terminated
+			},
+			&expr.Masq{},
+		},
+	})
 
 	// Create TCP/UDP set.
 	rules.setProto = &nftables.Set{
@@ -124,7 +158,7 @@ func NewNFTRules(cfg *config.AppConfig) (*NFTRules, error) {
 }
 
 // UpdateDestIpDomains is a callback that saves the supplied Ip addresses and updates the nft rules using them.
-func (q *NFTRules) UpdateDestIpDomains(newData models.MapIpDomain) {
+func (q *Rules) UpdateDestIpDomains(newData models.MapIpDomain) {
 	log.Printf("NFT callback with new destination IPs: %v", newData)
 
 	// Convert to set elements and save.
@@ -150,7 +184,7 @@ func (q *NFTRules) UpdateDestIpDomains(newData models.MapIpDomain) {
 }
 
 // UpdateSourceIpGroups is a callback that saves the supplied Ip addresses and updates the nft rules using them.
-func (q *NFTRules) UpdateSourceIpGroups(newData models.MapIpGroups) {
+func (q *Rules) UpdateSourceIpGroups(newData models.MapIpGroups) {
 	log.Printf("NFT callback with new source IPs: %v", newData)
 
 	// Convert to set elements and save.
@@ -175,8 +209,8 @@ func (q *NFTRules) UpdateSourceIpGroups(newData models.MapIpGroups) {
 }
 
 // updateIpSets adds nftables rules to send packets to the default NFQs.
-// This should be done under a mutex since it reads the NFTRules srcIps and destIps.
-func (q *NFTRules) updateIpSets() error {
+// This should be done under a mutex since it reads the Rules srcIps and destIps.
+func (q *Rules) updateIpSets() error {
 	if len(q.localIPs) == 0 {
 		return fmt.Errorf("local IPs aren't ready")
 	}
@@ -229,7 +263,7 @@ func (q *NFTRules) updateIpSets() error {
 // It uses a set for each of the source and dest IP slices supplied.
 // The caller should flush the changes to the kernel after.
 // # iptables -I OUTPUT -p icmp -j NFQUEUE --queue-num 100
-func (q *NFTRules) addNFTablesRuleForSets(nfqNumber uint16, srcSetName, destSetName string) error {
+func (q *Rules) addNFTablesRuleForSets(nfqNumber uint16, srcSetName, destSetName string) error {
 	// Add a rule to match traffic from YouTube IPs to destination hosts
 	rule := &nftables.Rule{
 		Table: q.table,
@@ -271,6 +305,15 @@ func (q *NFTRules) addNFTablesRuleForSets(nfqNumber uint16, srcSetName, destSetN
 				SourceRegister: 3,
 				SetName:        q.setProto.Name,
 			},
+			// Add a mark to the packet.
+			&expr.Meta{
+				Key:      expr.MetaKeyMARK,
+				Register: markRegister,
+			},
+			&expr.Immediate{
+				Register: markRegister,
+				Data:     []byte{1, 0, 0, 0}, // Set mark 1
+			},
 			// Send matching packets to NFQUEUE for further processing
 			&expr.Queue{
 				Num:   nfqNumber,
@@ -288,7 +331,7 @@ func (q *NFTRules) addNFTablesRuleForSets(nfqNumber uint16, srcSetName, destSetN
 // The caller should flush the changes to the kernel after.
 // It uses the default queue number.
 // # iptables -I OUTPUT -p icmp -j NFQUEUE --queue-num 100
-func (q *NFTRules) addNFTablesRuleForSingleDestAddr(dAddr models.Ip) error {
+func (q *Rules) addNFTablesRuleForSingleDestAddr(dAddr models.Ip) error {
 	ip := net.ParseIP(string(dAddr))
 	if ip == nil {
 		return errors.New("invalid net IP address")
@@ -380,7 +423,7 @@ func getOrCreateTable(conn *nftables.Conn, tableName string) (*nftables.Table, e
 	return table, err
 }
 
-func getOrCreateChain(conn *nftables.Conn, table *nftables.Table, chainName string) (*nftables.Chain, error) {
+func getOrCreateFilterChain(conn *nftables.Conn, table *nftables.Table, chainName string) (*nftables.Chain, error) {
 	var err error
 	chain := &nftables.Chain{
 		Name:     chainName,
@@ -390,6 +433,38 @@ func getOrCreateChain(conn *nftables.Conn, table *nftables.Table, chainName stri
 		Priority: nftables.ChainPriorityFilter,
 	}
 	if !chainExists(conn, table.Name) { // TODO: decide if we want to delete/replace the chain if it exists already
+		conn.AddChain(chain)
+		err = conn.Flush()
+	}
+	return chain, err
+}
+
+// func getOrCreatePreRoutingChain(conn *nftables.Conn, table *nftables.Table, chainName string) (*nftables.Chain, error) {
+// 	var err error
+// 	chain := &nftables.Chain{
+// 		Name:     chainName,
+// 		Table:    table,
+// 		Type:     nftables.ChainTypeFilter,
+// 		Hooknum:  nftables.ChainHookPrerouting,
+// 		Priority: nftables.ChainPriorityRaw,
+// 	}
+// 	if !chainExists(conn, chainName) {
+// 		conn.AddChain(chain)
+// 		err = conn.Flush()
+// 	}
+// 	return chain, err
+// }
+
+func getOrCreateNATPostRoutingChain(conn *nftables.Conn, table *nftables.Table, chainName string) (*nftables.Chain, error) {
+	var err error
+	chain := &nftables.Chain{
+		Name:     chainName,
+		Table:    table,
+		Type:     nftables.ChainTypeNAT,
+		Hooknum:  nftables.ChainHookPostrouting,
+		Priority: nftables.ChainPriorityNATSource,
+	}
+	if !chainExists(conn, chainName) {
 		conn.AddChain(chain)
 		err = conn.Flush()
 	}
@@ -410,7 +485,7 @@ func deleteTable(conn *nftables.Conn, tableName string) error {
 }
 
 // Clean deletes the nftables table and therefore all its chains and rules.
-func (q *NFTRules) Clean() error {
+func (q *Rules) Clean() error {
 	return deleteTable(q.conn, q.table.Name)
 }
 
