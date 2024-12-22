@@ -139,21 +139,21 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 
 		if ok { // if the packet IPs are known...
 			for _, grp := range groups { // for each group...
-				decision = "Accept"                        // assume success
+				decision = "accept"                        // assume success
 				f.t.AddSample(string(grp))                 // remember that we saw it
 				if f.t.HasExceededThreshold(string(grp)) { // if the threshold is exceeded for this group...
 					if rand.Float32() < cfg.PacketDropPercentage || (proto == "UDP" && cfg.PacketDropUDP) { // if we should drop the packet...
-						decision = "Drop"
+						decision = "drop"
 						verdict = nfqueue.NfDrop
 					} else { // else introduce a delay for the packet and accept...
 						if cfg.PacketDelayMs > 0 {
-							decision = "Delay"
+							decision = "delay"
 							time.Sleep(applyJitter(cfg.PacketDelayMs, cfg.PacketJitterMs)) // Delay the packet
 						}
 					}
 				} // else accept the packet as the threshold is not exceeded...
 				// f.logger.Debug("%v %v %v packet from %v to %v (group %v)", decision, direction, proto, pips.src, pips.dst, grp)
-				f.logger.Debug("Handled packet",
+				f.logger.Debug("handled packet",
 					zap.String("decision", decision),
 					zap.String("direction", direction),
 					zap.String("proto", proto),

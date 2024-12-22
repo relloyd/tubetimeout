@@ -1,14 +1,33 @@
 package config
 
 import (
+	"fmt"
+	"os"
 	"time"
+
+	"github.com/kelseyhightower/envconfig"
 )
 
 const (
 	AppHomeDir = ".tubetimeout"
 )
 
+var (
+	// AppCfg is the application configuration.
+	AppCfg AppConfig
+)
+
+func init() {
+	// Load app config from the environment.
+	err := envconfig.Process("", &AppCfg)
+	if err != nil {
+		fmt.Println("failed to process app config:", err)
+		os.Exit(1)
+	}
+}
+
 type AppConfig struct {
+	LogLevel      string        `envconfig:"LOG_LEVEL" default:"info"`
 	DebugConfig   DebugConfig   `envconfig:"DEBUG"`
 	TrackerConfig TrackerConfig `envconfig:"TRACKER"`
 	FilterConfig  FilterConfig  `envconfig:"FILTER"`

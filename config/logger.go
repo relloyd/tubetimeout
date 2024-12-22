@@ -15,8 +15,23 @@ func MustGetLogger() *zap.SugaredLogger {
 	}
 
 	c := zap.NewDevelopmentConfig()
-	c.Level = zap.NewAtomicLevelAt(zap.InfoLevel) // Set log level to INFO
-	c.DisableStacktrace = true                    // Disable stack traces
+	c.DisableStacktrace = true // Disable stack traces
+
+	if AppCfg.LogLevel == "debug" {
+		c.Level = zap.NewAtomicLevelAt(zap.DebugLevel) // Set log level to DEBUG
+	} else if AppCfg.LogLevel == "info" {
+		c.Level = zap.NewAtomicLevelAt(zap.InfoLevel) // Set log level to INFO
+	} else if AppCfg.LogLevel == "warn" {
+		c.Level = zap.NewAtomicLevelAt(zap.WarnLevel) // Set log level to WARN
+	} else if AppCfg.LogLevel == "error" {
+		c.Level = zap.NewAtomicLevelAt(zap.ErrorLevel) // Set log level to ERROR
+	} else if AppCfg.LogLevel == "dpanic" {
+		c.Level = zap.NewAtomicLevelAt(zap.DPanicLevel) // Set log level to DPANIC
+	} else if AppCfg.LogLevel == "panic" {
+		c.Level = zap.NewAtomicLevelAt(zap.PanicLevel) // Set log level to PANIC
+	} else if AppCfg.LogLevel == "fatal" {
+		c.Level = zap.NewAtomicLevelAt(zap.FatalLevel) // Set log level to FATAL
+	}
 
 	logger, err := c.Build()
 	if err != nil {

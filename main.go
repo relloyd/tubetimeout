@@ -16,7 +16,6 @@ import (
 	"example.com/tubetimeout/nft"
 	"example.com/tubetimeout/proxy"
 	"example.com/tubetimeout/usage"
-	"github.com/kelseyhightower/envconfig"
 	"go.uber.org/zap"
 )
 
@@ -68,25 +67,18 @@ func main() {
 	// Cleanup functions.
 	var cleanupFuncs []cleanupFunc
 
-	// Load app config from the environment.
-	var appCfg config.AppConfig
-	err := envconfig.Process("", &appCfg)
-	if err != nil {
-		logger.Fatalln("failed to process app config:", err)
-	}
-
-	handleDebugging(logger, &appCfg.DebugConfig)
+	handleDebugging(logger, &config.AppCfg.DebugConfig)
 
 	// NFT rules to send traffic to NFQueue.
 	// There won't be any NFT rules until dest IPs are supplied by manager callbacks.
-	rules, err := nft.NewNFTRules(logger, &appCfg.FilterConfig)
+	rules, err := nft.NewNFTRules(logger, &config.AppCfg.FilterConfig)
 	if err != nil {
 		logger.Fatal("Failed to setup nft rules:", err)
 	}
 	logger.Info("NFTables rules created")
 
 	// Usage tracker.
-	t, err := usage.NewTracker(ctx, logger, &appCfg.TrackerConfig)
+	t, err := usage.NewTracker(ctx, logger, &config.AppCfg.TrackerConfig)
 	if err != nil {
 		logger.Fatalln("Failed to setup usage tracker:", err)
 	}
@@ -113,7 +105,7 @@ func main() {
 	logger.Info("Destinations mapped")
 
 	// NFQueue to listen to and track packets in user space.
-	q, err := nfq.NewNFQueueFilter(ctx, logger, &appCfg.FilterConfig, t, mgr)
+	q, err := nfq.NewNFQueueFilter(ctx, logger, &config.AppCfg.FilterConfig, t, mgr)
 	if err != nil {
 		logger.Fatalln("Failed to setup NFQueue filter:", err)
 	}
@@ -122,7 +114,7 @@ func main() {
 	// Cleanup functions.
 	cleanupFuncs = append(cleanupFuncs, func() error {
 		cancel() // call cancel before closing NFQ else it will block!
-		err = rules.Clean()
+		err = rules.Clean(logger)
 		if err != nil {
 			return fmt.Errorf("error removing NFT rules: %w", err)
 		}
@@ -134,7 +126,7 @@ func main() {
 	})
 
 	// Proxy server start.
-	if appCfg.ProxyConfig.ProxyEnabled {
+	if config.AppCfg.ProxyConfig.ProxyEnabled {
 		s := proxy.NewServer(logger, mgr, t)
 		go func() {
 			if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

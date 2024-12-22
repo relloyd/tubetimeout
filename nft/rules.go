@@ -191,7 +191,7 @@ func (q *Rules) UpdateDestIpDomains(newData models.MapIpDomain) {
 	// Refresh the NFTables rules.
 	err := q.updateIpSets()
 	if err != nil {
-		q.logger.Errorf("NFT callback with new destination IPs couldn't make the update: %v", err)
+		q.logger.Warnf("NFT callback with new destination IPs couldn't make the update: %v", err)
 	}
 }
 
@@ -216,7 +216,7 @@ func (q *Rules) UpdateSourceIpGroups(newData models.MapIpGroups) {
 
 	err := q.updateIpSets()
 	if err != nil {
-		q.logger.Errorf("NFT callback with new source IPs couldn't make the update: %v", err)
+		q.logger.Warnf("NFT callback with new source IPs couldn't make the update: %v", err)
 	}
 }
 
