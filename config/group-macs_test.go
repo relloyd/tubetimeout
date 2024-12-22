@@ -35,8 +35,8 @@ groups:
 	}
 
 	// Call the function under test
-	defaultGroupMacFilePath = tempFile.Name()                                                      // override the default file path with temp file above.
-	DefaultCreateAppHomeDirAndGetConfigFileFunc = func(f string) (string, error) { return f, nil } // override the function that uses the home dir for config files.
+	defaultGroupMacFilePath = tempFile.Name()                                                          // override the default file path with temp file above.
+	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(f string) (string, error) { return f, nil } // override the function that uses the home dir for config files.
 	macGroup, err := LoadGroupMACs()
 	if err != nil {
 		t.Fatalf("LoadGroupMACs returned an error: %v", err)

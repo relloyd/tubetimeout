@@ -504,6 +504,7 @@ func deleteTable(logger *zap.SugaredLogger, conn *nftables.Conn, tableName strin
 	if tableExists(logger, conn, tableName) {
 		return fmt.Errorf("nft table %q not deleted", defaultTableName)
 	}
+	logger.Infof("NFT table %q deleted", tableName)
 	return nil
 }
 

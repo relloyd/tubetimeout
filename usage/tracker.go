@@ -16,7 +16,7 @@ type saveSamplesFunc func(string, *sync.Map) error
 
 var fnSaveSamples = saveSamplesFunc(saveSamples)
 
-var fnGetTrackerConfigFile = config.DefaultCreateAppHomeDirAndGetConfigFileFunc
+var fnGetTrackerConfigFile = config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc
 
 type deviceData struct {
 	mu      *sync.Mutex

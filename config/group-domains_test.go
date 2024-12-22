@@ -10,6 +10,9 @@ import (
 
 // TestLoadGroupDomains tests the LoadGroupDomains function
 func TestLoadGroupDomains(t *testing.T) {
+	// Override the default home dir to just return the tmp dir so that LoadGroupDomains doesn't try the app home dir.
+	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(f string) (string, error) { return f, nil }
+
 	// Define test cases
 	tests := []struct {
 		name        string

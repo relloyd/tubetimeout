@@ -43,11 +43,18 @@ run-docker:
 	# Run docker container with nftables capabilities
 	docker run -it --rm --cap-add=NET_ADMIN --cap-add=NET_RAW ubuntu-nftables-go
 
-install-daemon:
+daemon:
 	cp -p tubetimeout.service /etc/systemd/system/
 	systemctl daemon-reload
 	systemctl enable tubetimeout
+
+start:
 	systemctl start tubetimeout
+
+stop:
+	systemctl stop tubetimeout
+
+status:
 	systemctl status tubetimeout
 
 logs:

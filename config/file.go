@@ -8,6 +8,11 @@ import (
 	"go.uber.org/zap"
 )
 
+var (
+	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = getConfigFileFunc(createAppHomeDirAndGetConfigFile)
+	homeDirExists                                   = false
+)
+
 // createAppHomeDirAndGetConfigFile creates a directory in the user's home directory for the app's configuration file.
 // It returns the full path to the configuration file.
 func createAppHomeDirAndGetConfigFile(fileName string) (string, error) {
@@ -21,9 +26,12 @@ func createAppHomeDirAndGetConfigFile(fileName string) (string, error) {
 	appDir := filepath.Join(homeDir, AppHomeDir)
 
 	// Ensure the directory exists
-	if err := os.MkdirAll(appDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create app directory: %v", err)
+	if !homeDirExists {
+		if err := os.MkdirAll(appDir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create app directory: %v", err)
+		}
 	}
+	homeDirExists = true
 
 	// Construct the full path for the file
 	filePath := filepath.Join(appDir, fileName)

@@ -11,9 +11,9 @@ import (
 )
 
 var (
-	// TODO: supply config values from main instead of being implicit.
 	defaultGroupDomainsFilePath = "group-domains.yaml"
 	defaultGroupDomains         = models.MapGroupDomains{"youtube": {"www.youtube.com", "youtube.com", "googlevideo.com"}}
+	groupDomainsFileUpdated     = false
 )
 
 // GroupDomainsConfig represents the YAML structure
@@ -23,6 +23,16 @@ type GroupDomainsConfig struct {
 
 // LoadGroupDomains parses the YAML file
 func LoadGroupDomains() (models.MapGroupDomains, error) {
+	if !groupMACsFileUpdated { // if we should update the file path with the app home dir...
+		var err error
+		defaultGroupDomainsFilePath, err = DefaultCreateAppHomeDirAndGetConfigFilePathFunc(defaultGroupDomainsFilePath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create home directory for group-domains config file: %w", err)
+		} else {
+			groupDomainsFileUpdated = true
+		}
+	}
+
 	_, err := os.Stat(defaultGroupDomainsFilePath)
 	if err != nil && errors.Is(err, fs.ErrNotExist) {
 		return defaultGroupDomains, nil
