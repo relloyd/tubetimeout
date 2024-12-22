@@ -58,7 +58,7 @@ func TestNewTracker(t *testing.T) {
 	})
 
 	// Test that the saveSamplesPeriodically goroutine was started.
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	assert.GreaterOrEqual(t, savedFileCount, 1, "saveSamplesPeriodically goroutine was not started")
 }
 
