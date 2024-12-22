@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"example.com/tubetimeout/models"
+	"go.uber.org/zap"
 )
 
 var (
@@ -16,14 +17,16 @@ type ManagerI interface {
 }
 
 type Manager struct {
+	logger           *zap.SugaredLogger
 	sourceIpGroups   models.IpGroups
 	destIpGroups     models.IpGroups
 	destIpDomains    models.IpDomains
 	destDomainGroups models.DomainGroups
 }
 
-func NewManager() *Manager {
+func NewManager(logger *zap.SugaredLogger) *Manager {
 	m := &Manager{
+		logger:           logger,
 		sourceIpGroups:   models.IpGroups{Data: make(models.MapIpGroups)},
 		destIpGroups:     models.IpGroups{Data: make(models.MapIpGroups)},
 		destIpDomains:    models.IpDomains{Data: make(models.MapIpDomain)},
@@ -37,6 +40,7 @@ func (m *Manager) UpdateSourceIpGroups(newData models.MapIpGroups) {
 	m.sourceIpGroups.Mu.Lock()
 	defer m.sourceIpGroups.Mu.Unlock()
 	m.sourceIpGroups.Data = newData
+	m.logger.Debugf("Manager callback updated source IP groups: %v", newData)
 }
 
 // UpdateDestIpGroups implements the DestIpGroupsReceiver interface.
@@ -44,6 +48,7 @@ func (m *Manager) UpdateDestIpGroups(newData models.MapIpGroups) {
 	m.destIpGroups.Mu.Lock()
 	defer m.destIpGroups.Mu.Unlock()
 	m.destIpGroups.Data = newData
+	m.logger.Debugf("Manager callback updated destination IP groups: %v", newData)
 }
 
 // UpdateDestIpDomains implements the DestIpDomainReceiver interface.

@@ -101,8 +101,12 @@ func scanNetworkAndSaveResults(nw *NetWatcher) {
 	// Perform ARP scan and get updated map
 	newMapIpGroups := scanNetwork(nw.logger, ARPCmd) // Empty map returned if no groups are set up.
 
+	nw.logger.Debugf("ARP scan results: %v", newMapIpGroups)
+
 	// Compare with existing data
 	nw.mutex.Lock()
+	defer nw.mutex.Unlock()
+
 	// TODO: return all IPs if there is an error loading the YAML data.
 	if managerModeMatchAllSourceIps || !maps.EqualFunc(nw.sourceIpGroups, newMapIpGroups, func(m1 []models.Group, m2 []models.Group) bool {
 		return slices.Equal(m1, m2)
@@ -113,13 +117,13 @@ func scanNetworkAndSaveResults(nw *NetWatcher) {
 		for _, cb := range nw.callbacks {
 			cb.UpdateSourceIpGroups(newMapIpGroups)
 		}
+		nw.logger.Debugf("ARP scan notified %d callbacks", len(nw.callbacks))
 	}
-	nw.mutex.Unlock()
 }
 
 // scanNetwork performs an ARP scan and maps MAC addresses to IPs
 func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) models.MapIpGroups {
-	// Load YAML data
+	// Load YAML data each time.
 	gm, err := groupMacsLoaderFunc()
 	if errors.Is(err, config.ErrorGroupMacFileNotFound) { // if there is an error loading the YAML data...
 		// Log the error and configure all IPs subject to all groups.
@@ -131,6 +135,7 @@ func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) models.MapIpGroup
 	} else {
 		managerModeMatchAllSourceIps = false
 	}
+
 	// TODO: add tests to check that managerModeMatchAllSourceIps is set correctly when the YAML file is missing or has an error.
 	// TODO: add tests to check that managerModeMatchAllSourceIps is set correctly when the YAML file is added.
 

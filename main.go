@@ -85,7 +85,7 @@ func main() {
 	logger.Info("Usage tracker created")
 
 	// Group manager.
-	mgr := group.NewManager()
+	mgr := group.NewManager(logger)
 	logger.Info("Group manager created")
 
 	// Sources.

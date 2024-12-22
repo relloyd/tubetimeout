@@ -29,11 +29,14 @@ sync:
 	rsync -auv --delete-after --exclude=.git ./ root@tubetimeout:tubetimeout/
 
 debug: build
-	DEBUG_ENABLED=true dlv exec --headless --continue --accept-multiclient --listen=:56268 --api-version=2 $(APP_SHORT)
+	DEBUG_ENABLED=true LOG_LEVEL=debug dlv exec --headless --continue --accept-multiclient --listen=:56268 --api-version=2 $(APP_SHORT)
 	#	dlv exec --accept-multiclient --listen=:56268 --api-version=2 $(APP_SHORT)
 
 debug-test:
-	dlv test --headless --listen=:56268 --api-version=2 $(PACKAGE_TO_TEST) -- -test.run=$(FUNC_TO_TEST)
+	DEBUG_ENABLED=true LOG_LEVEL=debug dlv test --headless --listen=:56268 --api-version=2 $(PACKAGE_TO_TEST) -- -test.run=$(FUNC_TO_TEST)
+
+run: build
+	LOG_LEVEL=debug $(APP_SHORT)
 
 docker:
 	# Build docker image for local testing of nftables which is not available on MacOS
