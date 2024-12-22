@@ -203,7 +203,7 @@ func resolveDomains(logger *zap.SugaredLogger, domains []models.Domain) models.M
 	for _, domain := range domains {
 		ips, err := resolveOneDomain(domain)
 		if err != nil {
-			logger.Infof("Failed to resolve %s: %v\n", domain, err)
+			logger.Errorf("Failed to resolve %s: %v\n", domain, err)
 			continue
 		}
 		for _, ip := range ips {

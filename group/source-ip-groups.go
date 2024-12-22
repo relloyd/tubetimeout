@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"maps"
 	"os/exec"
 	"slices"
@@ -24,7 +23,7 @@ const (
 func init() {
 	err := checkARPAvailability()
 	if err != nil {
-		log.Fatalf("Error: %v. Please ensure the 'arp' command is installed and available on your PATH.", err)
+		config.MustGetLogger().Fatalf("Error: %v. Please ensure the 'arp' command is installed and available on your PATH.", err)
 	}
 }
 
@@ -124,10 +123,10 @@ func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) models.MapIpGroup
 	gm, err := groupMacsLoaderFunc()
 	if errors.Is(err, config.ErrorGroupMacFileNotFound) { // if there is an error loading the YAML data...
 		// Log the error and configure all IPs subject to all groups.
-		logger.Infof("Source IPs will be tracked individually. MAC-Groups file not configured: %v", err)
+		logger.Errorf("Source IPs will be tracked individually. MAC-Groups file not configured: %v", err)
 		managerModeMatchAllSourceIps = true
 	} else if err != nil {
-		logger.Infof("Source IPs will be tracked individually. Unexpected error loading MAC-Groups: %v", err)
+		logger.Errorf("Source IPs will be tracked individually. Unexpected error loading MAC-Groups: %v", err)
 		managerModeMatchAllSourceIps = true
 	} else {
 		managerModeMatchAllSourceIps = false
@@ -141,7 +140,7 @@ func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) models.MapIpGroup
 	// Execute ARP scan
 	output, err := arpCmd()
 	if err != nil {
-		logger.Infof("Error running ARP command: %v", err)
+		logger.Errorf("Error running ARP command: %v", err)
 		return nil
 	}
 

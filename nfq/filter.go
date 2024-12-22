@@ -40,7 +40,7 @@ type NFQueueFilter struct {
 // Ip addresses for which to perform filtering.
 // If the packets are destined for any of the injected Ips then filtering happens based on
 // <LOGIC-TBC>
-func NewNFQueueFilter(ctx context.Context, log *zap.SugaredLogger, cfg *config.FilterConfig, t *usage.Tracker, g *group.Manager) (*NFQueueFilter, error) {
+func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *config.FilterConfig, t *usage.Tracker, g *group.Manager) (*NFQueueFilter, error) {
 	var err error
 
 	if cfg.PacketDropPercentage < 0 || cfg.PacketDropPercentage > 1 {
@@ -48,7 +48,7 @@ func NewNFQueueFilter(ctx context.Context, log *zap.SugaredLogger, cfg *config.F
 	}
 
 	f := &NFQueueFilter{}
-	f.logger = log.Desugar()
+	f.logger = logger.Desugar()
 	f.g = g
 	f.t = t
 	f.Nfq, err = f.startNFQueueFilter(ctx, cfg, cfg.OutboundQueueNumber, packetDirectionOutbound)
@@ -179,11 +179,11 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 	}
 
 	fnErrorHandler := func(err error) int {
-		if err != nil {
-			fmt.Printf("error handler caught: %v\n", err)
+		if err != nil { // if there is an error...
+			if err := ctx.Err(); err == nil { // if the context is still active...
+				f.logger.Error("NFQ error handler caught", zap.Error(err))
+			}
 			// TODO: decide how error handler should return 0 or -1 or cancel everything.
-			// fnCancel() // cancel the context to stop the nfqueue
-			// return -1
 		}
 
 		return -1 // to stop receiving messages return something different from 0.

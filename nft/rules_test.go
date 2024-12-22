@@ -12,7 +12,7 @@ import (
 )
 
 func cleanupFunc() {
-	err := deleteTable(&nftables.Conn{}, defaultTableName)
+	err := deleteTable(config.MustGetLogger(), &nftables.Conn{}, defaultTableName)
 	fmt.Println("error during cleanup: deleteTable() error: ", err)
 }
 
@@ -124,14 +124,16 @@ func Test_Clean(t *testing.T) {
 	t.Cleanup(cleanupFunc)
 	defaultTableName = "test_table"
 
-	rules, err := NewNFTRules(config.MustGetLogger(), &config.FilterConfig{})
+	logger := config.MustGetLogger()
+
+	rules, err := NewNFTRules(logger, &config.FilterConfig{})
 	assert.NoError(t, err, "NewNFTRules() error = %v", err)
 
-	err = rules.Clean()
+	err = rules.Clean(logger)
 	assert.NoError(t, err, "Clean() error = %v", err)
 
 	// Check tables.
-	if tableExists(rules.conn, rules.tableName) {
+	if tableExists(logger, rules.conn, rules.tableName) {
 		t.Errorf("Table %v found when it should be gone", rules.tableName)
 	}
 }

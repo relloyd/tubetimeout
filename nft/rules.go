@@ -3,7 +3,6 @@ package nft
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"sync"
@@ -17,7 +16,7 @@ import (
 
 func init() {
 	if os.Geteuid() != 0 {
-		log.Fatal("You must be root to run this program.")
+		config.MustGetLogger().Fatalf("You must be root to run this program.")
 	}
 }
 
@@ -54,7 +53,7 @@ type Rules struct {
 func NewNFTRules(logger *zap.SugaredLogger, cfg *config.FilterConfig) (*Rules, error) {
 	var err error
 	rules := &Rules{
-		logger: logger,
+		logger:        logger,
 		conn:          &nftables.Conn{},
 		tableName:     defaultTableName,
 		chainName:     defaultFilterChainName,
@@ -64,17 +63,17 @@ func NewNFTRules(logger *zap.SugaredLogger, cfg *config.FilterConfig) (*Rules, e
 		remoteIPs:     make([]nftables.SetElement, 0),
 	}
 
-	rules.table, err = getOrCreateTable(rules.conn, rules.tableName)
+	rules.table, err = getOrCreateTable(rules.logger, rules.conn, rules.tableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create nftables table: %v", err)
 	}
 
-	rules.chain, err = getOrCreateFilterChain(rules.conn, rules.table, rules.chainName)
+	rules.chain, err = getOrCreateFilterChain(rules.logger, rules.conn, rules.table, rules.chainName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create nftables chain: %v", err)
 	}
 
-	nat, err := getOrCreateNATPostRoutingChain(rules.conn, rules.table, defaultNATChainName)
+	nat, err := getOrCreateNATPostRoutingChain(rules.logger, rules.conn, rules.table, defaultNATChainName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create nftables NAT chain: %v", err)
 	}
@@ -192,7 +191,7 @@ func (q *Rules) UpdateDestIpDomains(newData models.MapIpDomain) {
 	// Refresh the NFTables rules.
 	err := q.updateIpSets()
 	if err != nil {
-		q.logger.Infof("NFT callback with new destination IPs couldn't make the update: %v", err)
+		q.logger.Errorf("NFT callback with new destination IPs couldn't make the update: %v", err)
 	}
 }
 
@@ -217,7 +216,7 @@ func (q *Rules) UpdateSourceIpGroups(newData models.MapIpGroups) {
 
 	err := q.updateIpSets()
 	if err != nil {
-		q.logger.Infof("NFT callback with new source IPs couldn't make the update: %v", err)
+		q.logger.Errorf("NFT callback with new source IPs couldn't make the update: %v", err)
 	}
 }
 
@@ -397,10 +396,10 @@ func (q *Rules) addNFTablesRuleForSingleDestAddr(dAddr models.Ip) error {
 	return nil
 }
 
-func tableExists(conn *nftables.Conn, tableName string) bool {
+func tableExists(logger *zap.SugaredLogger, conn *nftables.Conn, tableName string) bool {
 	tables, err := conn.ListTables()
 	if err != nil {
-		log.Fatalf("Failed to list nftables tables: %v\n", err)
+		logger.Fatalf("Failed to list nftables tables: %v\n", err)
 	}
 	for _, v := range tables {
 		if v.Name == tableName {
@@ -410,10 +409,10 @@ func tableExists(conn *nftables.Conn, tableName string) bool {
 	return false
 }
 
-func chainExists(conn *nftables.Conn, chainName string) bool {
+func chainExists(logger *zap.SugaredLogger, conn *nftables.Conn, chainName string) bool {
 	chains, err := conn.ListChains()
 	if err != nil {
-		log.Fatalf("Failed to list nftables chains: %v\n", err)
+		logger.Fatalf("Failed to list nftables chains: %v\n", err)
 	}
 	for _, v := range chains {
 		if v.Name == chainName {
@@ -423,21 +422,21 @@ func chainExists(conn *nftables.Conn, chainName string) bool {
 	return false
 }
 
-func getOrCreateTable(conn *nftables.Conn, tableName string) (*nftables.Table, error) {
+func getOrCreateTable(logger *zap.SugaredLogger, conn *nftables.Conn, tableName string) (*nftables.Table, error) {
 	var err error
 	table := &nftables.Table{
 		Family: nftables.TableFamilyIPv4, // TODO: work out if we can use family inet instead for both ip4 and ip16 addresses
 		// NOTE: Family: nftables.TableFamilyINet doesn't work for both IPv4 and IPv6 addresses (it produces lower-level rules)
 		Name: tableName,
 	}
-	if !tableExists(conn, tableName) { // TODO: decide if we want to delete/replace the table if it exists already
+	if !tableExists(logger, conn, tableName) { // TODO: decide if we want to delete/replace the table if it exists already
 		conn.AddTable(table)
 		err = conn.Flush()
 	}
 	return table, err
 }
 
-func getOrCreateFilterChain(conn *nftables.Conn, table *nftables.Table, chainName string) (*nftables.Chain, error) {
+func getOrCreateFilterChain(logger *zap.SugaredLogger, conn *nftables.Conn, table *nftables.Table, chainName string) (*nftables.Chain, error) {
 	var err error
 	chain := &nftables.Chain{
 		Name:     chainName,
@@ -446,7 +445,7 @@ func getOrCreateFilterChain(conn *nftables.Conn, table *nftables.Table, chainNam
 		Hooknum:  nftables.ChainHookForward, // input chain is for packets destined for the local machine; forward chain is for packets that are being routed through the local machine; output chain is for packets originating from the local machine
 		Priority: nftables.ChainPriorityFilter,
 	}
-	if !chainExists(conn, table.Name) { // TODO: decide if we want to delete/replace the chain if it exists already
+	if !chainExists(logger, conn, table.Name) { // TODO: decide if we want to delete/replace the chain if it exists already
 		conn.AddChain(chain)
 		err = conn.Flush()
 	}
@@ -469,7 +468,7 @@ func getOrCreateFilterChain(conn *nftables.Conn, table *nftables.Table, chainNam
 // 	return chain, err
 // }
 
-func getOrCreateNATPostRoutingChain(conn *nftables.Conn, table *nftables.Table, chainName string) (*nftables.Chain, error) {
+func getOrCreateNATPostRoutingChain(logger *zap.SugaredLogger, conn *nftables.Conn, table *nftables.Table, chainName string) (*nftables.Chain, error) {
 	var err error
 	chain := &nftables.Chain{
 		Name:     chainName,
@@ -478,29 +477,29 @@ func getOrCreateNATPostRoutingChain(conn *nftables.Conn, table *nftables.Table, 
 		Hooknum:  nftables.ChainHookPostrouting,
 		Priority: nftables.ChainPriorityNATSource,
 	}
-	if !chainExists(conn, chainName) {
+	if !chainExists(logger, conn, chainName) {
 		conn.AddChain(chain)
 		err = conn.Flush()
 	}
 	return chain, err
 }
 
-func deleteTable(conn *nftables.Conn, tableName string) error {
+func deleteTable(logger *zap.SugaredLogger, conn *nftables.Conn, tableName string) error {
 	// Delete the table and all its chains and rules.
 	conn.DelTable(&nftables.Table{Name: tableName})
 	err := conn.Flush()
 	if err != nil {
 		return fmt.Errorf("failed to flush nft: %v", err)
 	}
-	if tableExists(conn, tableName) {
+	if tableExists(logger, conn, tableName) {
 		return fmt.Errorf("nft table %q not deleted", defaultTableName)
 	}
 	return nil
 }
 
 // Clean deletes the nftables table and therefore all its chains and rules.
-func (q *Rules) Clean() error {
-	return deleteTable(q.conn, q.table.Name)
+func (q *Rules) Clean(logger *zap.SugaredLogger, ) error {
+	return deleteTable(logger, q.conn, q.table.Name)
 }
 
 // // getDiffAMinusB returns all elements in a that are not in b.
