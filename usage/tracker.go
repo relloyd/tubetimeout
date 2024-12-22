@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"example.com/youtube-nfqueue/config"
+	"example.com/tubetimeout/config"
 )
 
 type saveSamplesFunc func(string, *sync.Map) error

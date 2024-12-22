@@ -8,12 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"example.com/youtube-nfqueue/group"
-	"example.com/youtube-nfqueue/models"
-	"example.com/youtube-nfqueue/usage"
+	"example.com/tubetimeout/group"
+	"example.com/tubetimeout/models"
+	"example.com/tubetimeout/usage"
 	"github.com/elazarl/goproxy"
 )
-
 
 func NewServer(m group.ManagerI, t usage.TrackerI) *http.Server {
 	proxy := goproxy.NewProxyHttpServer()

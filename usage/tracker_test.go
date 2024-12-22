@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"example.com/youtube-nfqueue/config"
+	"example.com/tubetimeout/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,11 +20,11 @@ func TestNewTracker(t *testing.T) {
 
 	// Case 1: Create a tracker with a 1-hour retention, 10-minute threshold, and 1-minute granularity.
 	cfg := &config.TrackerConfig{
-		Retention:   1 * time.Hour,
-		Threshold:   10 * time.Minute,
-		Granularity: 1 * time.Minute,
-		SampleFilePath: tmpFile.Name(),
-		SampleFileSaveInterval: 50*time.Millisecond,
+		Retention:              1 * time.Hour,
+		Threshold:              10 * time.Minute,
+		Granularity:            1 * time.Minute,
+		SampleFilePath:         tmpFile.Name(),
+		SampleFileSaveInterval: 50 * time.Millisecond,
 	}
 
 	// Mock the file saver func.
@@ -48,7 +48,7 @@ func TestNewTracker(t *testing.T) {
 	assert.Equal(t, cfg.Granularity, tracker.granularity, "NewTracker did not set granularity")
 	assert.Equal(t, cfg.Threshold, tracker.threshold, "NewTracker did not set threshold")
 	assert.NotNil(t, tracker.nowFunc, "NewTracker did not set a default nowFunc")
-	
+
 	// Test that the tracker loads the same samples that we saved.
 	devices.Range(func(key, value interface{}) bool {
 		tdv, ok := tracker.devices.Load(key)
@@ -58,8 +58,8 @@ func TestNewTracker(t *testing.T) {
 	})
 
 	// Test that the saveSamplesPeriodically goroutine was started.
-	time.Sleep(50*time.Millisecond)
-	assert.GreaterOrEqual(t, savedFileCount,1 , "saveSamplesPeriodically goroutine was not started")
+	time.Sleep(50 * time.Millisecond)
+	assert.GreaterOrEqual(t, savedFileCount, 1, "saveSamplesPeriodically goroutine was not started")
 }
 
 func TestHasExceededThreshold(t *testing.T) {
@@ -81,7 +81,7 @@ func TestHasExceededThreshold(t *testing.T) {
 	deviceData := &deviceData{
 		samples: make([]bool, tracker.sampleSize),
 		start:   startTime,
-		mu: 	&sync.Mutex{},
+		mu:      &sync.Mutex{},
 	}
 
 	// Add device data to the tracker.

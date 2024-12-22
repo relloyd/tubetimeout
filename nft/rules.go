@@ -8,8 +8,8 @@ import (
 	"os"
 	"sync"
 
-	"example.com/youtube-nfqueue/config"
-	"example.com/youtube-nfqueue/models"
+	"example.com/tubetimeout/config"
+	"example.com/tubetimeout/models"
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
 )
@@ -21,7 +21,7 @@ func init() {
 }
 
 var (
-	defaultTableName       = "tubetimeout-table"
+	defaultTableName = "tubetimeout-table"
 )
 
 const (

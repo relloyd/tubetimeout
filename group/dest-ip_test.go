@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"example.com/youtube-nfqueue/models"
+	"example.com/tubetimeout/models"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -72,7 +72,6 @@ func TestLoadGroupDomains(t *testing.T) {
 	}
 	mockReceiver.mu.Unlock()
 }
-
 
 // TestNewDomainWatcher tests the NewDomainWatcher function created by AI overlords.
 func TestNewDomainWatcher(t *testing.T) {

@@ -3,7 +3,7 @@ package group
 import (
 	"fmt"
 
-	"example.com/youtube-nfqueue/models"
+	"example.com/tubetimeout/models"
 )
 
 var (
@@ -134,7 +134,7 @@ func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool
 		}
 	}
 
-	return intersection, len(intersection) != 0  // return true if there are intersecting groups
+	return intersection, len(intersection) != 0 // return true if there are intersecting groups
 }
 
 // IsSrcIpDestDomainKnown checks if the source IP and destination domain are known and returns the intersection of groups.

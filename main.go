@@ -11,12 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/youtube-nfqueue/config"
-	"example.com/youtube-nfqueue/group"
-	"example.com/youtube-nfqueue/nfq"
-	"example.com/youtube-nfqueue/nft"
-	"example.com/youtube-nfqueue/proxy"
-	"example.com/youtube-nfqueue/usage"
+	"example.com/tubetimeout/config"
+	"example.com/tubetimeout/group"
+	"example.com/tubetimeout/nfq"
+	"example.com/tubetimeout/nft"
+	"example.com/tubetimeout/proxy"
+	"example.com/tubetimeout/usage"
 	"github.com/kelseyhightower/envconfig"
 )
 

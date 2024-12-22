@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"example.com/youtube-nfqueue/config"
-	"example.com/youtube-nfqueue/models"
+	"example.com/tubetimeout/config"
+	"example.com/tubetimeout/models"
 )
 
 type FuncGroupDomainsLoader func() (models.MapGroupDomains, error)

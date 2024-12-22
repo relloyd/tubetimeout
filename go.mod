@@ -1,9 +1,9 @@
-module example.com/youtube-nfqueue
+module example.com/tubetimeout
 
 go 1.23.3
 
 require (
-	github.com/elazarl/goproxy v0.0.0-20240909085733-6741dbfc16a1
+	github.com/elazarl/goproxy v0.0.0-20241221210044-9faedc2f9e9f
 	github.com/florianl/go-nfqueue v1.3.2
 	github.com/google/nftables v0.2.0
 	github.com/kelseyhightower/envconfig v1.4.0

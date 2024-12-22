@@ -6,7 +6,7 @@ import (
 	"io/fs"
 	"os"
 
-	"example.com/youtube-nfqueue/models"
+	"example.com/tubetimeout/models"
 	"gopkg.in/yaml.v3"
 )
 

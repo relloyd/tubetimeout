@@ -4,8 +4,8 @@ import (
 	"slices"
 	"testing"
 
-	"example.com/youtube-nfqueue/config"
-	"example.com/youtube-nfqueue/models"
+	"example.com/tubetimeout/config"
+	"example.com/tubetimeout/models"
 	"github.com/stretchr/testify/assert"
 )
 

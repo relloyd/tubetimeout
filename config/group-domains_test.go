@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"example.com/youtube-nfqueue/models"
+	"example.com/tubetimeout/models"
 )
 
 // TestLoadGroupDomains tests the LoadGroupDomains function

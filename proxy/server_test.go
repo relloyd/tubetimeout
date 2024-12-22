@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"example.com/youtube-nfqueue/models"
+	"example.com/tubetimeout/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
