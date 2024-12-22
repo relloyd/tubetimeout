@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"sync"
 	"time"
 
 	"example.com/tubetimeout/config"
+	"go.uber.org/zap"
 )
 
 type saveSamplesFunc func(string, *sync.Map) error
@@ -38,6 +38,7 @@ type TrackerI interface {
 }
 
 type Tracker struct {
+	logger          *zap.SugaredLogger
 	devices         *sync.Map     // Map of device IDs (string) to *deviceData
 	retention       time.Duration // The retention period for samples
 	granularity     time.Duration // The time granularity for sampling
@@ -49,7 +50,8 @@ type Tracker struct {
 }
 
 // NewTracker initializes a Tracker with preallocated slices for each device.
-func NewTracker(ctx context.Context, cfg *config.TrackerConfig) (*Tracker, error) {
+func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.TrackerConfig) (*Tracker, error) {
+
 	sampleSize := int(cfg.Retention / cfg.Granularity)
 
 	if cfg.Retention > 7*24*time.Hour {
@@ -62,6 +64,7 @@ func NewTracker(ctx context.Context, cfg *config.TrackerConfig) (*Tracker, error
 	}
 
 	t := &Tracker{
+		logger:          logger,
 		devices:         &sync.Map{},
 		retention:       cfg.Retention,
 		granularity:     cfg.Granularity,
@@ -80,27 +83,27 @@ func NewTracker(ctx context.Context, cfg *config.TrackerConfig) (*Tracker, error
 		}
 		s, err := loadSamples(configFile)
 		if err != nil {
-			log.Printf("Failed to load samples from file: %v", err)
+			logger.Errorf("Failed to load samples from file: %v", err)
 		} else {
 			// Load the samples into the devices map.
-			log.Printf("Samples loaded from file: %q", configFile)
+			logger.Infof("Samples loaded from file: %q", configFile)
 			t.devices = s
 		}
 		// Save samples to the file on context cancellation.
-		go saveSamplesPeriodically(ctx, t.devices, configFile, cfg.SampleFileSaveInterval)
+		go saveSamplesPeriodically(ctx, t.logger, t.devices, configFile, cfg.SampleFileSaveInterval)
 	}
 
 	return t, nil
 }
 
-func saveSamplesPeriodically(ctx context.Context, devicesToSave *sync.Map, filePath string, interval time.Duration) {
+func saveSamplesPeriodically(ctx context.Context, logger *zap.SugaredLogger, devicesToSave *sync.Map, filePath string, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	fn := func() {
 		// TODO: save samples safely by using a temporary file and renaming it.
 		if err := fnSaveSamples(filePath, devicesToSave); err != nil {
-			log.Printf("Failed to save samples to file: %v", err)
+			logger.Errorf("Failed to save samples to file: %v", err)
 		} else {
-			log.Printf("Saved samples to file %q", filePath)
+			logger.Infof("Saved samples to file %q", filePath)
 		}
 	}
 	for {
@@ -219,7 +222,7 @@ func (t *Tracker) HasExceededThreshold(deviceID string) bool {
 		}
 	}
 
-	log.Printf("Seen %v count %v", deviceID, count)
+	t.logger.Debugf("Seen %v count %v", deviceID, count)
 
 	return time.Duration(count)*t.granularity >= t.threshold
 }
@@ -242,7 +245,7 @@ func (t *Tracker) syncWindow(dd *deviceData, now time.Time) {
 		// dd.start = now.Truncate(t.granularity) // Reset start as we roll into a new window.
 		lastWindowStart, _ := t.calculateWindow(now)
 		dd.start = lastWindowStart // Reset the start as we roll into a new window.
-		log.Printf("Renew retention window (%v) for device %s", now, t.retention)
+		t.logger.Infof("Renew retention window (%v) for device %s", now, t.retention)
 	}
 	// If 0 < elapsed < t.sampleSize, do nothing. The circular buffer handles overwriting naturally.
 }

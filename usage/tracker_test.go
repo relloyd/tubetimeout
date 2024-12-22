@@ -39,7 +39,7 @@ func TestNewTracker(t *testing.T) {
 		return path, nil
 	}
 
-	tracker, err := NewTracker(ctx, cfg)
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
 
 	assert.NoError(t, err, "NewTracker failed")
 	assert.NotNil(t, tracker, "NewTracker returned nil")
@@ -72,7 +72,7 @@ func TestHasExceededThreshold(t *testing.T) {
 		Granularity: 1 * time.Minute,
 	}
 
-	tracker, err := NewTracker(ctx, cfg)
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
 	assert.NoError(t, err, "NewTracker failed")
 
 	// Simulate a device data structure with pre-allocated samples.
@@ -143,7 +143,7 @@ func TestAddSample(t *testing.T) {
 		Threshold:   10 * time.Minute,
 	}
 
-	tracker, err := NewTracker(ctx, cfg)
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
 	assert.NoError(t, err, "NewTracker failed")
 
 	deviceID := "test-device"
@@ -229,7 +229,7 @@ func TestGetIndex(t *testing.T) {
 		Retention:   1 * time.Hour,
 		Granularity: 1 * time.Minute,
 	}
-	tracker, err := NewTracker(ctx, cfg)
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
 	assert.NoError(t, err, "NewTracker failed")
 
 	startTime := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
@@ -262,7 +262,7 @@ func TestSyncWindow(t *testing.T) {
 		Retention:   1 * time.Hour,
 	}
 
-	tracker, err := NewTracker(ctx, cfg) // No threshold needed for this test.
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg) // No threshold needed for this test.
 	assert.NoError(t, err, "NewTracker failed")
 
 	// Simulate a device data structure.

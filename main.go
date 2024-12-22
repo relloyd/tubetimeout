@@ -86,7 +86,7 @@ func main() {
 	logger.Info("NFTables rules created")
 
 	// Usage tracker.
-	t, err := usage.NewTracker(ctx, &appCfg.TrackerConfig)
+	t, err := usage.NewTracker(ctx, logger, &appCfg.TrackerConfig)
 	if err != nil {
 		logger.Fatalln("Failed to setup usage tracker:", err)
 	}
@@ -165,7 +165,7 @@ func main() {
 	failure := false
 	for _, f := range cleanupFuncs {
 		if err := f(); err != nil {
-			logger.Info("Error during cleanup: %v", err)
+			logger.Errorf("Error during cleanup: %v", err)
 			failure = true
 		}
 	}

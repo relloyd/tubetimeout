@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"example.com/tubetimeout/config"
 	"example.com/tubetimeout/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -81,7 +82,7 @@ func TestGetHandler(t *testing.T) {
 	mockUsageTracker.On("HasExceededThreshold", "group2").Return(true)
 
 	// Create the handler
-	handler := GetHandler(mockGroupManager, mockUsageTracker)
+	handler := GetHandler(config.MustGetLogger(), mockGroupManager, mockUsageTracker)
 
 	// Unhappy path: threshold exceeded
 	newReq, resp := handler(req, nil)
