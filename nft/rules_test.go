@@ -5,6 +5,7 @@ import (
 	"net"
 	"testing"
 
+	"example.com/youtube-nfqueue/config"
 	"example.com/youtube-nfqueue/models"
 	"github.com/google/nftables"
 	"github.com/stretchr/testify/assert"
@@ -16,7 +17,9 @@ func cleanupFunc() {
 }
 
 func Test_New(t *testing.T) {
-	nfq, err := NewNFTRules()
+	t.Cleanup(cleanupFunc)
+	defaultTableName = "test_table"
+	nfq, err := NewNFTRules(&config.FilterConfig{})
 	assert.NoError(t, err, "NewNFTRules() error = %v", err)
 	assert.NotNil(t, nfq, "NewNFTRules() returned nil")
 	assert.NotNil(t, nfq.conn, "NewNFTRules() conn is nil")
@@ -29,9 +32,10 @@ func Test_New(t *testing.T) {
 }
 
 func Test_addNFTablesRuleForSingleDestAddr(t *testing.T) {
-	// t.Cleanup(cleanupFunc)
+	t.Cleanup(cleanupFunc)
+	defaultTableName = "test_table"
 
-	rules, err := NewNFTRules()
+	rules, err := NewNFTRules(&config.FilterConfig{})
 	assert.NoError(t, err, "NewNFTRules() error = %v", err)
 
 	// Check length of chain rules.
@@ -55,8 +59,9 @@ func Test_addNFTablesRuleForSingleDestAddr(t *testing.T) {
 
 func Test_addNFTablesRuleForSets(t *testing.T) {
 	t.Cleanup(cleanupFunc)
+	defaultTableName = "test_table"
 
-	rules, err := NewNFTRules()
+	rules, err := NewNFTRules(&config.FilterConfig{})
 	assert.NoError(t, err, "NewNFTRules() error = %v", err)
 
 	r, err := rules.conn.GetRules(rules.table, rules.chain)
@@ -117,8 +122,9 @@ func Test_addNFTablesRuleForSets(t *testing.T) {
 
 func Test_Clean(t *testing.T) {
 	t.Cleanup(cleanupFunc)
+	defaultTableName = "test_table"
 
-	rules, err := NewNFTRules()
+	rules, err := NewNFTRules(&config.FilterConfig{})
 	assert.NoError(t, err, "NewNFTRules() error = %v", err)
 
 	err = rules.Clean()

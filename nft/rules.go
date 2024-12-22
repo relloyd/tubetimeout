@@ -20,10 +20,13 @@ func init() {
 	}
 }
 
-const (
+var (
 	defaultTableName       = "tubetimeout-table"
+)
+
+const (
 	defaultFilterChainName = "filter"
-	defaultNATChainName    = "postrouting"
+	defaultNATChainName    = "post-routing"
 	defaultSrcIpSetName    = "local_ip_set"
 	defaultDestIpSetName   = "remote_ip_set"
 	defaultProtocolSetName = "protocol_set"
