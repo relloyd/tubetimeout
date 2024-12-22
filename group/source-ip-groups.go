@@ -123,7 +123,7 @@ func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) models.MapIpGroup
 	gm, err := groupMacsLoaderFunc()
 	if errors.Is(err, config.ErrorGroupMacFileNotFound) { // if there is an error loading the YAML data...
 		// Log the error and configure all IPs subject to all groups.
-		logger.Errorf("Source IPs will be tracked individually. MAC-Groups file not configured: %v", err)
+		logger.Warnf("Source IPs will be tracked individually. MAC-Groups file not configured: %v", err)
 		managerModeMatchAllSourceIps = true
 	} else if err != nil {
 		logger.Errorf("Source IPs will be tracked individually. Unexpected error loading MAC-Groups: %v", err)

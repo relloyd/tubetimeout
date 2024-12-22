@@ -73,7 +73,7 @@ func (dw *DomainWatcher) RegisterDestDomainGroupReceivers(receivers ...DestDomai
 
 func NewDomainWatcher(logger *zap.SugaredLogger) *DomainWatcher {
 	return &DomainWatcher{
-		logger: logger,
+		logger:                    logger,
 		mu:                        sync.RWMutex{},
 		interval:                  defaultInterval,
 		resolver:                  resolveDomains,

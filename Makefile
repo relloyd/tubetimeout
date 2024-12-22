@@ -8,7 +8,7 @@ INSTALL_DEST := /usr/local/bin
 INSTALL_TIMESTAMP := $(shell date +"%Y%m%dT%H%M%S")
 
 PACKAGE_TO_TEST=./nft
-FUNC_TO_TEST=Test_addNFTablesRuleForSingleDestAddr
+FUNC_TO_TEST=Test_New
 
 test:
 	go test ./...

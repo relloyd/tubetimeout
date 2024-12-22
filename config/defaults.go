@@ -8,11 +8,8 @@ import (
 	"github.com/kelseyhightower/envconfig"
 )
 
-const (
-	AppHomeDir = ".tubetimeout"
-)
-
 var (
+	AppHomeDir = ".tubetimeout"
 	// AppCfg is the application configuration.
 	AppCfg AppConfig
 )

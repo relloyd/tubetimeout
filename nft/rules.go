@@ -174,14 +174,19 @@ func (q *Rules) UpdateDestIpDomains(newData models.MapIpDomain) {
 	q.logger.Infof("NFT callback with new destination IPs: %v", newData)
 
 	// Convert to set elements and save.
+	discarded := 0
 	var newIps []nftables.SetElement
 	for k := range newData {
 		ip := net.ParseIP(string(k)).To4()
 		if ip != nil {
 			newIps = append(newIps, nftables.SetElement{Key: ip})
 		} else {
-			q.logger.Infof("NFT destination IP callback discarded IPv6 address %v", k)
+			discarded++
 		}
+	}
+
+	if discarded > 0 {
+		q.logger.Infof("NFT destination IP callback discarded %v address(es)", discarded)
 	}
 
 	q.mu.Lock()
@@ -200,14 +205,19 @@ func (q *Rules) UpdateSourceIpGroups(newData models.MapIpGroups) {
 	q.logger.Infof("NFT callback with new source IPs: %v", newData)
 
 	// Convert to set elements and save.
+	discarded := 0
 	var newIps []nftables.SetElement
 	for k := range newData {
 		ip := net.ParseIP(string(k)).To4()
 		if ip != nil {
 			newIps = append(newIps, nftables.SetElement{Key: ip})
 		} else {
-			q.logger.Infof("NFT source IP callback discarded IPv6 address %v", k)
+			discarded++
 		}
+	}
+
+	if discarded > 0 {
+		q.logger.Infof("NFT destination IP callback discarded %v address(es)", discarded)
 	}
 
 	q.mu.Lock()
@@ -498,7 +508,7 @@ func deleteTable(logger *zap.SugaredLogger, conn *nftables.Conn, tableName strin
 }
 
 // Clean deletes the nftables table and therefore all its chains and rules.
-func (q *Rules) Clean(logger *zap.SugaredLogger, ) error {
+func (q *Rules) Clean(logger *zap.SugaredLogger) error {
 	return deleteTable(logger, q.conn, q.table.Name)
 }
 

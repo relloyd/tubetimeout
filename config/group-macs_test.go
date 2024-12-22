@@ -22,7 +22,9 @@ groups:
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tempFile.Name()) // Clean up the temp file after the test
+	defer func(name string) {
+		_ = os.Remove(name)
+	}(tempFile.Name()) // Clean up the temp file after the test
 
 	// Write the YAML content to the file
 	if _, err := tempFile.WriteString(yamlContent); err != nil {
@@ -33,7 +35,8 @@ groups:
 	}
 
 	// Call the function under test
-	defaultGroupMacFilePath = tempFile.Name() // override the default file path with temp file above.
+	defaultGroupMacFilePath = tempFile.Name()                                                      // override the default file path with temp file above.
+	DefaultCreateAppHomeDirAndGetConfigFileFunc = func(f string) (string, error) { return f, nil } // override the function that uses the home dir for config files.
 	macGroup, err := LoadGroupMACs()
 	if err != nil {
 		t.Fatalf("LoadGroupMACs returned an error: %v", err)

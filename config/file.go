@@ -8,7 +8,9 @@ import (
 	"go.uber.org/zap"
 )
 
-func CreateAppHomeDirForConfigFile(fileName string) (string, error) {
+// createAppHomeDirAndGetConfigFile creates a directory in the user's home directory for the app's configuration file.
+// It returns the full path to the configuration file.
+func createAppHomeDirAndGetConfigFile(fileName string) (string, error) {
 	// Get the home directory
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -27,7 +29,6 @@ func CreateAppHomeDirForConfigFile(fileName string) (string, error) {
 	filePath := filepath.Join(appDir, fileName)
 	return filePath, nil
 }
-
 
 func safeWriteViaTemp(logger *zap.SugaredLogger, filePath string, data string) {
 	tempPath := filePath + ".tmp"
@@ -56,4 +57,3 @@ func safeWriteViaTemp(logger *zap.SugaredLogger, filePath string, data string) {
 		logger.Fatalf("Failed to rename file: %v", err)
 	}
 }
-

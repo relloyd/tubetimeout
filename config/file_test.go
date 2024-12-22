@@ -3,8 +3,44 @@ package config
 import (
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
+
+// TestCreateAppHomeDirForConfigFile tests the createAppHomeDirAndGetConfigFile function.
+func TestCreateAppHomeDirForConfigFile(t *testing.T) {
+	// Setup
+	AppHomeDir = ".myapp"
+	fileName := "config.yaml"
+
+	// Get the current user's home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("Failed to get home directory: %v", err)
+	}
+
+	// Expected output
+	expectedDir := filepath.Join(homeDir, AppHomeDir)
+	expectedPath := filepath.Join(expectedDir, fileName)
+
+	// Cleanup after test
+	defer func() {
+		_ = os.RemoveAll(expectedDir) // Clean up the test directory
+	}()
+
+	// Call the function under test
+	result, err := createAppHomeDirAndGetConfigFile(fileName)
+
+	assert.NoError(t, err, "Unexpected error")
+	assert.Equal(t, expectedPath, result, "Unexpected path")
+
+	// Check if directory was created
+	if _, err := os.Stat(expectedDir); os.IsNotExist(err) {
+		t.Errorf("Expected directory %s to exist, but it does not", expectedDir)
+	}
+}
 
 func TestSafeWriteViaTemp(t *testing.T) {
 	// Setup: Define the file paths and test data

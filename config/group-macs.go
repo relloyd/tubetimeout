@@ -8,9 +8,13 @@ import (
 )
 
 var (
-	ErrorGroupMacFileNotFound = fmt.Errorf("group-macs file not found")
-	defaultGroupMacFilePath = "group-macs.yaml"
+	DefaultCreateAppHomeDirAndGetConfigFileFunc = getConfigFileFunc(createAppHomeDirAndGetConfigFile)
+	ErrorGroupMacFileNotFound                   = fmt.Errorf("group-macs file not found")
+	defaultGroupMacFilePath                     = "group-macs.yaml"
+	homeDirExists                               = false
 )
+
+type getConfigFileFunc func(string) (string, error)
 
 // GroupConfig represents the YAML structure
 type GroupConfig struct {
@@ -19,6 +23,16 @@ type GroupConfig struct {
 
 // LoadGroupMACs parses the YAML file
 func LoadGroupMACs() (GroupConfig, error) {
+	if !homeDirExists {
+		var err error
+		defaultGroupMacFilePath, err = DefaultCreateAppHomeDirAndGetConfigFileFunc(defaultGroupMacFilePath)
+		if err != nil {
+			return GroupConfig{}, fmt.Errorf("failed to create home directory for group-macs config file: %w", err)
+		} else {
+			homeDirExists = true
+		}
+	}
+
 	yamlFile, err := os.ReadFile(defaultGroupMacFilePath)
 	if err != nil {
 		return GroupConfig{}, fmt.Errorf("%w: %v", ErrorGroupMacFileNotFound, err)
