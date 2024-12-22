@@ -3,7 +3,6 @@ package proxy
 import (
 	"bytes"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -12,12 +11,13 @@ import (
 	"example.com/tubetimeout/models"
 	"example.com/tubetimeout/usage"
 	"github.com/elazarl/goproxy"
+	"go.uber.org/zap"
 )
 
-func NewServer(m group.ManagerI, t usage.TrackerI) *http.Server {
+func NewServer(logger *zap.SugaredLogger, m group.ManagerI, t usage.TrackerI) *http.Server {
 	proxy := goproxy.NewProxyHttpServer()
 	proxy.Verbose = true
-	proxy.OnRequest().DoFunc(GetHandler(m, t))
+	proxy.OnRequest().DoFunc(GetHandler(logger, m, t))
 
 	return &http.Server{
 		Addr:                         ":8080",
@@ -34,7 +34,7 @@ func NewServer(m group.ManagerI, t usage.TrackerI) *http.Server {
 
 // GetHandler returns a handle func that can allow/deny requests.
 // The returned func will return a req,nil if the request is allowed, or nil,res if the request should be denied.
-func GetHandler(m group.ManagerI, t usage.TrackerI) func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+func GetHandler(logger *zap.SugaredLogger, m group.ManagerI, t usage.TrackerI) func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 	return func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 		// Destination of the request.
 		destDomain := req.URL.Host
@@ -50,20 +50,20 @@ func GetHandler(m group.ManagerI, t usage.TrackerI) func(req *http.Request, ctx 
 
 		// Use the groups associated with the source IP and destination domain.
 		if g, ok := m.IsSrcIpDestDomainKnown(models.Ip(srcIP), models.Domain(destDomain)); ok {
-			log.Printf("Proxying request to %v within group(s) %v", destDomain, g)
+			logger.Infof("Proxying request to %v within group(s) %v", destDomain, g)
 			count := 0
 			for _, v := range g {
 				t.AddSample(string(v))
 				if t.HasExceededThreshold(string(v)) {
 					// TODO: handle multiple groups in the proxy blocker.
-					log.Printf("Proxy request from %v to %v denied. Threshold exceeded for group %v", srcIP, destDomain, g)
+					logger.Infof("Proxy request from %v to %v denied. Threshold exceeded for group %v", srcIP, destDomain, g)
 					return nil, createBlockedResponse(`Request exploded 💣💥`)
 				}
-				log.Printf("Proxy request from %v to %v granted", srcIP, destDomain)
+				logger.Infof("Proxy request from %v to %v granted", srcIP, destDomain)
 				count++
 			}
 			if count == 0 {
-				log.Printf("Proxy filter found no known groups for request from %v to %v", srcIP, destDomain)
+				logger.Infof("Proxy filter found no known groups for request from %v to %v", srcIP, destDomain)
 			}
 		}
 

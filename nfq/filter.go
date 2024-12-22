@@ -3,7 +3,6 @@ package nfq
 import (
 	"context"
 	"fmt"
-	"log"
 	"math/rand"
 	"net"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"example.com/tubetimeout/usage"
 	"github.com/florianl/go-nfqueue"
 	"github.com/mdlayher/netlink"
+	"go.uber.org/zap"
 )
 
 const (
@@ -29,9 +29,10 @@ type packetIPs struct {
 }
 
 type NFQueueFilter struct {
-	Nfq *nfqueue.Nfqueue
-	t   *usage.Tracker
-	g   *group.Manager
+	Nfq    *nfqueue.Nfqueue
+	t      *usage.Tracker
+	g      *group.Manager
+	logger *zap.Logger
 }
 
 // NewNFQueueFilter creates a new nfqueue filtering outbound packets.
@@ -39,44 +40,29 @@ type NFQueueFilter struct {
 // Ip addresses for which to perform filtering.
 // If the packets are destined for any of the injected Ips then filtering happens based on
 // <LOGIC-TBC>
-func NewNFQueueFilter(ctx context.Context, cfg config.AppConfig, t *usage.Tracker, g *group.Manager) (*NFQueueFilter, error) {
+func NewNFQueueFilter(ctx context.Context, log *zap.SugaredLogger, cfg *config.FilterConfig, t *usage.Tracker, g *group.Manager) (*NFQueueFilter, error) {
 	var err error
 
-	if cfg.FilterConfig.PacketDropPercentage < 0 || cfg.FilterConfig.PacketDropPercentage > 1 {
+	if cfg.PacketDropPercentage < 0 || cfg.PacketDropPercentage > 1 {
 		return nil, fmt.Errorf("packet drop percentage must be between 0 and 100")
 	}
 
 	f := &NFQueueFilter{}
+	f.logger = log.Desugar()
 	f.g = g
 	f.t = t
-	f.Nfq, err = f.startNFQueueFilter(
-		ctx,
-		cfg.FilterConfig.PacketDelayMs,
-		cfg.FilterConfig.PacketJitterMs,
-		cfg.FilterConfig.PacketDropPercentage,
-		cfg.FilterConfig.PacketDropUDP,
-		cfg.FilterConfig.OutboundQueueNumber,
-		packetDirectionOutbound,
-	)
+	f.Nfq, err = f.startNFQueueFilter(ctx, cfg, cfg.OutboundQueueNumber, packetDirectionOutbound)
 	if err != nil {
 		return nil, err
 	}
-	f.Nfq, err = f.startNFQueueFilter(
-		ctx,
-		cfg.FilterConfig.PacketDelayMs,
-		cfg.FilterConfig.PacketJitterMs,
-		cfg.FilterConfig.PacketDropPercentage,
-		cfg.FilterConfig.PacketDropUDP,
-		cfg.FilterConfig.InboundQueueNumber,
-		packetDirectionInbound,
-	)
+	f.Nfq, err = f.startNFQueueFilter(ctx, cfg, cfg.InboundQueueNumber, packetDirectionInbound)
 	if err != nil {
 		return nil, err
 	}
 	return f, nil
 }
 
-func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, packetDelay, packetJitter time.Duration, packetDropPercentage float32, dropUDP bool, queueNumber uint16, mode packetDirection) (*nfqueue.Nfqueue, error) {
+func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.FilterConfig, queueNumber uint16, mode packetDirection) (*nfqueue.Nfqueue, error) {
 	// Open a new NFQueue
 	nf, err := nfqueue.Open(&nfqueue.Config{
 		NetNS:        0,
@@ -109,10 +95,10 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, packetDelay, pac
 		id := *a.PacketID
 
 		if a.Payload == nil { // if there's no payload then accept the packet.
-			log.Println("Payload is nil")
+			f.logger.Warn("Payload is nil")
 			err = nf.SetVerdict(id, nfqueue.NfAccept)
 			if err != nil {
-				log.Printf("Error setting verdict: %v\n", err)
+				f.logger.Error("Error setting verdict", zap.Error(err))
 				return -1
 			}
 			return 0
@@ -120,7 +106,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, packetDelay, pac
 
 		pips, err = getPacketIPs(a)
 		if err != nil {
-			log.Printf("Error getting packet IPs: %v\n", err)
+			f.logger.Error("Error getting packet IPs", zap.Error(err))
 			return -1
 		}
 
@@ -156,25 +142,36 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, packetDelay, pac
 				decision = "Accept"                        // assume success
 				f.t.AddSample(string(grp))                 // remember that we saw it
 				if f.t.HasExceededThreshold(string(grp)) { // if the threshold is exceeded for this group...
-					if rand.Float32() < packetDropPercentage || (proto == "UDP" && dropUDP) { // if we should drop the packet...
+					if rand.Float32() < cfg.PacketDropPercentage || (proto == "UDP" && cfg.PacketDropUDP) { // if we should drop the packet...
 						decision = "Drop"
 						verdict = nfqueue.NfDrop
 					} else { // else introduce a delay for the packet and accept...
-						if packetDelay > 0 {
+						if cfg.PacketDelayMs > 0 {
 							decision = "Delay"
-							time.Sleep(applyJitter(packetDelay, packetJitter)) // Delay the packet
+							time.Sleep(applyJitter(cfg.PacketDelayMs, cfg.PacketJitterMs)) // Delay the packet
 						}
 					}
 				} // else accept the packet as the threshold is not exceeded...
-				log.Printf("%v %v %v packet from %v to %v (group %v)", decision, direction, proto, pips.src, pips.dst, grp)
+				// f.logger.Debug("%v %v %v packet from %v to %v (group %v)", decision, direction, proto, pips.src, pips.dst, grp)
+				f.logger.Debug("Handled packet",
+					zap.String("decision", decision),
+					zap.String("direction", direction),
+					zap.String("proto", proto),
+					zap.String("src", pips.src.String()),
+					zap.String("dest", pips.dst.String()),
+					zap.String("group", string(grp)))
 			}
 		} else { // else accept the packet since the src/dest are not known...
-			log.Printf("Accepting %v packet from %v to unregistered destination %v", proto, pips.src, pips.dst)
+			f.logger.Debug("Accept unregistered",
+				zap.String("direction", direction),
+				zap.String("proto", proto),
+				zap.String("src", pips.src.String()),
+				zap.String("dest", pips.dst.String()))
 		}
 
 		err = nf.SetVerdict(id, verdict)
 		if err != nil {
-			log.Printf("Error setting verdict: %v", err)
+			f.logger.Error("Error setting verdict: %v", zap.Error(err))
 			retval = 1 // 1 to exit clean; -1 to signal error; 0 to continue
 		}
 

@@ -14,6 +14,7 @@ import (
 
 	"example.com/tubetimeout/config"
 	"example.com/tubetimeout/models"
+	"go.uber.org/zap"
 )
 
 const (
@@ -57,14 +58,16 @@ type SourceIpGroupsReceiver interface {
 
 // NetWatcher manages ARP scanning and registered callbacks
 type NetWatcher struct {
+	logger         *zap.SugaredLogger
 	sourceIpGroups models.MapIpGroups
 	callbacks      []SourceIpGroupsReceiver
 	mutex          sync.RWMutex
 }
 
 // NewNetWatcher creates a new NetWatcher instance
-func NewNetWatcher() *NetWatcher {
+func NewNetWatcher(logger *zap.SugaredLogger) *NetWatcher {
 	return &NetWatcher{
+		logger:         logger,
 		sourceIpGroups: make(map[models.Ip][]models.Group),
 		callbacks:      []SourceIpGroupsReceiver{},
 	}
@@ -97,7 +100,7 @@ func (nw *NetWatcher) Start(ctx context.Context) {
 
 func scanNetworkAndSaveResults(nw *NetWatcher) {
 	// Perform ARP scan and get updated map
-	newMapIpGroups := scanNetwork(ARPCmd) // Empty map returned if no groups are set up.
+	newMapIpGroups := scanNetwork(nw.logger, ARPCmd) // Empty map returned if no groups are set up.
 
 	// Compare with existing data
 	nw.mutex.Lock()
@@ -116,15 +119,15 @@ func scanNetworkAndSaveResults(nw *NetWatcher) {
 }
 
 // scanNetwork performs an ARP scan and maps MAC addresses to IPs
-func scanNetwork(arpCmd arpCommand) models.MapIpGroups {
+func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) models.MapIpGroups {
 	// Load YAML data
 	gm, err := groupMacsLoaderFunc()
 	if errors.Is(err, config.ErrorGroupMacFileNotFound) { // if there is an error loading the YAML data...
 		// Log the error and configure all IPs subject to all groups.
-		log.Printf("Source IPs will be tracked individually. MAC-Groups file not configured: %v", err)
+		logger.Infof("Source IPs will be tracked individually. MAC-Groups file not configured: %v", err)
 		managerModeMatchAllSourceIps = true
 	} else if err != nil {
-		log.Printf("Source IPs will be tracked individually. Unexpected error loading MAC-Groups: %v", err)
+		logger.Infof("Source IPs will be tracked individually. Unexpected error loading MAC-Groups: %v", err)
 		managerModeMatchAllSourceIps = true
 	} else {
 		managerModeMatchAllSourceIps = false
@@ -138,7 +141,7 @@ func scanNetwork(arpCmd arpCommand) models.MapIpGroups {
 	// Execute ARP scan
 	output, err := arpCmd()
 	if err != nil {
-		log.Printf("Error running ARP command: %v", err)
+		logger.Infof("Error running ARP command: %v", err)
 		return nil
 	}
 

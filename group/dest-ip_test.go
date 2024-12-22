@@ -4,6 +4,7 @@ import (
 	"sync"
 	"testing"
 
+	"example.com/tubetimeout/config"
 	"example.com/tubetimeout/models"
 	"github.com/stretchr/testify/assert"
 )
@@ -76,7 +77,7 @@ func TestLoadGroupDomains(t *testing.T) {
 // TestNewDomainWatcher tests the NewDomainWatcher function created by AI overlords.
 func TestNewDomainWatcher(t *testing.T) {
 	// Call the function to create a new instance
-	dw := NewDomainWatcher()
+	dw := NewDomainWatcher(config.MustGetLogger())
 
 	// Assert each field is set up correctly
 	assert.NotNil(t, dw, "DomainWatcher instance should not be nil")

@@ -12,6 +12,7 @@ import (
 	"example.com/tubetimeout/models"
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
+	"go.uber.org/zap"
 )
 
 func init() {
@@ -34,6 +35,7 @@ const (
 )
 
 type Rules struct {
+	logger        *zap.SugaredLogger
 	conn          *nftables.Conn
 	tableName     string
 	chainName     string
@@ -49,9 +51,10 @@ type Rules struct {
 	mu            sync.Mutex
 }
 
-func NewNFTRules(cfg *config.FilterConfig) (*Rules, error) {
+func NewNFTRules(logger *zap.SugaredLogger, cfg *config.FilterConfig) (*Rules, error) {
 	var err error
 	rules := &Rules{
+		logger: logger,
 		conn:          &nftables.Conn{},
 		tableName:     defaultTableName,
 		chainName:     defaultFilterChainName,
@@ -169,7 +172,7 @@ func NewNFTRules(cfg *config.FilterConfig) (*Rules, error) {
 
 // UpdateDestIpDomains is a callback that saves the supplied Ip addresses and updates the nft rules using them.
 func (q *Rules) UpdateDestIpDomains(newData models.MapIpDomain) {
-	log.Printf("NFT callback with new destination IPs: %v", newData)
+	q.logger.Infof("NFT callback with new destination IPs: %v", newData)
 
 	// Convert to set elements and save.
 	var newIps []nftables.SetElement
@@ -178,7 +181,7 @@ func (q *Rules) UpdateDestIpDomains(newData models.MapIpDomain) {
 		if ip != nil {
 			newIps = append(newIps, nftables.SetElement{Key: ip})
 		} else {
-			log.Printf("NFT destination IP callback discarded IPv6 address %v", k)
+			q.logger.Infof("NFT destination IP callback discarded IPv6 address %v", k)
 		}
 	}
 
@@ -189,13 +192,13 @@ func (q *Rules) UpdateDestIpDomains(newData models.MapIpDomain) {
 	// Refresh the NFTables rules.
 	err := q.updateIpSets()
 	if err != nil {
-		log.Printf("NFT callback with new destination IPs couldn't make the update: %v", err)
+		q.logger.Infof("NFT callback with new destination IPs couldn't make the update: %v", err)
 	}
 }
 
 // UpdateSourceIpGroups is a callback that saves the supplied Ip addresses and updates the nft rules using them.
 func (q *Rules) UpdateSourceIpGroups(newData models.MapIpGroups) {
-	log.Printf("NFT callback with new source IPs: %v", newData)
+	q.logger.Infof("NFT callback with new source IPs: %v", newData)
 
 	// Convert to set elements and save.
 	var newIps []nftables.SetElement
@@ -204,7 +207,7 @@ func (q *Rules) UpdateSourceIpGroups(newData models.MapIpGroups) {
 		if ip != nil {
 			newIps = append(newIps, nftables.SetElement{Key: ip})
 		} else {
-			log.Printf("NFT source IP callback discarded IPv6 address %v", k)
+			q.logger.Infof("NFT source IP callback discarded IPv6 address %v", k)
 		}
 	}
 
@@ -214,7 +217,7 @@ func (q *Rules) UpdateSourceIpGroups(newData models.MapIpGroups) {
 
 	err := q.updateIpSets()
 	if err != nil {
-		log.Printf("NFT callback with new source IPs couldn't make the update: %v", err)
+		q.logger.Infof("NFT callback with new source IPs couldn't make the update: %v", err)
 	}
 }
 
@@ -265,7 +268,7 @@ func (q *Rules) updateIpSets() error {
 		return fmt.Errorf("failed to flush nftables sets: %v", err)
 	}
 
-	log.Printf("NFT rules updated with %d local IPs and %d remote IPs", len(q.localIPs), len(q.remoteIPs))
+	q.logger.Infof("NFT rules updated with %d local IPs and %d remote IPs", len(q.localIPs), len(q.remoteIPs))
 	return nil
 }
 
@@ -357,9 +360,9 @@ func (q *Rules) addNFTablesRuleForSingleDestAddr(dAddr models.Ip) error {
 		ipBytes = ip.To4()
 	} else {
 		if ip.To16() != nil {
-			log.Printf("Skipped IP6 address %q\n", dAddr)
+			q.logger.Infof("Skipped IP6 address %q\n", dAddr)
 		} else {
-			log.Printf("Skipped bad IP address %q\n", dAddr)
+			q.logger.Infof("Skipped bad IP address %q\n", dAddr)
 		}
 		return nil
 	}

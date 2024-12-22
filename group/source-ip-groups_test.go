@@ -35,7 +35,7 @@ func TestScanNetwork(t *testing.T) {
 	}
 
 	// Call the function under test
-	mig := scanNetwork(mockARPCommand)
+	mig := scanNetwork(config.MustGetLogger(), mockARPCommand)
 
 	// Validate the result
 	expectedMap := map[models.Ip][]models.Group{
@@ -61,7 +61,7 @@ func TestScanNetwork(t *testing.T) {
 	groupMacsLoaderFunc = func() (config.GroupConfig, error) {
 		return config.GroupConfig{}, config.ErrorGroupMacFileNotFound
 	}
-	mig = scanNetwork(mockARPCommand)
+	mig = scanNetwork(config.MustGetLogger(), mockARPCommand)
 	expectedMap = map[models.Ip][]models.Group{
 		"192.168.1.10": {defaultGroupName},
 		"192.168.1.11": {defaultGroupName},

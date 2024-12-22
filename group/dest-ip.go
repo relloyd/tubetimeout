@@ -2,7 +2,6 @@ package group
 
 import (
 	"context"
-	"log"
 	"maps"
 	"net"
 	"sync"
@@ -10,6 +9,7 @@ import (
 
 	"example.com/tubetimeout/config"
 	"example.com/tubetimeout/models"
+	"go.uber.org/zap"
 )
 
 type FuncGroupDomainsLoader func() (models.MapGroupDomains, error)
@@ -29,6 +29,7 @@ type DestDomainGroupsReceiver interface {
 }
 
 type DomainWatcher struct {
+	logger                    *zap.SugaredLogger
 	mu                        sync.RWMutex // TODO: tidy up use of locks on maps that don't need them; make locks consistent.
 	interval                  time.Duration
 	resolver                  resolver
@@ -41,7 +42,7 @@ type DomainWatcher struct {
 	destDomainGroupsReceivers []DestDomainGroupsReceiver
 }
 
-type resolver func(d []models.Domain) models.MapIpDomain
+type resolver func(logger *zap.SugaredLogger, d []models.Domain) models.MapIpDomain
 
 type ipDomain struct {
 	ip     models.Ip
@@ -70,8 +71,9 @@ func (dw *DomainWatcher) RegisterDestDomainGroupReceivers(receivers ...DestDomai
 	dw.destDomainGroupsReceivers = append(dw.destDomainGroupsReceivers, receivers...)
 }
 
-func NewDomainWatcher() *DomainWatcher {
+func NewDomainWatcher(logger *zap.SugaredLogger) *DomainWatcher {
 	return &DomainWatcher{
+		logger: logger,
 		mu:                        sync.RWMutex{},
 		interval:                  defaultInterval,
 		resolver:                  resolveDomains,
@@ -91,7 +93,7 @@ func (dw *DomainWatcher) Start(ctx context.Context) {
 	dw.loadGroupDomains()
 	// Collect all IPs for all domains in all groups.
 	for _, domains := range dw.groupDomains { // for each domain in each group...
-		m := dw.resolver(domains)
+		m := dw.resolver(dw.logger, domains)
 		maps.Copy(dw.destIpDomains.Data, m)
 	}
 	dw.generateIPToGroups()
@@ -109,7 +111,7 @@ func (dw *DomainWatcher) Start(ctx context.Context) {
 				dw.loadGroupDomains()
 				// Collect all IPs for all domains in all groups.
 				for _, domains := range dw.groupDomains {
-					m := dw.resolver(domains)
+					m := dw.resolver(dw.logger, domains)
 					maps.Copy(dw.destIpDomains.Data, m)
 				}
 				dw.generateIPToGroups()
@@ -123,7 +125,7 @@ func (dw *DomainWatcher) loadGroupDomains() {
 	var err error
 	dw.groupDomains, err = groupDomainLoaderFunc()
 	if err != nil {
-		log.Fatalf("Error loading group domain YAML: %v\n", err)
+		dw.logger.Fatalf("Error loading group domain YAML: %v\n", err)
 	}
 
 	// Setup DomainGroups.
@@ -195,13 +197,13 @@ func (dw *DomainWatcher) notifyReceivers() {
 	}
 }
 
-func resolveDomains(domains []models.Domain) models.MapIpDomain {
+func resolveDomains(logger *zap.SugaredLogger, domains []models.Domain) models.MapIpDomain {
 	var allIPs []ipDomain
 
 	for _, domain := range domains {
 		ips, err := resolveOneDomain(domain)
 		if err != nil {
-			log.Printf("Failed to resolve %s: %v\n", domain, err)
+			logger.Infof("Failed to resolve %s: %v\n", domain, err)
 			continue
 		}
 		for _, ip := range ips {
@@ -209,7 +211,7 @@ func resolveDomains(domains []models.Domain) models.MapIpDomain {
 		}
 	}
 
-	log.Printf("Resolved domains")
+	logger.Info("Resolved domains")
 
 	// Remove duplicates.
 	mid := make(models.MapIpDomain)

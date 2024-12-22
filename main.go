@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,6 +17,7 @@ import (
 	"example.com/tubetimeout/proxy"
 	"example.com/tubetimeout/usage"
 	"github.com/kelseyhightower/envconfig"
+	"go.uber.org/zap"
 )
 
 // Functionality:
@@ -38,18 +38,18 @@ import (
 
 type cleanupFunc func() error
 
-func handleDebugging(appCfg *config.AppConfig) {
-	if appCfg.DebugConfig.DebugEnabled {
+func handleDebugging(logger *zap.SugaredLogger, appCfg *config.DebugConfig) {
+	if appCfg.DebugEnabled {
 		// Allow debug connection timeout.
-		tc := time.After(appCfg.DebugConfig.DebugTime)
+		tc := time.After(appCfg.DebugTime)
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT)
-		log.Println("Waiting for debug time or CTRL-C signal...")
+		logger.Info("Waiting for debug time or CTRL-C signal...")
 		select {
 		case <-tc:
-			log.Println("Debug time is up; continuing...")
+			logger.Info("Debug time is up; continuing...")
 		case <-sigs:
-			log.Println("Signal received, continuing...")
+			logger.Info("Signal received, continuing...")
 		}
 		time.Sleep(1 * time.Second) // allow more time for debugger/dlv to attach 🤷‍♂️
 	}
@@ -59,58 +59,65 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Setup logger.
+	logger := config.MustGetLogger()
+	defer func(logger *zap.SugaredLogger) {
+		_ = logger.Sync()
+	}(logger)
+
+	// Cleanup functions.
 	var cleanupFuncs []cleanupFunc
 
 	// Load app config from the environment.
 	var appCfg config.AppConfig
 	err := envconfig.Process("", &appCfg)
 	if err != nil {
-		log.Fatalln("failed to process app config:", err)
+		logger.Fatalln("failed to process app config:", err)
 	}
 
-	handleDebugging(&appCfg)
+	handleDebugging(logger, &appCfg.DebugConfig)
 
 	// NFT rules to send traffic to NFQueue.
 	// There won't be any NFT rules until dest IPs are supplied by manager callbacks.
-	rules, err := nft.NewNFTRules(&appCfg.FilterConfig)
+	rules, err := nft.NewNFTRules(logger, &appCfg.FilterConfig)
 	if err != nil {
-		log.Fatalln("Failed to setup nft rules:", err)
+		logger.Fatal("Failed to setup nft rules:", err)
 	}
-	log.Println("NFTables rules created")
+	logger.Info("NFTables rules created")
 
 	// Usage tracker.
 	t, err := usage.NewTracker(ctx, &appCfg.TrackerConfig)
 	if err != nil {
-		log.Fatalln("Failed to setup usage tracker:", err)
+		logger.Fatalln("Failed to setup usage tracker:", err)
 	}
-	log.Println("Usage tracker created")
+	logger.Info("Usage tracker created")
 
 	// Group manager.
 	mgr := group.NewManager()
-	log.Println("Group manager created")
+	logger.Info("Group manager created")
 
 	// Sources.
-	w := group.NewNetWatcher()
+	w := group.NewNetWatcher(logger)
 	w.RegisterSourceIpGroupsReceivers(mgr)
 	w.RegisterSourceIpGroupsReceivers(rules)
 	w.Start(ctx)
-	log.Println("Sources mapped")
+	logger.Info("Sources mapped")
 
 	// Destinations.
-	dw := group.NewDomainWatcher()
+	dw := group.NewDomainWatcher(logger)
 	dw.RegisterDestIpGroupReceivers(mgr)
 	dw.RegisterDestIpDomainReceivers(mgr)
 	dw.RegisterDestDomainGroupReceivers(mgr)
 	dw.RegisterDestIpDomainReceivers(rules)
 	dw.Start(ctx)
-	log.Println("Destinations mapped")
+	logger.Info("Destinations mapped")
 
 	// NFQueue to listen to and track packets in user space.
-	q, err := nfq.NewNFQueueFilter(ctx, appCfg, t, mgr)
+	q, err := nfq.NewNFQueueFilter(ctx, logger, &appCfg.FilterConfig, t, mgr)
 	if err != nil {
-		log.Fatalln("Failed to setup NFQueue filter:", err)
+		logger.Fatalln("Failed to setup NFQueue filter:", err)
 	}
-	log.Println("NFQueue listener started")
+	logger.Info("NFQueue listener started")
 
 	// Cleanup functions.
 	cleanupFuncs = append(cleanupFuncs, func() error {
@@ -128,14 +135,14 @@ func main() {
 
 	// Proxy server start.
 	if appCfg.ProxyConfig.ProxyEnabled {
-		s := proxy.NewServer(mgr, t)
+		s := proxy.NewServer(logger, mgr, t)
 		go func() {
 			if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				log.Fatalln("Error starting proxy server:", err)
+				logger.Fatalln("Error starting proxy server:", err)
 			}
-			log.Println("Proxy server quit")
+			logger.Info("Proxy server quit")
 		}()
-		log.Println("Proxy server started")
+		logger.Info("Proxy server started")
 
 		cleanupFuncs = append(cleanupFuncs, func() error {
 			// Shutdown the proxy server.
@@ -152,13 +159,13 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	<-sigs
-	log.Printf("\nSignal received, shutting down...\n")
+	logger.Info("Signal received, shutting down...")
 
 	// Cleanup and exit.
 	failure := false
 	for _, f := range cleanupFuncs {
 		if err := f(); err != nil {
-			log.Printf("Error during cleanup: %v", err)
+			logger.Info("Error during cleanup: %v", err)
 			failure = true
 		}
 	}
