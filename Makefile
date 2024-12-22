@@ -1,4 +1,4 @@
-.PHONY: test build sync debug docker run-docker install
+.PHONY: test build build-release install sync debug docker run-docker install-daemon logs
 
 default: build
 
@@ -19,24 +19,36 @@ build:
 build-release: test
 	go build -ldflags "-s -w" -gcflags "all=-trimpath=$(pwd)" -o $(APP_SHORT) .
 
-sync:
-	rsync -auv --delete-after --exclude=.git ./ root@tubetimeout:tubetimeout/
-
-debug: build
-	DEBUG_ENABLED=true dlv exec --headless --continue --accept-multiclient --listen=:56268 --api-version=2 $(APP_SHORT)
-#	dlv exec --accept-multiclient --listen=:56268 --api-version=2 $(APP_SHORT)
-
-debug-test:
-	dlv test --headless --listen=:56268 --api-version=2 $(PACKAGE_TO_TEST) -- -test.run=$(FUNC_TO_TEST)
-
-docker:
-	docker build -t ubuntu-nftables-go .
-
-run-docker:
-	docker run -it --rm --cap-add=NET_ADMIN --cap-add=NET_RAW ubuntu-nftables-go
-
 install: build-release
 	@echo "Installing $(APP) with timestamp $(INSTALL_TIMESTAMP)..."
 	install -m 0755 $(APP_SHORT) $(INSTALL_DEST)/$(APP)-$(INSTALL_TIMESTAMP)
 	ln -sf $(INSTALL_DEST)/$(APP)-$(INSTALL_TIMESTAMP) $(INSTALL_DEST)/tt
 	@echo "Installation complete!"
+
+sync:
+	rsync -auv --delete-after --exclude=.git ./ root@tubetimeout:tubetimeout/
+
+debug: build
+	DEBUG_ENABLED=true dlv exec --headless --continue --accept-multiclient --listen=:56268 --api-version=2 $(APP_SHORT)
+	#	dlv exec --accept-multiclient --listen=:56268 --api-version=2 $(APP_SHORT)
+
+debug-test:
+	dlv test --headless --listen=:56268 --api-version=2 $(PACKAGE_TO_TEST) -- -test.run=$(FUNC_TO_TEST)
+
+docker:
+	# Build docker image for local testing of nftables which is not available on MacOS
+	docker build -t ubuntu-nftables-go .
+
+run-docker:
+	# Run docker container with nftables capabilities
+	docker run -it --rm --cap-add=NET_ADMIN --cap-add=NET_RAW ubuntu-nftables-go
+
+install-daemon:
+	cp -p tubetimeout.service /etc/systemd/system/
+	systemctl daemon-reload
+	systemctl enable tubetimeout
+	systemctl start tubetimeout
+	systemctl status tubetimeout
+
+logs:
+	journalctl -u tubetimeout.service -f

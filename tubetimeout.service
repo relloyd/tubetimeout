@@ -1,0 +1,13 @@
+[Unit]
+Description=tubetimeout
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/tt --your-flags
+WorkingDirectory=/root
+Restart=always
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
