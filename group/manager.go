@@ -12,10 +12,6 @@ var (
 	managerModeMatchAllSourceIps = false
 )
 
-type ManagerI interface {
-	IsSrcIpDestDomainKnown(ip models.Ip, domain models.Domain) ([]models.Group, bool)
-}
-
 type Manager struct {
 	logger           *zap.SugaredLogger
 	sourceIpGroups   models.IpGroups

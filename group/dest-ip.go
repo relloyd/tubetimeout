@@ -96,8 +96,12 @@ func (dw *DomainWatcher) Start(ctx context.Context) {
 		m := dw.resolver(dw.logger, domains)
 		maps.Copy(dw.destIpDomains.Data, m)
 	}
-	dw.generateIPToGroups()
-	dw.notifyReceivers()
+
+	fn := func() {
+		dw.generateIPToGroups()
+		dw.notifyReceivers()
+	}
+	fn()
 
 	// Periodically resolve.
 	ticker := time.NewTicker(defaultInterval)
@@ -114,13 +118,14 @@ func (dw *DomainWatcher) Start(ctx context.Context) {
 					m := dw.resolver(dw.logger, domains)
 					maps.Copy(dw.destIpDomains.Data, m)
 				}
-				dw.generateIPToGroups()
-				dw.notifyReceivers()
+				fn()
 			}
 		}
 	}()
 }
 
+// TODO: fully replace the domains each time, rather than adding to them and test for this!
+//   only notify if they're new
 func (dw *DomainWatcher) loadGroupDomains() {
 	var err error
 	dw.groupDomains, err = groupDomainLoaderFunc()
@@ -177,6 +182,8 @@ func (dw *DomainWatcher) generateIPToGroups() {
 func (dw *DomainWatcher) notifyReceivers() {
 	dw.mu.RLock()
 	defer dw.mu.RUnlock()
+
+	dw.logger.Infof("Domain watcher notifying receivers of IP domains: %v", dw.destIpDomains.Data)
 	for _, receiver := range dw.destIpDomainReceivers {
 		newData := make(models.MapIpDomain)
 		dw.destIpDomains.Mu.RLock()
@@ -186,6 +193,8 @@ func (dw *DomainWatcher) notifyReceivers() {
 		receiver.UpdateDestIpDomains(newData)
 		dw.destIpDomains.Mu.RUnlock()
 	}
+
+	dw.logger.Infof("Domain watcher notifying receivers of IP groups: %v", dw.destIpGroups.Data)
 	for _, gr := range dw.destIpGroupReceivers {
 		newData := make(models.MapIpGroups)
 		dw.destIpGroups.Mu.RLock()

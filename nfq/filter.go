@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"example.com/tubetimeout/config"
-	"example.com/tubetimeout/group"
 	"example.com/tubetimeout/models"
 	"example.com/tubetimeout/usage"
 	"github.com/florianl/go-nfqueue"
@@ -21,6 +20,10 @@ const (
 	packetDirectionInbound  packetDirection = "inbound"
 )
 
+type ManagerI interface {
+	IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool)
+}
+
 type packetDirection string
 
 type packetIPs struct {
@@ -31,7 +34,7 @@ type packetIPs struct {
 type NFQueueFilter struct {
 	Nfq    *nfqueue.Nfqueue
 	t      *usage.Tracker
-	g      *group.Manager
+	g      ManagerI
 	logger *zap.Logger
 }
 
@@ -40,7 +43,7 @@ type NFQueueFilter struct {
 // Ip addresses for which to perform filtering.
 // If the packets are destined for any of the injected Ips then filtering happens based on
 // <LOGIC-TBC>
-func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *config.FilterConfig, t *usage.Tracker, g *group.Manager) (*NFQueueFilter, error) {
+func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *config.FilterConfig, t *usage.Tracker, g ManagerI) (*NFQueueFilter, error) {
 	var err error
 
 	if cfg.PacketDropPercentage < 0 || cfg.PacketDropPercentage > 1 {

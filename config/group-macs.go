@@ -7,6 +7,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// TODO: allow naming in group mac file or comments?
+
 var (
 	ErrorGroupMacFileNotFound = fmt.Errorf("group-macs file not found")
 	defaultGroupMacFilePath   = "group-macs.yaml"

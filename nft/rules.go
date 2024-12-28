@@ -171,7 +171,7 @@ func NewNFTRules(logger *zap.SugaredLogger, cfg *config.FilterConfig) (*Rules, e
 
 // UpdateDestIpDomains is a callback that saves the supplied Ip addresses and updates the nft rules using them.
 func (q *Rules) UpdateDestIpDomains(newData models.MapIpDomain) {
-	q.logger.Infof("NFT callback with new destination IPs: %v", newData)
+	q.logger.Debugf("NFT callback with new destination IPs: %v", newData)
 
 	// Convert to set elements and save.
 	discarded := 0
@@ -202,7 +202,7 @@ func (q *Rules) UpdateDestIpDomains(newData models.MapIpDomain) {
 
 // UpdateSourceIpGroups is a callback that saves the supplied Ip addresses and updates the nft rules using them.
 func (q *Rules) UpdateSourceIpGroups(newData models.MapIpGroups) {
-	q.logger.Infof("NFT callback with new source IPs: %v", newData)
+	q.logger.Debugf("NFT callback with new source IPs: %v", newData)
 
 	// Convert to set elements and save.
 	discarded := 0

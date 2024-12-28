@@ -12,7 +12,7 @@ import (
 
 var (
 	defaultGroupDomainsFilePath = "group-domains.yaml"
-	defaultGroupDomains         = models.MapGroupDomains{"youtube": {"www.youtube.com", "youtube.com", "googlevideo.com"}}
+	defaultGroupDomains         = models.MapGroupDomains{"youtube": {"www.youtube.com", "youtube.com", "googlevideo.com", "youtu.be"}}
 	groupDomainsFileUpdated     = false
 )
 

@@ -94,6 +94,7 @@ func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.Trac
 	return t, nil
 }
 
+// TODO: only save samples if there are changes to the samples.
 func saveSamplesPeriodically(ctx context.Context, logger *zap.SugaredLogger, devicesToSave *sync.Map, filePath string, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	fn := func() {

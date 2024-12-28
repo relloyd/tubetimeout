@@ -59,8 +59,8 @@ type SourceIpGroupsReceiver interface {
 type NetWatcher struct {
 	logger         *zap.SugaredLogger
 	sourceIpGroups models.MapIpGroups
-	callbacks      []SourceIpGroupsReceiver
-	mutex          sync.RWMutex
+	callbacks []SourceIpGroupsReceiver
+	mu        sync.Mutex
 }
 
 // NewNetWatcher creates a new NetWatcher instance
@@ -74,8 +74,8 @@ func NewNetWatcher(logger *zap.SugaredLogger) *NetWatcher {
 
 // RegisterSourceIpGroupsReceivers registers a callback to be called on updates
 func (nw *NetWatcher) RegisterSourceIpGroupsReceivers(receivers ...SourceIpGroupsReceiver) {
-	nw.mutex.Lock()
-	defer nw.mutex.Unlock()
+	nw.mu.Lock()
+	defer nw.mu.Unlock()
 	nw.callbacks = append(nw.callbacks, receivers...)
 }
 
@@ -97,6 +97,7 @@ func (nw *NetWatcher) Start(ctx context.Context) {
 	}()
 }
 
+// TODO: stop always notifying everyone when in managerModeMatchAllSourceIps mode.
 func scanNetworkAndSaveResults(nw *NetWatcher) {
 	// Perform ARP scan and get updated map
 	newMapIpGroups := scanNetwork(nw.logger, ARPCmd) // Empty map returned if no groups are set up.
@@ -104,16 +105,16 @@ func scanNetworkAndSaveResults(nw *NetWatcher) {
 	nw.logger.Debugf("ARP scan results: %v", newMapIpGroups)
 
 	// Compare with existing data
-	nw.mutex.Lock()
-	defer nw.mutex.Unlock()
+	nw.mu.Lock()
+	defer nw.mu.Unlock()
 
 	// TODO: return all IPs if there is an error loading the YAML data.
 	if managerModeMatchAllSourceIps || !maps.EqualFunc(nw.sourceIpGroups, newMapIpGroups, func(m1 []models.Group, m2 []models.Group) bool {
 		return slices.Equal(m1, m2)
 	}) { // if there is new arp data or if we are defaulting to all source IPs...
-		// TODO: stop always notifying everyone when in managerModeMatchAllSourceIps mode.
-		nw.sourceIpGroups = newMapIpGroups
 		// Send IpGroups to all registered callbacks.
+		nw.logger.Infof("ARP scan detected changes in source IPs: %v", newMapIpGroups)
+		nw.sourceIpGroups = newMapIpGroups
 		for _, cb := range nw.callbacks {
 			cb.UpdateSourceIpGroups(newMapIpGroups)
 		}

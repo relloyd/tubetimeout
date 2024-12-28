@@ -27,13 +27,6 @@ import (
 //   DOES STUFF
 //     NFT rules  - add NFT rules to capture traffic going to a set of dest IP addresses
 //     NFQueue    - inspect packets in user space (relies on NFT rules to receive them)
-//
-// TODO: blocking doesn't work by running mitm attacks for my RPi
-//
-// TODO: implement another filter for return/incoming traffic from YouTube
-//       do rate limiting
-
-// TODO: notify if another device hits youtube not via the proxy
 
 type cleanupFunc func() error
 
@@ -97,9 +90,9 @@ func main() {
 
 	// Destinations.
 	dw := group.NewDomainWatcher(logger)
+	dw.RegisterDestDomainGroupReceivers(mgr)
 	dw.RegisterDestIpGroupReceivers(mgr)
 	dw.RegisterDestIpDomainReceivers(mgr)
-	dw.RegisterDestDomainGroupReceivers(mgr)
 	dw.RegisterDestIpDomainReceivers(rules)
 	dw.Start(ctx)
 	logger.Info("Destinations mapped")
