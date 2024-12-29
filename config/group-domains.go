@@ -2,24 +2,39 @@ package config
 
 import (
 	"bufio"
+	"embed"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"os"
 	"strings"
 
 	"example.com/tubetimeout/models"
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
 var (
-	defaultGroupDomainsFilePath = "group-domains.yaml"
-	defaultYouTubeGroupName     = models.Group("youtube")
-	defaultGroupDomains         = models.MapGroupDomains{defaultYouTubeGroupName: {"www.youtube.com", "youtube.com", "googlevideo.com", "youtu.be"}}
-	groupDomainsFileUpdated     = false
-	youtubeDomainsURL           = "https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/youtubeparsed"
+	defaultGroupDomainsFilePath            = "group-domains.yaml"
+	defaultYouTubeGroupName                = models.Group("youtube")
+	defaultGroupDomains                    = models.MapGroupDomains{defaultYouTubeGroupName: {"www.youtube.com", "youtube.com", "googlevideo.com", "youtu.be"}}
+	groupDomainsFileUpdated                = false
+	youtubeDomainsURL                      = "https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/youtubeparsed"
+	youtubeDomainsFile                     = "youtube-domains.txt"
+	httpClient                  HTTPClient = &http.Client{} // Default HTTP client, can be replaced for testing
 )
+
+// HTTPClient interface for mocking
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// Embed the local file into the binary at compile time
+//
+//go:embed youtube-domains.txt
+var embeddedFile embed.FS
 
 // GroupDomainsConfig represents the YAML structure
 type GroupDomainsConfig struct {
@@ -58,21 +73,48 @@ func LoadGroupDomains() (models.MapGroupDomains, error) {
 }
 
 // FetchYouTubeDomains retrieves the list of domains from the specified URL.
-// TODO: test FetchYouTubeDomains()
-// TODO: use a local copy of the domains file if we can't fetch it and log an error.
-func FetchYouTubeDomains() (models.MapGroupDomains, error) {
-	resp, err := http.Get(youtubeDomainsURL)
+func FetchYouTubeDomains(logger *zap.SugaredLogger) (models.MapGroupDomains, error) {
+	// Create HTTP request
+	req, err := http.NewRequest(http.MethodGet, youtubeDomainsURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch domains: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	defer resp.Body.Close()
 
+	// Perform HTTP request using the package-level client
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		logger.Errorf("Failed to fetch domains from URL: %v. Falling back to embedded file.", err)
+		return fetchDomainsFromEmbeddedFile()
+	}
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
+
+	return parseDomains(resp.Body)
+}
+
+// fetchDomainsFromEmbeddedFile reads the embedded file contents
+func fetchDomainsFromEmbeddedFile() (models.MapGroupDomains, error) {
+	file, err := embeddedFile.Open(youtubeDomainsFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open embedded file: %w", err)
+	}
+	defer func(file fs.File) {
+		_ = file.Close()
+	}(file)
+
+	return parseDomains(file)
+}
+
+// parseDomains parses domain names from an io.Reader source
+// TODO: consider rejecting invalid domains/urls
+func parseDomains(reader io.Reader) (models.MapGroupDomains, error) {
 	var domains []models.Domain
-	scanner := bufio.NewScanner(resp.Body)
+	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		// Skip comments and empty lines
-		if line == "" || strings.HasPrefix(line, "#") {
+		if line == "" || strings.HasPrefix(line, "#") || strings.Contains(line, " ") {
 			continue
 		}
 		domains = append(domains, models.Domain(line))

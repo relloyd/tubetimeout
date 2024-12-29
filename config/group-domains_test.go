@@ -1,11 +1,16 @@
 package config
 
 import (
+	"bytes"
+	"errors"
+	"io"
+	"net/http"
 	"os"
 	"slices"
 	"testing"
 
 	"example.com/tubetimeout/models"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestLoadGroupDomains tests the LoadGroupDomains function
@@ -93,6 +98,99 @@ func equalGroupDomains(a, b models.MapGroupDomains) bool {
 	for key, val := range a {
 		if bVal, exists := b[key]; !exists || !slices.Equal(val, bVal) {
 			return false
+		}
+	}
+	return true
+}
+
+// Mock HTTP client for testing
+type mockHTTPClient struct {
+	responseBody string
+	statusCode   int
+	err          error
+}
+
+func (m *mockHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return &http.Response{
+		StatusCode: m.statusCode,
+		Body:       io.NopCloser(bytes.NewBufferString(m.responseBody)),
+	}, nil
+}
+
+// Test for successful fetch from remote URL
+func TestFetchYouTubeDomains_RemoteSuccess(t *testing.T) {
+	// Override httpClient with mock client
+	httpClient = &mockHTTPClient{
+		responseBody: "youtube.com\ngooglevideo.com\n# comment\n\nytimg.com",
+		statusCode:   http.StatusOK,
+	}
+
+	got, err := FetchYouTubeDomains(MustGetLogger())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := models.MapGroupDomains{
+		defaultYouTubeGroupName: []models.Domain{"youtube.com", "googlevideo.com", "ytimg.com"},
+	}
+	if !compareDomains(got, expected) {
+		t.Errorf("expected %v, got %v", expected, got)
+	}
+}
+
+// Test for fallback to embedded file
+func TestFetchYouTubeDomains_FallbackToEmbedded(t *testing.T) {
+	// Override httpClient with mock client simulating a network error
+	httpClient = &mockHTTPClient{
+		err: errors.New("network error"),
+	}
+
+	got, err := FetchYouTubeDomains(MustGetLogger())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Ensure fallback uses the embedded file
+	expected, err := fetchDomainsFromEmbeddedFile()
+	assert.NoError(t, err, "fetchDomainsFromEmbeddedFile() error = %v", err)
+	if !compareDomains(got, expected) {
+		t.Errorf("expected fallback domains %v, got %v", expected, got)
+	}
+}
+
+// Test parsing invalid domains
+func TestParseDomains_InvalidData(t *testing.T) {
+	data := "valid.com\n# comment\ninvalid domain\nanother-valid.com\n"
+	reader := bytes.NewBufferString(data)
+
+	got, err := parseDomains(reader)
+	assert.NoError(t, err, "parseDomains() error = %v", err)
+
+	expected := models.MapGroupDomains{
+		defaultYouTubeGroupName: []models.Domain{"valid.com", "another-valid.com"},
+	}
+	if !compareDomains(got, expected) {
+		t.Errorf("expected %v, got %v", expected, got)
+	}
+}
+
+// Helper to compare domain maps
+func compareDomains(got, expected models.MapGroupDomains) bool {
+	if len(got) != len(expected) {
+		return false
+	}
+	for key, gotDomains := range got {
+		expectedDomains, ok := expected[key]
+		if !ok || len(gotDomains) != len(expectedDomains) {
+			return false
+		}
+		for i := range gotDomains {
+			if gotDomains[i] != expectedDomains[i] {
+				return false
+			}
 		}
 	}
 	return true

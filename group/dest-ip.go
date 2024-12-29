@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type FuncGroupDomainsLoader func() (models.MapGroupDomains, error)
+type FuncGroupDomainsLoader func(logger *zap.SugaredLogger) (models.MapGroupDomains, error)
 
 var fnGroupDomainLoader = FuncGroupDomainsLoader(config.FetchYouTubeDomains)
 
@@ -123,7 +123,7 @@ func (dw *DomainWatcher) Start(ctx context.Context) {
 //   only notify if they're new
 func (dw *DomainWatcher) loadGroupDomains() {
 	var err error
-	dw.groupDomains, err = fnGroupDomainLoader()
+	dw.groupDomains, err = fnGroupDomainLoader(dw.logger)
 	if err != nil {
 		dw.logger.Fatalf("Error loading group domain YAML: %v\n", err)
 	}
