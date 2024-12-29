@@ -221,7 +221,7 @@ func (t *Tracker) HasExceededThreshold(deviceID string) bool {
 		}
 	}
 
-	t.logger.Debugf("Seen %v count %v", deviceID, count)
+	t.logger.Debugf("Usage tracker has seen %v %vx", deviceID, count)
 
 	return time.Duration(count)*t.granularity >= t.threshold
 }

@@ -56,12 +56,15 @@ type TrackerConfig struct {
 }
 
 type FilterConfig struct {
-	PacketDelayMs        time.Duration `envconfig:"PACKET_DELAY_MS" default:"100ms"`
-	PacketJitterMs       time.Duration `envconfig:"PACKET_DELAY_JITTER_MS" default:"50ms"`
-	PacketDropPercentage float32       `envconfig:"PACKET_DROP_PCT" default:"0.4"`
-	PacketDropUDP        bool          `envconfig:"PACKET_DROP_UDP" default:"true"`
-	OutboundQueueNumber  uint16        `envconfig:"OUTBOUND_QUEUE_NUMBER" default:"100"`
-	InboundQueueNumber   uint16        `envconfig:"INBOUND_QUEUE_NUMBER" default:"101"`
+	// PacketDropPercentage is the percentage of packets to drop.
+	PacketDropPercentage  float32       `envconfig:"PACKET_DROP_PCT" default:"0.30"`
+	// PacketDelayPercentage is the percentage of packets to delay evaluated after dropping.
+	PacketDelayPercentage float32       `envconfig:"PACKET_DELAY_PCT" default:"0.50"`
+	PacketDelayMs         time.Duration `envconfig:"PACKET_DELAY_MS" default:"100ms"`
+	PacketJitterMs        time.Duration `envconfig:"PACKET_DELAY_JITTER_MS" default:"50ms"`
+	PacketDropUDP         bool          `envconfig:"PACKET_DROP_UDP" default:"true"`
+	OutboundQueueNumber   uint16        `envconfig:"OUTBOUND_QUEUE_NUMBER" default:"100"`
+	InboundQueueNumber    uint16        `envconfig:"INBOUND_QUEUE_NUMBER" default:"101"`
 }
 
 type ProxyConfig struct {

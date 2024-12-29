@@ -149,9 +149,11 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 						decision = "drop"
 						verdict = nfqueue.NfDrop
 					} else { // else introduce a delay for the packet and accept...
-						if cfg.PacketDelayMs > 0 {
+						if cfg.PacketDelayMs > 0 && rand.Float32() < cfg.PacketDelayPercentage {
 							decision = "delay"
 							time.Sleep(applyJitter(cfg.PacketDelayMs, cfg.PacketJitterMs)) // Delay the packet
+						} else {
+							decision = "accept"
 						}
 					}
 				} // else accept the packet as the threshold is not exceeded...
