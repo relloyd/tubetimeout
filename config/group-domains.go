@@ -1,10 +1,13 @@
 package config
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"os"
+	"strings"
 
 	"example.com/tubetimeout/models"
 	"gopkg.in/yaml.v3"
@@ -12,8 +15,10 @@ import (
 
 var (
 	defaultGroupDomainsFilePath = "group-domains.yaml"
-	defaultGroupDomains         = models.MapGroupDomains{"youtube": {"www.youtube.com", "youtube.com", "googlevideo.com", "youtu.be"}}
+	defaultYouTubeGroupName     = models.Group("youtube")
+	defaultGroupDomains         = models.MapGroupDomains{defaultYouTubeGroupName: {"www.youtube.com", "youtube.com", "googlevideo.com", "youtu.be"}}
 	groupDomainsFileUpdated     = false
+	youtubeDomainsURL           = "https://raw.githubusercontent.com/nickspaargaren/no-google/master/categories/youtubeparsed"
 )
 
 // GroupDomainsConfig represents the YAML structure
@@ -50,4 +55,30 @@ func LoadGroupDomains() (models.MapGroupDomains, error) {
 	}
 
 	return groupDomains.GroupDomains, nil
+}
+
+// FetchYouTubeDomains retrieves the list of domains from the specified URL.
+// TODO: test FetchYouTubeDomains()
+// TODO: use a local copy of the domains file if we can't fetch it and log an error.
+func FetchYouTubeDomains() (models.MapGroupDomains, error) {
+	resp, err := http.Get(youtubeDomainsURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch domains: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var domains []models.Domain
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		// Skip comments and empty lines
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		domains = append(domains, models.Domain(line))
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("error reading domains: %w", err)
+	}
+	return models.MapGroupDomains{defaultYouTubeGroupName: domains}, nil
 }

@@ -31,9 +31,9 @@ func TestLoadGroupDomains(t *testing.T) {
 	}
 
 	// Set the loader function to the mock
-	originalLoaderFunc := groupDomainLoaderFunc
-	defer func() { groupDomainLoaderFunc = originalLoaderFunc }()
-	groupDomainLoaderFunc = mockLoaderFunc
+	originalLoaderFunc := fnGroupDomainLoader
+	defer func() { fnGroupDomainLoader = originalLoaderFunc }()
+	fnGroupDomainLoader = mockLoaderFunc
 
 	// Initialize a DomainWatcher instance
 	dw := &DomainWatcher{

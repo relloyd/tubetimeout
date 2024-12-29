@@ -70,7 +70,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 	nf, err := nfqueue.Open(&nfqueue.Config{
 		NetNS:        0,
 		NfQueue:      queueNumber,
-		MaxQueueLen:  0xFF,
+		MaxQueueLen:  0xFFFF, // 65535
 		MaxPacketLen: 0xFFFF,
 		Copymode:     nfqueue.NfQnlCopyPacket,
 		Flags:        0,

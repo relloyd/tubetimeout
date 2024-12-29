@@ -106,7 +106,10 @@ func main() {
 
 	// Cleanup functions.
 	cleanupFuncs = append(cleanupFuncs, func() error {
-		cancel() // call cancel before closing NFQ else it will block!
+		// Cancel the NFQ before closing NFQ else it will block!
+		// We probably want to remove the NFT rules before closing the NFQ but NFQ will have packets in flight that it cannot Accept with error: "netlink send: sendmsg: bad file descriptor".
+		// This is good enough:
+		cancel()
 		err = rules.Clean(logger)
 		if err != nil {
 			return fmt.Errorf("error removing NFT rules: %w", err)
