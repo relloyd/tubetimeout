@@ -16,6 +16,7 @@ import (
 	"example.com/tubetimeout/nft"
 	"example.com/tubetimeout/proxy"
 	"example.com/tubetimeout/usage"
+	"example.com/tubetimeout/web"
 	"go.uber.org/zap"
 )
 
@@ -138,6 +139,28 @@ func main() {
 			defer cancelSrv()
 			if err = s.Shutdown(ctxSrv); err != nil {
 				return fmt.Errorf("error shutting down proxy server: %w", err)
+			}
+			return nil
+		})
+	}
+
+	if config.AppCfg.WebConfig.WebEnabled {
+		// Web server start.
+		s := web.NewServer()
+		go func() {
+			if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				logger.Fatalln("Error starting web server:", err)
+			}
+			logger.Info("Web server quit")
+		}()
+		logger.Info("Web server started")
+
+		cleanupFuncs = append(cleanupFuncs, func() error {
+			// Shutdown the web server.
+			ctxSrv, cancelSrv := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancelSrv()
+			if err = s.Shutdown(ctxSrv); err != nil {
+				return fmt.Errorf("error shutting down web server: %w", err)
 			}
 			return nil
 		})

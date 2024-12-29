@@ -29,6 +29,7 @@ type AppConfig struct {
 	TrackerConfig TrackerConfig `envconfig:"TRACKER"`
 	FilterConfig  FilterConfig  `envconfig:"FILTER"`
 	ProxyConfig   ProxyConfig   `envconfig:"PROXY"`
+	WebConfig	 WebConfig     `envconfig:"WEB"`
 }
 
 type DebugConfig struct {
@@ -69,4 +70,8 @@ type FilterConfig struct {
 
 type ProxyConfig struct {
 	ProxyEnabled bool `envconfig:"ENABLED" default:"false"`
+}
+
+type WebConfig struct {
+	WebEnabled bool `envconfig:"ENABLED" default:"true"`
 }
