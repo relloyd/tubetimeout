@@ -7,6 +7,7 @@ import (
 	"example.com/tubetimeout/config"
 	"example.com/tubetimeout/models"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
 
 // Mock Receiver for Testing
@@ -23,7 +24,7 @@ func (m *MockDestDomainGroupReceiver) UpdateDestDomainGroups(newGroups models.Ma
 
 func TestLoadGroupDomains(t *testing.T) {
 	// Mock loader function
-	mockLoaderFunc := func() (models.MapGroupDomains, error) {
+	mockLoaderFunc := func(logger *zap.SugaredLogger) (models.MapGroupDomains, error) {
 		return models.MapGroupDomains{
 			"GroupA": {"domain1.com", "domain2.com"},
 			"GroupB": {"domain2.com", "domain3.com"},
