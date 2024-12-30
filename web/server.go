@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +38,8 @@ func NewServer(s TrackerSummariserI) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", h.handler)
 	mux.HandleFunc("/static/", h.staticHandler)
+	mux.HandleFunc("/pause", h.pauseHandler)
+	mux.HandleFunc("/reset", h.resetHandler)
 
 	return &http.Server{
 		Addr:                         ":8081",
@@ -108,4 +111,38 @@ func fileModTime() time.Time {
 		return time.Now()
 	}
 	return t
+}
+
+// pauseHandler is an API endpoint for /pause
+func (h *Handler) pauseHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse duration parameter
+	minutes := r.FormValue("minutes")
+	duration, err := strconv.Atoi(minutes)
+	if err != nil || duration <= 0 {
+		http.Error(w, "Invalid duration", http.StatusBadRequest)
+		return
+	}
+
+	// Simulate some action (you can replace this with actual logic)
+	fmt.Printf("Pause added for %d minutes\n", duration)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(fmt.Sprintf("Paused for %d minutes", duration)))
+}
+
+// resetHandler is an API endpoint for /reset
+func (h *Handler) resetHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Simulate reset action (replace with actual logic)
+	fmt.Println("Reset triggered")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("Reset successful"))
 }

@@ -56,5 +56,43 @@
     </tbody>
   </table>
 </div>
+
+<!-- Buttons Section -->
+<div class="button-container">
+  <!-- Add Button -->
+  <button id="addButton">Add (60 minutes)</button>
+  <!-- Reset Button -->
+  <button id="resetButton">Reset</button>
+</div>
+<div id="statusMessage"></div>
+
+<script>
+    // Function to handle AJAX POST requests
+    async function postData(url, data) {
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                body: new URLSearchParams(data),
+            });
+            const result = await response.text();
+            document.getElementById("statusMessage").innerText = result;
+        } catch (error) {
+            document.getElementById("statusMessage").innerText = "Error: " + error.message;
+        }
+    }
+
+    // Attach event listeners to buttons
+    document.getElementById("addButton").addEventListener("click", () => {
+        postData("/pause", { minutes: "60" });
+    });
+
+    document.getElementById("resetButton").addEventListener("click", () => {
+        postData("/reset", {});
+    });
+</script>
+
 </body>
 </html>
