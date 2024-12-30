@@ -1,4 +1,4 @@
-module example.com/tubetimeout
+module relloyd/tubetimeout
 
 go 1.23.3
 

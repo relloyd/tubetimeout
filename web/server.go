@@ -1,15 +1,26 @@
 package web
 
 import (
+	"embed"
+	"fmt"
+	"html/template"
 	"net/http"
-	"os"
-	"path/filepath"
+	"strings"
 	"time"
+
+	"example.com/tubetimeout/config"
 )
+
+var buildTime string // Will be set at build time
+
+//go:embed static/* templates/*
+var embeddedFiles embed.FS
 
 func NewServer() *http.Server {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", getHandler())
+
+	mux.HandleFunc("/", handler)
+	mux.HandleFunc("/static/", staticHandler)
 
 	return &http.Server{
 		Addr:                         ":8081",
@@ -24,31 +35,43 @@ func NewServer() *http.Server {
 	}
 }
 
-func getHandler() func(w http.ResponseWriter, r *http.Request) {
-	staticDir := "dist"
+func handler(w http.ResponseWriter, r *http.Request) {
+	// Parse the HTML template from the embedded file system
+	tmpl, err := template.ParseFS(embeddedFiles, "templates/index.html")
+	if err != nil {
+		http.Error(w, "Error loading template", http.StatusInternalServerError)
+		return
+	}
 
-	// Create a file server to serve static files
-	fs := http.FileServer(http.Dir(staticDir))
-
-	// Create a custom handler to handle Vue.js SPA fallback
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Only allow GET requests for static files
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		
-		path := filepath.Join(staticDir, r.URL.Path)
-		// Check if the requested file exists
-		if _, err := os.Stat(path); os.IsNotExist(err) || r.URL.Path == "/" || !isFile(path) {
-			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
-			return
-		}
-		fs.ServeHTTP(w, r)
+	// Execute the template with appCfg data
+	tmpl.Option("missingkey=default")
+	err = tmpl.Execute(w, config.AppCfg)
+	if err != nil {
+		http.Error(w, "Error rendering template", http.StatusInternalServerError)
 	}
 }
 
-func isFile(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && !info.IsDir()
+// File server handler for static files
+func staticHandler(w http.ResponseWriter, r *http.Request) {
+	// Extract the requested file path
+	path := strings.TrimPrefix(r.URL.Path, "/static/")
+	data, err := embeddedFiles.ReadFile("static/" + path)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Serve the content with proper headers
+	http.ServeContent(w, r, path, fileModTime(), strings.NewReader(string(data)))
+}
+
+// Mock file modification time (for cache control)
+func fileModTime() time.Time {
+	t, err := time.Parse(time.RFC3339, buildTime)
+	if err != nil {
+		// Fallback to the current time if parsing fails
+		fmt.Println("Error parsing build time:", err)
+		return time.Now()
+	}
+	return t
 }

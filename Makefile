@@ -10,14 +10,16 @@ INSTALL_TIMESTAMP := $(shell date +"%Y%m%dT%H%M%S")
 PACKAGE_TO_TEST=./nft
 FUNC_TO_TEST=Test_New
 
+LD_FLAGS=-ldflags "-X tubetimeout/web.buildTime=$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
 test:
 	go test ./...
 
 build:
-	go build -buildvcs=false -gcflags='all=-N -l' -o $(APP_SHORT) .
+	go build -buildvcs=false -gcflags='all=-N -l' $(LD_FLAGS) -o $(APP_SHORT) .
 
 build-release: test
-	go build -ldflags "-s -w" -gcflags "all=-trimpath=$(pwd)" -o $(APP_SHORT) .
+	go build -ldflags "-s -w" $(LD_FLAGS) -gcflags "all=-trimpath=$(pwd)" -o $(APP_SHORT) .
 
 install: build-release
 	@echo "Installing $(APP) with timestamp $(INSTALL_TIMESTAMP)..."
