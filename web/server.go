@@ -17,12 +17,13 @@ import (
 var embeddedFiles embed.FS
 
 type TemplateData struct {
-	Config       config.AppConfig
-	BuildTime    string
-	UsageMinutes int
-	NextReset    time.Time
-	UsagePct     int
-	PausedUntil  time.Time
+	BuildTime      string
+	UsagePeriod    string
+	UsageThreshold string
+	UsageMinutes   int
+	UsageNextReset time.Time
+	UsagePercent   int
+	PausedUntil    string
 }
 
 // TrackerInteractorI returns info from the usage tracker.
@@ -68,27 +69,31 @@ func (h *Handler) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Gather data to use in the template.
 	_, nextResetTime := h.usage.CalculateWindow(time.Now())
-
-	sampleSummary := h.usage.GetSampleSummary()
-	usageMinutes := sampleSummary["youtube"]
-
-	usagePct := int(float64(usageMinutes) / float64(config.AppCfg.TrackerConfig.Threshold.Minutes()) * 100)
-	if usagePct > 100 {
-		usagePct = 100
+	usageMinutes := h.usage.GetSampleSummary()["youtube"]
+	usagePercent := int(float64(usageMinutes) / float64(config.AppCfg.TrackerConfig.Threshold.Minutes()) * 100)
+	if usagePercent > 100 {
+		usagePercent = 100
+	}
+	pe := h.usage.GetPauseEndTime()
+	pausedUntil := pe.String()
+	if pe.IsZero() {
+		pausedUntil = ""
 	}
 
+	// Execute the template with config data.
 	td := TemplateData{
-		Config:       config.AppCfg,
-		BuildTime:    config.BuildTime,
-		NextReset:    nextResetTime,
-		UsageMinutes: sampleSummary["youtube"],
-		UsagePct:     usagePct,
-		PausedUntil:  h.usage.GetPauseEndTime(),
+		BuildTime:      config.BuildTime,
+		UsagePeriod:    formatDuration(config.AppCfg.TrackerConfig.Retention),
+		UsageNextReset: nextResetTime,
+		UsageThreshold: formatDuration(config.AppCfg.TrackerConfig.Threshold),
+		UsageMinutes:   usageMinutes,
+		UsagePercent:   usagePercent,
+		PausedUntil:    pausedUntil,
 	}
 
-	// Execute the template with appCfg data
-	tmpl.Option("missingkey=default")
+	tmpl.Option("missingkey=default") // TODO: fix the error when keys are missing.
 	err = tmpl.Execute(w, td)
 	if err != nil {
 		http.Error(w, "Error rendering template", http.StatusInternalServerError)
@@ -156,4 +161,15 @@ func (h *Handler) resetHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("Reset successful"))
+}
+
+// formatDuration converts a time.Duration to a string showing days, hours, and minutes
+func formatDuration(d time.Duration) string {
+	days := d / (24 * time.Hour)
+	d -= days * (24 * time.Hour)
+	hours := d / time.Hour
+	d -= hours * time.Hour
+	minutes := d / time.Minute
+
+	return fmt.Sprintf("%dd %02dh %02dm", days, hours, minutes)
 }

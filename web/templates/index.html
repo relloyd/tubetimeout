@@ -19,44 +19,39 @@
     </thead>
     <tbody>
     <tr>
-      <td>Logging Level</td>
-      <td>{{.Config.LogLevel}}</td>
-      <td>App logging level</td>
-    </tr>
-    <tr>
       <td>Build Time</td>
       <td>{{.BuildTime}}</td>
       <td>App build time</td>
     </tr>
     <tr>
-      <td>Retention Period</td>
-      <td>{{.Config.TrackerConfig.Retention}}</td>
-      <td>The retention period for tracking YouTube usage</td>
+      <td>Usage Tracker Period</td>
+      <td>{{.UsagePeriod}}</td>
+      <td>The period over which YouTube usage is tracked before it is reset</td>
     </tr>
     <tr>
-      <td>Threshold</td>
-      <td>{{.Config.TrackerConfig.Threshold}}</td>
+      <td>Next Usage Reset</td>
+      <td>{{.UsageNextReset}}</td>
+      <td>Time the usage tracker will reset</td>
+    </tr>
+    <tr>
+      <td>Block Threshold</td>
+      <td>{{.UsageThreshold}}</td>
       <td>The number of usage minutes to allow this period before blocking kicks in</td>
     </tr>
     <tr>
-      <td>Usage Minutes</td>
+      <td>Current Usage</td>
       <td>{{.UsageMinutes}}</td>
       <td>Minutes of usage consumed so far this period</td>
     </tr>
     <tr>
-      <td>Usage Percentage</td>
-      <td>{{.UsagePct}}</td>
+      <td>Current Usage Percentage</td>
+      <td>{{.UsagePercent}}</td>
       <td>Percentage of usage consumed so far this period</td>
     </tr>
     <tr>
-      <td>Next Usage Reset</td>
-      <td>{{.NextReset}}</td>
-      <td>Time the usage tracker will reset</td>
-    </tr>
-    <tr>
-      <td>Usage Paused Until</td>
+      <td>Pause</td>
       <td>{{.PausedUntil}}</td>
-      <td>Time the pause for the usage tracker will end</td>
+      <td>If paused, the time the usage tracker will resume</td>
     </tr>
     </tbody>
   </table>
@@ -65,7 +60,7 @@
 <!-- Buttons Section -->
 <div class="button-container">
   <!-- Add Button -->
-  <button id="addButton">Add (60 minutes)</button>
+  <button id="addButton">Pause (60 minutes)</button>
   <!-- Reset Button -->
   <button id="resetButton">Reset</button>
 </div>
