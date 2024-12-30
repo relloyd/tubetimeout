@@ -77,9 +77,9 @@ func (h *Handler) handler(w http.ResponseWriter, r *http.Request) {
 		usagePercent = 100
 	}
 	pe := h.usage.GetPauseEndTime()
-	pausedUntil := pe.String()
+	pausedUntil := pe.Format(time.RFC1123) // RFC1123 = "Mon, 02 Jan 2006 15:04:05 MST"
 	if pe.IsZero() {
-		pausedUntil = ""
+		pausedUntil = "-"
 	}
 
 	// Execute the template with config data.
