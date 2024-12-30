@@ -45,11 +45,12 @@ type Tracker struct {
 	windowStartTime time.Duration
 	sampleSize      int              // The number of slots in the circular buffer
 	nowFunc         func() time.Time // Function to get the current time (defaults to time.Now)
+	pauseEndTime    time.Time        // The time when the pause ends
+	mu              *sync.Mutex
 }
 
 // NewTracker initializes a Tracker with preallocated slices for each device.
 func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.TrackerConfig) (*Tracker, error) {
-
 	sampleSize := int(cfg.Retention / cfg.Granularity)
 
 	if cfg.Retention > 7*24*time.Hour {
@@ -75,6 +76,7 @@ func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.Trac
 		windowStartDay:  cfg.StartDay,
 		windowStartTime: cfg.StartTime,
 		nowFunc:         time.Now, // Default to time.Now
+		mu:              &sync.Mutex{},
 	}
 
 	// Load & save existing sample data.
@@ -202,6 +204,11 @@ func (t *Tracker) AddSample(id string) {
 
 // HasExceededThreshold checks if a device has exceeded the threshold duration.
 func (t *Tracker) HasExceededThreshold(deviceID string) bool {
+	if t.pauseEndTime.After(time.Now()) {  // if the tracker is paused...
+		// TODO: add test for HasExceededThreshold() when tracker is paused
+		return false
+	}
+
 	data, ok := t.devices.Load(deviceID)
 	if !ok {
 		return false
@@ -315,4 +322,23 @@ func (t *Tracker) GetSampleSummary() map[string]int {
 		return true
 	})
 	return samples
+}
+
+func (t *Tracker) SetPause(d time.Duration) {
+	pauseEnd := time.Now().Add(d)
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.pauseEndTime = pauseEnd
+}
+
+func (t *Tracker) GetPauseEndTime() time.Time {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.pauseEndTime
+}
+
+func (t *Tracker) RemovePause() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.pauseEndTime = time.Time{}
 }

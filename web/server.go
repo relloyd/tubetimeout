@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
 )
 
@@ -21,20 +22,25 @@ type TemplateData struct {
 	UsageMinutes int
 	NextReset    time.Time
 	UsagePct     int
+	PausedUntil  time.Time
 }
 
-// TrackerSummariserI returns info from the usage tracker.
-type TrackerSummariserI interface {
+// TrackerInteractorI returns info from the usage tracker.
+type TrackerInteractorI interface {
 	GetSampleSummary() map[string]int
 	CalculateWindow(now time.Time) (time.Time, time.Time)
+	RemovePause()
+	SetPause(d time.Duration)
+	GetPauseEndTime() time.Time
 }
 
 type Handler struct {
-	Usage TrackerSummariserI
+	logger *zap.SugaredLogger
+	usage  TrackerInteractorI
 }
 
-func NewServer(s TrackerSummariserI) *http.Server {
-	h := Handler{Usage: s}
+func NewServer(logger *zap.SugaredLogger, s TrackerInteractorI) *http.Server {
+	h := Handler{logger: logger, usage: s}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", h.handler)
 	mux.HandleFunc("/static/", h.staticHandler)
@@ -62,9 +68,9 @@ func (h *Handler) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, nextResetTime := h.Usage.CalculateWindow(time.Now())
+	_, nextResetTime := h.usage.CalculateWindow(time.Now())
 
-	sampleSummary := h.Usage.GetSampleSummary()
+	sampleSummary := h.usage.GetSampleSummary()
 	usageMinutes := sampleSummary["youtube"]
 
 	usagePct := int(float64(usageMinutes) / float64(config.AppCfg.TrackerConfig.Threshold.Minutes()) * 100)
@@ -78,6 +84,7 @@ func (h *Handler) handler(w http.ResponseWriter, r *http.Request) {
 		NextReset:    nextResetTime,
 		UsageMinutes: sampleSummary["youtube"],
 		UsagePct:     usagePct,
+		PausedUntil:  h.usage.GetPauseEndTime(),
 	}
 
 	// Execute the template with appCfg data
@@ -128,8 +135,10 @@ func (h *Handler) pauseHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Simulate some action (you can replace this with actual logic)
-	fmt.Printf("Pause added for %d minutes\n", duration)
+	// Add a pause to the usage tracker.
+	h.logger.Info("Usage tracker paused for %d minutes\n", duration)
+	h.usage.SetPause(time.Duration(duration) * time.Minute)
+
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(fmt.Sprintf("Paused for %d minutes", duration)))
 }
@@ -141,8 +150,10 @@ func (h *Handler) resetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Simulate reset action (replace with actual logic)
-	fmt.Println("Reset triggered")
+	// Reset the usage tracker pause timer.
+	h.logger.Info("Pause timer reset triggered")
+	h.usage.RemovePause()
+
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("Reset successful"))
 }

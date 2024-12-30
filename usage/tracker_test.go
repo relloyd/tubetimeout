@@ -55,6 +55,7 @@ func TestNewTracker(t *testing.T) {
 	assert.Equal(t, cfg.Granularity, tracker.granularity, "NewTracker did not set granularity")
 	assert.Equal(t, cfg.Threshold, tracker.threshold, "NewTracker did not set threshold")
 	assert.NotNil(t, tracker.nowFunc, "NewTracker did not set a default nowFunc")
+	assert.NotNil(t, tracker.mu, "NewTracker did not setup the mutex")
 
 	// Test that the tracker loads the same samples that we saved.
 	devices.Range(func(key, value interface{}) bool {
