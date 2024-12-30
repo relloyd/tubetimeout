@@ -80,9 +80,9 @@ func (nw *NetWatcher) RegisterSourceIpGroupsReceivers(receivers ...SourceIpGroup
 }
 
 // Start begins the periodic ARP scanning process and supports cancellation using context
-// TODO: add a test to check that scanNetworkAndSaveResults is called immediately and repeatedly.
+// TODO: add a test to check that scanNetworkAndNotify is called immediately and repeatedly.
 func (nw *NetWatcher) Start(ctx context.Context) {
-	scanNetworkAndSaveResults(nw)
+	scanNetworkAndNotify(nw)
 	ticker := time.NewTicker(1 * time.Minute)
 	go func() {
 		for {
@@ -91,14 +91,14 @@ func (nw *NetWatcher) Start(ctx context.Context) {
 				ticker.Stop()
 				return
 			case <-ticker.C:
-				scanNetworkAndSaveResults(nw)
+				scanNetworkAndNotify(nw)
 			}
 		}
 	}()
 }
 
 // TODO: stop always notifying everyone when in managerModeMatchAllSourceIps mode.
-func scanNetworkAndSaveResults(nw *NetWatcher) {
+func scanNetworkAndNotify(nw *NetWatcher) {
 	// Perform ARP scan and get updated map
 	newMapIpGroups := scanNetwork(nw.logger, ARPCmd) // Empty map returned if no groups are set up.
 
