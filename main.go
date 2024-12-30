@@ -10,14 +10,14 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/tubetimeout/config"
-	"example.com/tubetimeout/group"
-	"example.com/tubetimeout/nfq"
-	"example.com/tubetimeout/nft"
-	"example.com/tubetimeout/proxy"
-	"example.com/tubetimeout/usage"
-	"example.com/tubetimeout/web"
 	"go.uber.org/zap"
+	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/group"
+	"relloyd/tubetimeout/nfq"
+	"relloyd/tubetimeout/nft"
+	"relloyd/tubetimeout/proxy"
+	"relloyd/tubetimeout/usage"
+	"relloyd/tubetimeout/web"
 )
 
 // Functionality:

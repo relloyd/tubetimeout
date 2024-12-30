@@ -4,10 +4,10 @@ import (
 	"sync"
 	"testing"
 
-	"example.com/tubetimeout/config"
-	"example.com/tubetimeout/models"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
+	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
 )
 
 // Mock Receiver for Testing

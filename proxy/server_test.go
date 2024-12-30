@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"example.com/tubetimeout/config"
-	"example.com/tubetimeout/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
 )
 
 // AI generated test for function "createBlockedResponse"

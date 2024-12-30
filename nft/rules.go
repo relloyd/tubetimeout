@@ -7,11 +7,11 @@ import (
 	"os"
 	"sync"
 
-	"example.com/tubetimeout/config"
-	"example.com/tubetimeout/models"
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
 	"go.uber.org/zap"
+	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
 )
 
 func init() {

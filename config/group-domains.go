@@ -11,9 +11,9 @@ import (
 	"os"
 	"strings"
 
-	"example.com/tubetimeout/models"
 	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
+	"relloyd/tubetimeout/models"
 )
 
 var (

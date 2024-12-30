@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"example.com/tubetimeout/config"
-	"example.com/tubetimeout/models"
 	"go.uber.org/zap"
+	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
 )
 
 const (
@@ -59,8 +59,8 @@ type SourceIpGroupsReceiver interface {
 type NetWatcher struct {
 	logger         *zap.SugaredLogger
 	sourceIpGroups models.MapIpGroups
-	callbacks []SourceIpGroupsReceiver
-	mu        sync.Mutex
+	callbacks      []SourceIpGroupsReceiver
+	mu             sync.Mutex
 }
 
 // NewNetWatcher creates a new NetWatcher instance

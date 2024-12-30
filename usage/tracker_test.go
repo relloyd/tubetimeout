@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"example.com/tubetimeout/config"
 	"github.com/stretchr/testify/assert"
+	"relloyd/tubetimeout/config"
 )
 
 func TestNewTracker(t *testing.T) {

@@ -3,8 +3,8 @@ package group
 import (
 	"testing"
 
-	"example.com/tubetimeout/models"
 	"github.com/stretchr/testify/assert"
+	"relloyd/tubetimeout/models"
 )
 
 func TestIsSrcIpDestDomainKnown(t *testing.T) {

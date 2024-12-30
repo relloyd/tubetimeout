@@ -7,12 +7,12 @@ import (
 	"net"
 	"time"
 
-	"example.com/tubetimeout/config"
-	"example.com/tubetimeout/models"
-	"example.com/tubetimeout/usage"
 	"github.com/florianl/go-nfqueue"
 	"github.com/mdlayher/netlink"
 	"go.uber.org/zap"
+	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
+	"relloyd/tubetimeout/usage"
 )
 
 const (

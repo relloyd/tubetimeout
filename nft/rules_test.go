@@ -5,10 +5,10 @@ import (
 	"net"
 	"testing"
 
-	"example.com/tubetimeout/config"
-	"example.com/tubetimeout/models"
 	"github.com/google/nftables"
 	"github.com/stretchr/testify/assert"
+	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
 )
 
 func cleanupFunc() {

@@ -12,6 +12,8 @@ var (
 	AppHomeDir = ".tubetimeout"
 	// AppCfg is the application configuration.
 	AppCfg AppConfig
+	// BuildTime is set by the go build command - probably see the Makefile.
+	BuildTime string
 )
 
 func init() {
@@ -29,7 +31,7 @@ type AppConfig struct {
 	TrackerConfig TrackerConfig `envconfig:"TRACKER"`
 	FilterConfig  FilterConfig  `envconfig:"FILTER"`
 	ProxyConfig   ProxyConfig   `envconfig:"PROXY"`
-	WebConfig	 WebConfig     `envconfig:"WEB"`
+	WebConfig     WebConfig     `envconfig:"WEB"`
 }
 
 type DebugConfig struct {
@@ -58,7 +60,7 @@ type TrackerConfig struct {
 
 type FilterConfig struct {
 	// PacketDropPercentage is the percentage of packets to drop.
-	PacketDropPercentage  float32       `envconfig:"PACKET_DROP_PCT" default:"0.30"`
+	PacketDropPercentage float32 `envconfig:"PACKET_DROP_PCT" default:"0.30"`
 	// PacketDelayPercentage is the percentage of packets to delay evaluated after dropping.
 	PacketDelayPercentage float32       `envconfig:"PACKET_DELAY_PCT" default:"0.50"`
 	PacketDelayMs         time.Duration `envconfig:"PACKET_DELAY_MS" default:"100ms"`

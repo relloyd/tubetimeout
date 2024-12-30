@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"example.com/tubetimeout/models"
-	"example.com/tubetimeout/usage"
 	"github.com/elazarl/goproxy"
 	"go.uber.org/zap"
+	"relloyd/tubetimeout/models"
+	"relloyd/tubetimeout/usage"
 )
 
 type ManagerI interface {

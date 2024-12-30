@@ -10,7 +10,7 @@ INSTALL_TIMESTAMP := $(shell date +"%Y%m%dT%H%M%S")
 PACKAGE_TO_TEST=./nft
 FUNC_TO_TEST=Test_New
 
-LD_FLAGS=-ldflags "-X tubetimeout/web.buildTime=$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+LD_FLAGS=-ldflags "-X relloyd/tubetimeout/config.BuildTime=$$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 test:
 	go test ./...

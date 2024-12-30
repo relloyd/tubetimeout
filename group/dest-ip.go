@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"example.com/tubetimeout/config"
-	"example.com/tubetimeout/models"
 	"go.uber.org/zap"
+	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
 )
 
 type FuncGroupDomainsLoader func(logger *zap.SugaredLogger) (models.MapGroupDomains, error)

@@ -8,13 +8,16 @@ import (
 	"strings"
 	"time"
 
-	"example.com/tubetimeout/config"
+	"relloyd/tubetimeout/config"
 )
-
-var buildTime string // Will be set at build time
 
 //go:embed static/* templates/*
 var embeddedFiles embed.FS
+
+type TemplateData struct {
+	Config    config.AppConfig
+	BuildTime string
+}
 
 func NewServer() *http.Server {
 	mux := http.NewServeMux()
@@ -43,9 +46,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	td := TemplateData{
+		Config:    config.AppCfg,
+		BuildTime: config.BuildTime,
+	}
+
 	// Execute the template with appCfg data
 	tmpl.Option("missingkey=default")
-	err = tmpl.Execute(w, config.AppCfg)
+	err = tmpl.Execute(w, td)
 	if err != nil {
 		http.Error(w, "Error rendering template", http.StatusInternalServerError)
 	}
@@ -67,7 +75,7 @@ func staticHandler(w http.ResponseWriter, r *http.Request) {
 
 // Mock file modification time (for cache control)
 func fileModTime() time.Time {
-	t, err := time.Parse(time.RFC3339, buildTime)
+	t, err := time.Parse(time.RFC3339, config.BuildTime)
 	if err != nil {
 		// Fallback to the current time if parsing fails
 		fmt.Println("Error parsing build time:", err)

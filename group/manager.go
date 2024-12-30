@@ -3,8 +3,8 @@ package group
 import (
 	"fmt"
 
-	"example.com/tubetimeout/models"
 	"go.uber.org/zap"
+	"relloyd/tubetimeout/models"
 )
 
 var (

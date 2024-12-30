@@ -4,9 +4,9 @@ import (
 	"slices"
 	"testing"
 
-	"example.com/tubetimeout/config"
-	"example.com/tubetimeout/models"
 	"github.com/stretchr/testify/assert"
+	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
 )
 
 func TestScanNetwork(t *testing.T) {

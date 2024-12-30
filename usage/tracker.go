@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"example.com/tubetimeout/config"
 	"go.uber.org/zap"
+	"relloyd/tubetimeout/config"
 )
 
 type saveSamplesFunc func(string, *sync.Map) error

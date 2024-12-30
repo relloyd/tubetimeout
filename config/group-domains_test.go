@@ -9,8 +9,8 @@ import (
 	"slices"
 	"testing"
 
-	"example.com/tubetimeout/models"
 	"github.com/stretchr/testify/assert"
+	"relloyd/tubetimeout/models"
 )
 
 // TestLoadGroupDomains tests the LoadGroupDomains function
