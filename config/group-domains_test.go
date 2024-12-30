@@ -166,7 +166,7 @@ func TestParseDomains_InvalidData(t *testing.T) {
 	data := "valid.com\n# comment\ninvalid domain\nanother-valid.com\n"
 	reader := bytes.NewBufferString(data)
 
-	got, err := parseDomains(reader)
+	got, err := parseDomains(reader, defaultYouTubeGroupName)
 	assert.NoError(t, err, "parseDomains() error = %v", err)
 
 	expected := models.MapGroupDomains{

@@ -90,7 +90,7 @@ func FetchYouTubeDomains(logger *zap.SugaredLogger) (models.MapGroupDomains, err
 		_ = Body.Close()
 	}(resp.Body)
 
-	return parseDomains(resp.Body)
+	return parseDomains(resp.Body, defaultYouTubeGroupName)
 }
 
 // fetchDomainsFromEmbeddedFile reads the embedded file contents
@@ -103,12 +103,12 @@ func fetchDomainsFromEmbeddedFile() (models.MapGroupDomains, error) {
 		_ = file.Close()
 	}(file)
 
-	return parseDomains(file)
+	return parseDomains(file, defaultYouTubeGroupName)
 }
 
 // parseDomains parses domain names from an io.Reader source
 // TODO: consider rejecting invalid domains/urls
-func parseDomains(reader io.Reader) (models.MapGroupDomains, error) {
+func parseDomains(reader io.Reader, groupName models.Group) (models.MapGroupDomains, error) {
 	var domains []models.Domain
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
@@ -122,5 +122,5 @@ func parseDomains(reader io.Reader) (models.MapGroupDomains, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading domains: %w", err)
 	}
-	return models.MapGroupDomains{defaultYouTubeGroupName: domains}, nil
+	return models.MapGroupDomains{groupName: domains}, nil
 }

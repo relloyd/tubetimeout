@@ -15,15 +15,28 @@ import (
 var embeddedFiles embed.FS
 
 type TemplateData struct {
-	Config    config.AppConfig
-	BuildTime string
+	Config       config.AppConfig
+	BuildTime    string
+	UsageMinutes int
+	NextReset    time.Time
+	UsagePct     int
 }
 
-func NewServer() *http.Server {
-	mux := http.NewServeMux()
+// TrackerSummariserI returns info from the usage tracker.
+type TrackerSummariserI interface {
+	GetSampleSummary() map[string]int
+	CalculateWindow(now time.Time) (time.Time, time.Time)
+}
 
-	mux.HandleFunc("/", handler)
-	mux.HandleFunc("/static/", staticHandler)
+type Handler struct {
+	Usage TrackerSummariserI
+}
+
+func NewServer(s TrackerSummariserI) *http.Server {
+	h := Handler{Usage: s}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", h.handler)
+	mux.HandleFunc("/static/", h.staticHandler)
 
 	return &http.Server{
 		Addr:                         ":8081",
@@ -38,7 +51,7 @@ func NewServer() *http.Server {
 	}
 }
 
-func handler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handler(w http.ResponseWriter, r *http.Request) {
 	// Parse the HTML template from the embedded file system
 	tmpl, err := template.ParseFS(embeddedFiles, "templates/index.html")
 	if err != nil {
@@ -46,9 +59,22 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_, nextResetTime := h.Usage.CalculateWindow(time.Now())
+
+	sampleSummary := h.Usage.GetSampleSummary()
+	usageMinutes := sampleSummary["youtube"]
+
+	usagePct := int(float64(usageMinutes) / float64(config.AppCfg.TrackerConfig.Threshold.Minutes()) * 100)
+	if usagePct > 100 {
+		usagePct = 100
+	}
+
 	td := TemplateData{
-		Config:    config.AppCfg,
-		BuildTime: config.BuildTime,
+		Config:       config.AppCfg,
+		BuildTime:    config.BuildTime,
+		NextReset:    nextResetTime,
+		UsageMinutes: sampleSummary["youtube"],
+		UsagePct:     usagePct,
 	}
 
 	// Execute the template with appCfg data
@@ -60,7 +86,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 // File server handler for static files
-func staticHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) staticHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract the requested file path
 	path := strings.TrimPrefix(r.URL.Path, "/static/")
 	data, err := embeddedFiles.ReadFile("static/" + path)

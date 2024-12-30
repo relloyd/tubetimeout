@@ -61,6 +61,10 @@ func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.Trac
 		cfg.StartTime = 0
 	}
 
+	if cfg.Threshold == 0 {
+		cfg.Threshold = 1 * time.Minute
+	}
+
 	t := &Tracker{
 		logger:          logger,
 		devices:         &sync.Map{},
@@ -173,7 +177,7 @@ func saveSamples(path string, devices *sync.Map) error {
 func (t *Tracker) AddSample(id string) {
 	now := t.nowFunc() // Use nowFunc instead of time.Now
 
-	lastWindowStart, _ := t.calculateWindow(now)
+	lastWindowStart, _ := t.CalculateWindow(now)
 
 	// Get or initialize the device data.
 	data, _ := t.devices.LoadOrStore(id, &deviceData{
@@ -233,6 +237,7 @@ func (t *Tracker) getIndex(now time.Time, bufferStart time.Time) int {
 }
 
 // syncWindow ensures the slice is synchronized with the current time.
+// If 0 < elapsed < t.sampleSize, do nothing. The circular buffer handles overwriting naturally.
 func (t *Tracker) syncWindow(dd *deviceData, now time.Time) {
 	// Calculate number of time slices that have elapsed since the start of the window.
 	elapsed := int(now.Sub(dd.start) / t.granularity)
@@ -241,15 +246,13 @@ func (t *Tracker) syncWindow(dd *deviceData, now time.Time) {
 		for i := range dd.samples {
 			dd.samples[i] = false
 		}
-		// dd.start = now.Truncate(t.granularity) // Reset start as we roll into a new window.
-		lastWindowStart, _ := t.calculateWindow(now)
+		lastWindowStart, _ := t.CalculateWindow(now)
 		dd.start = lastWindowStart // Reset the start as we roll into a new window.
 		t.logger.Infof("Renew retention window (%v) for device %s", now, t.retention)
 	}
-	// If 0 < elapsed < t.sampleSize, do nothing. The circular buffer handles overwriting naturally.
 }
 
-// calculateWindow determines the start times for the last and next windows.
+// CalculateWindow determines the start times for the last and next windows.
 // Return the start time of the last window and the start time of the next window respectively.
 // it uses t.retention to determine the duration of the window
 // it uses t.windowStartDay and t.windowStartTime to determine the start time of the window as follows
@@ -259,8 +262,8 @@ func (t *Tracker) syncWindow(dd *deviceData, now time.Time) {
 // if t.retention is 7 days, the window starts on t.windowStartDay at t.windowStartTime
 // if t.retention is 24 hours, the window starts t.windowStartTime after midnight and windowStartDay is ignored
 // if t.retention is less than 24 hours, the window starts t.windowStartTime after the current time and windowStartDay is ignored
-// TODO: make calculateWindow work for monthly
-func (t *Tracker) calculateWindow(now time.Time) (time.Time, time.Time) {
+// TODO: make CalculateWindow work for monthly
+func (t *Tracker) CalculateWindow(now time.Time) (time.Time, time.Time) {
 	var lastWindowStart, nextWindowStart time.Time
 
 	if t.retention >= 7*24*time.Hour {
@@ -292,4 +295,24 @@ func (t *Tracker) calculateWindow(now time.Time) (time.Time, time.Time) {
 
 	return lastWindowStart, nextWindowStart
 
+}
+
+// GetSampleSummary returns a map of device IDs to the number of samples seen.
+// Used by package web for reporting.
+func (t *Tracker) GetSampleSummary() map[string]int {
+	samples := make(map[string]int)
+	t.devices.Range(func(k, v interface{}) bool {
+		data := v.(*deviceData)
+		data.mu.Lock()
+		defer data.mu.Unlock()
+		count := 0
+		for _, seen := range data.samples {
+			if seen {
+				count++
+			}
+		}
+		samples[k.(string)] = count
+		return true
+	})
+	return samples
 }

@@ -8,22 +8,50 @@
 </head>
 <body>
 <div class="container">
-  <h1>App Configuration</h1>
+  <h1>TubeTimeout Configuration</h1>
   <table>
     <thead>
     <tr>
       <th>Key</th>
       <th>Value</th>
+      <th>What?</th>
     </tr>
     </thead>
     <tbody>
     <tr>
-      <td>LogLevel</td>
+      <td>Logging Level</td>
       <td>{{.Config.LogLevel}}</td>
+      <td>App logging level</td>
     </tr>
     <tr>
-      <td>BuildTime</td>
+      <td>Build Time</td>
       <td>{{.BuildTime}}</td>
+      <td>App build time</td>
+    </tr>
+    <tr>
+      <td>Retention Period</td>
+      <td>{{.Config.TrackerConfig.Retention}}</td>
+      <td>The retention period for tracking YouTube usage</td>
+    </tr>
+    <tr>
+      <td>Threshold</td>
+      <td>{{.Config.TrackerConfig.Threshold}}</td>
+      <td>The number of usage minutes to allow this period before blocking kicks in</td>
+    </tr>
+    <tr>
+      <td>Usage Minutes</td>
+      <td>{{.UsageMinutes}}</td>
+      <td>Minutes of usage consumed so far this period</td>
+    </tr>
+    <tr>
+      <td>Usage Percentage</td>
+      <td>{{.UsagePct}}</td>
+      <td>Percentage of usage consumed so far this period</td>
+    </tr>
+    <tr>
+      <td>Next Usage Reset</td>
+      <td>{{.NextReset}}</td>
+      <td>Time the usage tracker will reset</td>
     </tr>
     </tbody>
   </table>

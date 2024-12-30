@@ -21,7 +21,7 @@ func TestNewTracker(t *testing.T) {
 	// Case 1: Create a tracker with a 1-hour retention, 10-minute threshold, and 1-minute granularity.
 	cfg := &config.TrackerConfig{
 		Retention:              1 * time.Hour,
-		Threshold:              10 * time.Minute,
+		Threshold:              0 * time.Minute, // expect tracker to use at least 1 min.
 		Granularity:            1 * time.Minute,
 		SampleFilePath:         tmpFile.Name(),
 		SampleFileSaveInterval: 50 * time.Millisecond,
@@ -39,7 +39,14 @@ func TestNewTracker(t *testing.T) {
 		return path, nil
 	}
 
+	// Tracker with threshold 0 should default to 1 minute.
 	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
+	assert.NoError(t, err, "NewTracker failed")
+	assert.Equal(t, 1*time.Minute, tracker.threshold, "NewTracker did not set threshold to 1m")
+
+	// Another tracker for more stuff.
+	cfg.Threshold = 10 * time.Minute
+	tracker, err = NewTracker(ctx, config.MustGetLogger(), cfg)
 
 	assert.NoError(t, err, "NewTracker failed")
 	assert.NotNil(t, tracker, "NewTracker returned nil")
@@ -267,7 +274,7 @@ func TestSyncWindow(t *testing.T) {
 
 	// Simulate a device data structure.
 	// startTime := time.Now().Truncate(granularity)
-	startTime, _ := tracker.calculateWindow(time.Now())
+	startTime, _ := tracker.CalculateWindow(time.Now())
 	deviceData := &deviceData{
 		samples: make([]bool, tracker.sampleSize),
 		start:   startTime,
@@ -287,7 +294,7 @@ func TestSyncWindow(t *testing.T) {
 	// Case 2: Elapsed time exceeds retention (expect the buffer to be reset).
 	exceedTime := startTime.Add(2 * cfg.Retention)
 	tracker.syncWindow(deviceData, exceedTime)
-	expectedNewTime, _ := tracker.calculateWindow(exceedTime)
+	expectedNewTime, _ := tracker.CalculateWindow(exceedTime)
 	for i, v := range deviceData.samples {
 		if v {
 			t.Errorf("syncWindow failed to reset the buffer at index %d", i)
@@ -354,7 +361,7 @@ func TestCalculateWindow(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lastWindowStart, nextWindowStart := tt.tracker.calculateWindow(tt.now)
+			lastWindowStart, nextWindowStart := tt.tracker.CalculateWindow(tt.now)
 
 			if !lastWindowStart.Equal(tt.expectedLast) {
 				t.Errorf("%v: lastWindowStart: got %v, want %v", tt.name, lastWindowStart, tt.expectedLast)
