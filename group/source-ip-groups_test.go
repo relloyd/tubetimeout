@@ -11,11 +11,11 @@ import (
 
 func TestScanNetwork(t *testing.T) {
 	// Mock loader function
-	mockLoaderFunc := func() (config.GroupConfig, error) {
-		return config.GroupConfig{
-			GroupMACs: map[string][]string{
-				"group1": {"00:11:22:33:44:55", "66:77:88:99:AA:BB"},
-				"group2": {"CC:DD:EE:FF:00:11"},
+	mockLoaderFunc := func() (config.GroupMACsConfig, error) {
+		return config.GroupMACsConfig{
+			Groups: map[models.Group][]models.NamedMAC{
+				"group1": {{MAC: "00:11:22:33:44:55", Name: ""}, {MAC: "66:77:88:99:AA:BB", Name: ""}},
+				"group2": {{MAC: "CC:DD:EE:FF:00:11", Name: ""}},
 			},
 		}, nil
 	}
@@ -58,8 +58,8 @@ func TestScanNetwork(t *testing.T) {
 
 	// Test the case where the group-macs file is not found.
 	// Expect all IPs to be in the default group.
-	groupMacsLoaderFunc = func() (config.GroupConfig, error) {
-		return config.GroupConfig{}, config.ErrorGroupMacFileNotFound
+	groupMacsLoaderFunc = func() (config.GroupMACsConfig, error) {
+		return config.GroupMACsConfig{}, config.ErrorGroupMacFileNotFound
 	}
 	mig = scanNetwork(config.MustGetLogger(), mockARPCommand)
 	expectedMap = map[models.Ip][]models.Group{

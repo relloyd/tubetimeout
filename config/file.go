@@ -13,6 +13,8 @@ var (
 	homeDirExists                                   = false
 )
 
+type getConfigFileFunc func(string) (string, error)
+
 // createAppHomeDirAndGetConfigFile creates a directory in the user's home directory for the app's configuration file.
 // It returns the full path to the configuration file.
 func createAppHomeDirAndGetConfigFile(fileName string) (string, error) {

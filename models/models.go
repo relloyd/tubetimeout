@@ -27,3 +27,8 @@ type MapGroupDomains map[Group][]Domain
 type MapIpDomain map[Ip]Domain
 type MapIpGroups map[Ip][]Group
 type MapDomainGroups map[Domain][]Group
+
+type NamedMAC struct {
+	MAC string `yaml:"mac"`
+	Name string `yaml:"name"`
+}

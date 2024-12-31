@@ -23,7 +23,7 @@ import (
 // Functionality:
 //   INPUT
 //     Domains    - resolve IPs for a list of domains and supply to callbacks like NFT rules and NFQueue
-//     NetWatcher - MAC IP GroupConfig
+//     NetWatcher - MAC IP GroupMACsConfig
 //     Tracker    - count usage stats by a thing like dest IP or any string
 //   DOES STUFF
 //     NFT rules  - add NFT rules to capture traffic going to a set of dest IP addresses

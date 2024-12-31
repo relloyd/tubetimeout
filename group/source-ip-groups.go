@@ -47,9 +47,9 @@ var (
 	}
 )
 
-type FuncGroupMacsLoader func() (config.GroupConfig, error)
+type FuncGroupMacsLoader func() (config.GroupMACsConfig, error)
 
-var groupMacsLoaderFunc = FuncGroupMacsLoader(config.LoadGroupMACs)
+var groupMacsLoaderFunc = FuncGroupMacsLoader(config.GroupMACs.LoadGroupMACs)
 
 type SourceIpGroupsReceiver interface {
 	UpdateSourceIpGroups(newData models.MapIpGroups)
@@ -161,14 +161,14 @@ func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) models.MapIpGroup
 		arpIp := strings.Trim(fields[1], "()") // field zero may be '?' as the hostnames haven't been looked up
 		arpMAC := fields[3]
 
-		if managerModeMatchAllSourceIps && gm.GroupMACs == nil { // if there are no groups of MACs found...
+		if managerModeMatchAllSourceIps && gm.Groups == nil { // if there are no groups of MACs found...
 			// Set each source IP into the default group.
 			mig[models.Ip(arpIp)] = []models.Group{defaultGroupName}
 		} else {
 			// Find group for MAC
-			for group, macs := range gm.GroupMACs {
+			for group, macs := range gm.Groups {
 				for _, gmac := range macs {
-					if gmac == arpMAC {
+					if gmac.MAC == arpMAC {
 						groups := mig[models.Ip(arpIp)]                             // retrieve existing groups for the IP.
 						mig[models.Ip(arpIp)] = append(groups, models.Group(group)) // append the new group to the existing groups.
 					}

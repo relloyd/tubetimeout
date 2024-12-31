@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"testing"
+
+	"relloyd/tubetimeout/models"
 )
 
 func TestLoadMACGroups(t *testing.T) {
@@ -10,11 +12,15 @@ func TestLoadMACGroups(t *testing.T) {
 	yamlContent := `
 groups:
   group1:
-    - 00:11:22:33:44:55
-    - 66:77:88:99:AA:BB
+  - mac: "00:11:22:33:44:55"
+    name: "my-device"
+  - mac: "66:77:88:99:AA:BB"
+    name: ""
   group2:
-    - CC:DD:EE:FF:00:11
-    - 22:33:44:55:66:77
+  - mac: "CC:DD:EE:FF:00:11"
+    name: ""
+  - mac: "22:33:44:55:66:77"
+    name: ""
 `
 
 	// Create a temporary file to hold the YAML content
@@ -37,34 +43,37 @@ groups:
 	// Call the function under test
 	defaultGroupMacFilePath = tempFile.Name()                                                          // override the default file path with temp file above.
 	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(f string) (string, error) { return f, nil } // override the function that uses the home dir for config files.
-	macGroup, err := LoadGroupMACs()
+	gm, err := GroupMACs.LoadGroupMACs()
 	if err != nil {
 		t.Fatalf("LoadGroupMACs returned an error: %v", err)
 	}
 
 	// Validate the result
-	expectedGroups := map[string][]string{
-		"group1": {"00:11:22:33:44:55", "66:77:88:99:AA:BB"},
-		"group2": {"CC:DD:EE:FF:00:11", "22:33:44:55:66:77"},
+	expectedGroups := map[models.Group][]models.NamedMAC{
+		"group1": {{MAC: "00:11:22:33:44:55", Name: "my-device"}, {MAC: "66:77:88:99:AA:BB", Name: ""}},
+		"group2": {{MAC: "CC:DD:EE:FF:00:11", Name: ""}, {MAC: "22:33:44:55:66:77", Name: ""}},
 	}
 
-	if len(macGroup.GroupMACs) != len(expectedGroups) {
-		t.Fatalf("Expected %d groups, got %d", len(expectedGroups), len(macGroup.GroupMACs))
+	if len(gm.Groups) != len(expectedGroups) {
+		t.Fatalf("Expected %d groups, got %d", len(expectedGroups), len(gm.Groups))
 	}
 
-	for group, macs := range expectedGroups {
-		parsedMacs, ok := macGroup.GroupMACs[group]
+	for group, namedMacs := range expectedGroups {
+		parsedMacs, ok := gm.Groups[group]
 		if !ok {
-			t.Errorf("Group %s not found in parsed result", group)
+			t.Errorf("Group %q not found in parsed result", group)
 			continue
 		}
-		if len(parsedMacs) != len(macs) {
-			t.Errorf("Group %s: expected %d MACs, got %d", group, len(macs), len(parsedMacs))
+		if len(parsedMacs) != len(namedMacs) {
+			t.Errorf("Group %q: expected %d MACs, got %d", group, len(namedMacs), len(parsedMacs))
 			continue
 		}
-		for i, mac := range macs {
-			if parsedMacs[i] != mac {
-				t.Errorf("Group %s: expected MAC %s, got %s", group, mac, parsedMacs[i])
+		for i, v := range namedMacs {
+			if parsedMacs[i].MAC != v.MAC {
+				t.Errorf("Group %q: expected MAC %q, got %q", group, v.MAC, parsedMacs[i])
+			}
+			if parsedMacs[i].Name != v.Name {
+				t.Errorf("Group %q: expected Name %q, got %q", group, v.Name, parsedMacs[i].Name)
 			}
 		}
 	}
