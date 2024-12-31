@@ -7,7 +7,7 @@ import (
 	"relloyd/tubetimeout/models"
 )
 
-func TestLoadMACGroups(t *testing.T) {
+func TestGetGroupMACs(t *testing.T) {
 	// Create a sample YAML file content
 	yamlContent := `
 groups:
@@ -43,9 +43,9 @@ groups:
 	// Call the function under test
 	defaultGroupMacFilePath = tempFile.Name()                                                          // override the default file path with temp file above.
 	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(f string) (string, error) { return f, nil } // override the function that uses the home dir for config files.
-	gm, err := GroupMACs.LoadGroupMACs()
+	gm, err := GroupMACs.GetConfig()
 	if err != nil {
-		t.Fatalf("LoadGroupMACs returned an error: %v", err)
+		t.Fatalf("GetConfig returned an error: %v", err)
 	}
 
 	// Validate the result

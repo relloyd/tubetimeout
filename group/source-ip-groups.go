@@ -40,16 +40,11 @@ func checkARPAvailability() error {
 type arpCommand func() (string, error)
 
 var (
-	// ARPCmd is the default ARP command
-	ARPCmd = func() (string, error) {
-		output, err := exec.Command("arp", "-n", "-a").Output() // TODO: check compatibility with Linux
-		return string(output), err
-	}
+	ARPCmd              = config.ARPCmd // ARPCmd is the default ARP command
+	groupMacsLoaderFunc = FuncGroupMacsLoader(config.GroupMACs.GetConfig)
 )
 
 type FuncGroupMacsLoader func() (config.GroupMACsConfig, error)
-
-var groupMacsLoaderFunc = FuncGroupMacsLoader(config.GroupMACs.LoadGroupMACs)
 
 type SourceIpGroupsReceiver interface {
 	UpdateSourceIpGroups(newData models.MapIpGroups)
