@@ -38,7 +38,7 @@ type FlatGroupMAC struct {
 
 // groupMACs is used as a package variable to load the group-macs from disk.
 type groupMACs struct {
-	mu sync.RWMutex
+	mu sync.Mutex
 }
 
 // GetConfig parses the defaultGroupMacFilePath YAML file.
@@ -72,9 +72,6 @@ func (g *groupMACs) GetConfig() (GroupMACsConfig, error) {
 
 // GetAllGroupMACs returns all the group-macs from the config file and ARP scan.
 func (g *groupMACs) GetAllGroupMACs(logger *zap.SugaredLogger) ([]FlatGroupMAC, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
 	// Load the configured group-macs from disk.
 	gm, err := g.GetConfig()
 	if err != nil {
