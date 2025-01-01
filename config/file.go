@@ -40,30 +40,32 @@ func createAppHomeDirAndGetConfigFile(fileName string) (string, error) {
 	return filePath, nil
 }
 
-func safeWriteViaTemp(logger *zap.SugaredLogger, filePath string, data string) {
+func safeWriteViaTemp(logger *zap.SugaredLogger, filePath string, data string) error {
 	tempPath := filePath + ".tmp"
 
-	// Create a temporary file
+	// Create a temporary file.
 	file, err := os.Create(tempPath)
 	if err != nil {
-		logger.Fatalf("Failed to create temp file: %v", err)
+		return fmt.Errorf("failed to create temp file: %v", err)
 	}
 	defer file.Close()
 
 	_, err = file.WriteString(data)
 	if err != nil {
-		logger.Fatalf("Failed to write data: %v", err)
+		return fmt.Errorf("failed to write data: %v", err)
 	}
 
-	// Flush data to disk
+	// Flush data to disk.
 	err = file.Sync()
 	if err != nil {
-		logger.Fatalf("Failed to sync temp file: %v", err)
+		return fmt.Errorf("failed to sync temp file: %v", err)
 	}
 
 	// Rename temporary file to target file
 	err = os.Rename(tempPath, filePath)
 	if err != nil {
-		logger.Fatalf("Failed to rename file: %v", err)
+		return fmt.Errorf("failed to rename file: %v", err)
 	}
+
+	return nil
 }

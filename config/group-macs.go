@@ -117,3 +117,41 @@ func (g *groupMACs) GetAllGroupMACs(logger *zap.SugaredLogger) ([]FlatGroupMAC, 
 
 	return allGroupMACs, nil
 }
+
+// SaveGroupMACs saves the group-macs to the config file.
+func (g *groupMACs) SaveGroupMACs(logger *zap.SugaredLogger, flatGroupMACs []FlatGroupMAC) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	// Convert the JSON structure to the group-macs YAML structure.
+	groups := make(map[models.Group][]models.NamedMAC)
+	for _, flatGroupMAC := range flatGroupMACs {
+		if flatGroupMAC.Group == "" || flatGroupMAC.MAC == "" { // if the group isn't worth saving...
+			continue
+		}
+		// Create the group if it doesn't already exist.
+		group := models.Group(flatGroupMAC.Group)
+		if _, ok := groups[group]; !ok {
+			groups[group] = []models.NamedMAC{}
+		}
+		// Add the MAC to the group.
+		groups[group] = append(groups[group], models.NamedMAC{
+			MAC:  flatGroupMAC.MAC,
+			Name: flatGroupMAC.Name, // Name may be blank.
+		})
+	}
+	gc := GroupMACsConfig{Groups: groups}
+
+	// Marshal the group-macs to YAML.
+	yamlBytes, err := yaml.Marshal(gc)
+	if err != nil {
+		return fmt.Errorf("failed to marshal group-macs to YAML: %w", err)
+	}
+
+	err = safeWriteViaTemp(logger, defaultGroupMacFilePath, string(yamlBytes))
+	if err != nil {
+		return fmt.Errorf("failed to write group-macs to file: %w", err)
+	}
+
+	return nil
+}
