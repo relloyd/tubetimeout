@@ -46,13 +46,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const deviceDropdown = document.getElementById('device-dropdown');
         deviceDropdown.innerHTML = ''; // Clear the dropdown
 
-        // Recompute availableMACs dynamically each time this function is called
-        availableMACs = flatGroupMACs.filter(entry => !entry.group); // Always filter latest data
+        // Include all MACs, regardless of group assignment
+        availableMACs = flatGroupMACs;
 
-        availableMACs.forEach(({ mac, name }) => {
+        availableMACs.forEach(({ mac, name, group }) => {
             const option = document.createElement('option');
             option.value = mac;
-            option.textContent = name ? `${mac} - ${name}` : mac;
+
+            // Show name and group status in the dropdown
+            const label = name ? `${mac} - ${name}` : mac;
+            option.textContent = group ? `${label} (in ${group})` : label; // Add group info if available
             deviceDropdown.appendChild(option);
         });
 
