@@ -4,6 +4,7 @@ body {
     margin: 0;
     padding: 0;
     background-color: #f4f4f9;
+    color: #333;
 }
 
 /* Container styles */
@@ -45,12 +46,13 @@ tr:hover {
 }
 
 /* Header styles */
-h1 {
+h1, h2 {
     color: #333;
-    text-align: center;
+    text-align: center; /* Center-align all headings */
+    margin-bottom: 20px;
 }
 
-/* Button styles */
+/* Button Container */
 .button-container {
     text-align: center; /* Center-align buttons */
     margin-top: 20px; /* Add spacing above buttons */
@@ -90,4 +92,124 @@ button:hover {
         font-size: 14px;
         padding: 8px 16px;
     }
+}
+
+/* Notification Styles */
+.notification {
+    padding: 10px;
+    margin-top: 10px;
+    border-radius: 5px;
+    text-align: center;
+    font-weight: bold;
+    background-color: #4caf50; /* Success - green */
+    color: white;
+}
+
+.hidden {
+    display: none;
+}
+
+.error {
+    background-color: #f44336; /* Error - red */
+}
+
+/* Form styles */
+form {
+    margin-bottom: 20px;
+    display: flex;
+    gap: 10px;
+    justify-content: center; /* Center-align forms */
+}
+
+input, select {
+    padding: 10px;
+    border: 1px solid #ddd; /* Matching border style for inputs and dropdowns */
+    border-radius: 4px;
+}
+
+/* Group styles */
+.group {
+    margin-bottom: 20px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+}
+
+.group h3 {
+    margin: 0 0 10px;
+    text-align: center; /* Center-align group titles */
+}
+
+/* Group Header */
+.group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.group-header h3 {
+    margin: 0;
+}
+
+/* Remove Group Button */
+.remove-group-btn {
+    background-color: #dc3545;
+}
+
+.remove-group-btn:hover {
+    background-color: #c82333;
+}
+
+/* Lists */
+ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 0;
+}
+
+li span {
+    flex-grow: 1;
+}
+
+li button {
+    margin-left: 10px;
+}
+
+/* Add MAC Form */
+.add-mac-form {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+/* Devices Section */
+.device-controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+/* Groups Section */
+.group {
+    margin-bottom: 20px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background-color: #fafafa;
+}
+
+/* Dropdowns - Styled to match inputs */
+select {
+    padding: 10px;
+    border: 1px solid #ddd; /* Matches input box */
+    border-radius: 4px;
 }

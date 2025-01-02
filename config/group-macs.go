@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -97,6 +98,8 @@ func (g *groupMACs) GetAllGroupMACs(logger *zap.SugaredLogger) ([]FlatGroupMAC, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to run ARP command to get MAC addresses: %w", err)
 	}
+
+	re := regexp.MustCompile(`([0-9A-Fa-f]{2}:){5}([0-9A-Fa-f]{2})`)
 	// Parse ARP output to get the MAC addresses.
 	arpLines := strings.Split(output, "\n")
 	for _, line := range arpLines {
@@ -105,6 +108,9 @@ func (g *groupMACs) GetAllGroupMACs(logger *zap.SugaredLogger) ([]FlatGroupMAC, 
 			continue
 		}
 		arpMAC := strings.Trim(fields[3], " ")
+		if !re.MatchString(arpMAC) { // if the MAC address is invalid...
+			continue
+		}
 		if _, seen := macs[arpMAC]; !seen { // if we don't already have config for this MAC...
 			// Add the MAC to the list.
 			allGroupMACs = append(allGroupMACs, FlatGroupMAC{
@@ -134,15 +140,16 @@ func (g *groupMACs) SaveGroupMACs(logger *zap.SugaredLogger, flatGroupMACs []Fla
 		if _, ok := groups[group]; !ok {
 			groups[group] = []models.NamedMAC{}
 		}
+
 		// Add the MAC to the group.
 		groups[group] = append(groups[group], models.NamedMAC{
 			MAC:  flatGroupMAC.MAC,
 			Name: flatGroupMAC.Name, // Name may be blank.
 		})
 	}
-	gc := GroupMACsConfig{Groups: groups}
 
 	// Marshal the group-macs to YAML.
+	gc := GroupMACsConfig{Groups: groups} // TODO: do we really need Groups at the top level?
 	yamlBytes, err := yaml.Marshal(gc)
 	if err != nil {
 		return fmt.Errorf("failed to marshal group-macs to YAML: %w", err)

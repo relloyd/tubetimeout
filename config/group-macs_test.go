@@ -96,6 +96,7 @@ func TestGetAllGroupMACs(t *testing.T) {
 ? (192.168.1.11) at 66:77:88:99:AA:BB
 ? (192.168.1.12) at CC:DD:EE:FF:00:11
 ? (192.168.1.12) at CC:DD:EE:FF:00:22
+? (192.168.68.88) at <incomplete> on eth0
 `, nil
 	}
 

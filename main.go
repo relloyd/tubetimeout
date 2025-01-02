@@ -24,7 +24,7 @@ import (
 //   INPUT
 //     Domains    - resolve IPs for a list of domains and supply to callbacks like NFT rules and NFQueue
 //     NetWatcher - MAC IP GroupMACsConfig
-//     Tracker    - count usage stats by a thing like dest IP or any string
+//     UsageTracker    - count usage stats by a thing like dest IP or any string
 //   DOES STUFF
 //     NFT rules  - add NFT rules to capture traffic going to a set of dest IP addresses
 //     NFQueue    - inspect packets in user space (relies on NFT rules to receive them)
@@ -146,7 +146,7 @@ func main() {
 
 	if config.AppCfg.WebConfig.WebEnabled {
 		// Web server start.
-		s := web.NewServer(logger, t)
+		s := web.NewServer(logger, t, config.GroupMACs)
 		go func() {
 			if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				logger.Fatalln("Error starting web server:", err)

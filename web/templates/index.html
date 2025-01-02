@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>App Configuration</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/script.js" defer></script>
 </head>
 <body>
 <div class="container">
@@ -64,35 +65,41 @@
   <!-- Reset Button -->
   <button id="resetButton">Reset</button>
 </div>
+
 <div id="statusMessage"></div>
 
-<script>
-    // Function to handle AJAX POST requests
-    async function postData(url, data) {
-        try {
-            const response = await fetch(url, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: new URLSearchParams(data),
-            });
-            const result = await response.text();
-            document.getElementById("statusMessage").innerText = result;
-        } catch (error) {
-            document.getElementById("statusMessage").innerText = "Error: " + error.message;
-        }
-    }
+<div class="container">
+  <h1>Device Groups</h1>
 
-    // Attach event listeners to buttons
-    document.getElementById("addButton").addEventListener("click", () => {
-        postData("/pause", { minutes: "60" });
-    });
+  <!-- Groups Section -->
+  <section>
+    <form id="add-group-form">
+      <input id="new-group-name" type="text" placeholder="New Group Name" required />
+      <button type="submit">Add</button>
+    </form>
+  </section>
 
-    document.getElementById("resetButton").addEventListener("click", () => {
-        postData("/reset", {});
-    });
-</script>
+  <!-- Devices Section -->
+  <section>
+    <div class="device-controls">
+      <select id="device-dropdown"></select>
+      <input id="device-name" type="text" placeholder="Device Name" />
+      <select id="group-dropdown"></select>
+      <button id="add-to-group-btn">Add</button>
+    </div>
+    <div id="groups-container">
+      <!-- Groups content dynamically generated here -->
+    </div>
+  </section>
+
+  <!-- Save Configuration Button -->
+  <div class="button-container">
+    <button id="save-config-btn">Save Configuration</button>
+  </div>
+
+  <!-- Notification Area -->
+  <div id="notification" class="notification hidden"></div>
+</div>
 
 </body>
 </html>

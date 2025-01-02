@@ -23,8 +23,8 @@ type TemplateData struct {
 	PausedUntil    string
 }
 
-// TrackerInteractorI returns info from the usage tracker.
-type TrackerInteractorI interface {
+// UsageTracker returns info from the usage tracker.
+type UsageTracker interface {
 	GetSampleSummary() map[string]int
 	CalculateWindow(now time.Time) (time.Time, time.Time)
 	RemovePause()
@@ -32,13 +32,19 @@ type TrackerInteractorI interface {
 	GetPauseEndTime() time.Time
 }
 
-type Handler struct {
-	logger *zap.SugaredLogger
-	usage  TrackerInteractorI
+type DeviceGroupGetterSetter interface {
+	GetAllGroupMACs(logger *zap.SugaredLogger) ([]config.FlatGroupMAC, error)
+	SaveGroupMACs(logger *zap.SugaredLogger, flatGroupMACs []config.FlatGroupMAC) error
 }
 
-func NewServer(logger *zap.SugaredLogger, s TrackerInteractorI) *http.Server {
-	h := Handler{logger: logger, usage: s}
+type Handler struct {
+	logger *zap.SugaredLogger
+	usage  UsageTracker
+	deviceGroups DeviceGroupGetterSetter
+}
+
+func NewServer(logger *zap.SugaredLogger, s UsageTracker, d DeviceGroupGetterSetter) *http.Server {
+	h := Handler{logger: logger, usage: s, deviceGroups: d}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", h.rootHandler)
 	mux.HandleFunc("/static/", h.staticHandler)

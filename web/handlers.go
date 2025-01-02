@@ -1,6 +1,7 @@
 package web
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -52,7 +53,45 @@ func (h *Handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 
 // groupMACHandler
 func (h *Handler) groupMACHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		gm, err := h.deviceGroups.GetAllGroupMACs(h.logger)
+		if err != nil {
+			h.logger.Errorf("Error getting device group data: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		err = json.NewEncoder(w).Encode(gm)
+		if err != nil {
+			h.logger.Errorf("Error encoding device group response: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
 
+	if r.Method == http.MethodPost {
+		// Handle POST request
+		var flatGroupMACs []config.FlatGroupMAC
+		if err := json.NewDecoder(r.Body).Decode(&flatGroupMACs); err != nil {
+			h.logger.Errorf("Invalid request device group payload: %v", err)
+			http.Error(w, "Invalid request payload", http.StatusBadRequest)
+			return
+		}
+		err := h.deviceGroups.SaveGroupMACs(h.logger, flatGroupMACs)
+		if err != nil {
+			h.logger.Errorf("Error saving device group data: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		// Respond with success
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": "configuration saved successfully"})
+		return
+	}
+
+	http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 }
 
 // File server rootHandler for static files
