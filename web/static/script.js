@@ -44,10 +44,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Render Devices Dropdown and Inputs
     function renderDevices() {
         const deviceDropdown = document.getElementById('device-dropdown');
-        deviceDropdown.innerHTML = '';
+        deviceDropdown.innerHTML = ''; // Clear the dropdown
 
-        // Filter available MACs without groups
-        availableMACs = flatGroupMACs.filter(entry => !entry.group);
+        // Recompute availableMACs dynamically each time this function is called
+        availableMACs = flatGroupMACs.filter(entry => !entry.group); // Always filter latest data
 
         availableMACs.forEach(({ mac, name }) => {
             const option = document.createElement('option');
@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         deviceDropdown.onchange = updateDeviceNameInput;
-        updateDeviceNameInput();
+        updateDeviceNameInput(); // Update input box with selected name
     }
 
     // Update name input field based on selection

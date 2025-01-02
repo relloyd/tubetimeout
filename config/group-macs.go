@@ -118,6 +118,7 @@ func (g *groupMACs) GetAllGroupMACs(logger *zap.SugaredLogger) ([]FlatGroupMAC, 
 				MAC:   arpMAC,
 				Name:  "",
 			})
+			macs[arpMAC] = true // MACs may appear on multiple network adapters so remember that we have seen them.
 		}
 	}
 
