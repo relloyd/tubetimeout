@@ -213,3 +213,54 @@ select {
     border: 1px solid #ddd; /* Matches input box */
     border-radius: 4px;
 }
+
+/* Device Table Wrapper */
+.device-table-wrapper {
+    margin: 20px 0;
+}
+
+/* Device Table */
+.device-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+/* Table Headers */
+.device-table th, .device-table td {
+    padding: 10px;
+    text-align: center;
+    border: 1px solid #ddd;
+}
+
+.device-table th {
+    background-color: #007BFF;
+    color: white;
+}
+
+/* Table Cells */
+.device-table td {
+    background-color: #f9f9f9;
+}
+
+/* Dropdowns and Inputs */
+.device-table select,
+.device-table input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* Buttons inside the Table */
+.device-table button {
+    padding: 8px 16px;
+    background-color: #007BFF;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.device-table button:hover {
+    background-color: #0056b3;
+}

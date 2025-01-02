@@ -81,11 +81,39 @@
 
   <!-- Devices Section -->
   <section>
-    <div class="device-controls">
-      <select id="device-dropdown"></select>
-      <input id="device-name" type="text" placeholder="Device Name" />
-      <select id="group-dropdown"></select>
-      <button id="add-to-group-btn">Add</button>
+    <div class="device-table-wrapper">
+      <table class="device-table">
+        <!-- Table Header -->
+        <thead>
+        <tr>
+          <th>Device ID</th>
+          <th>Label</th>
+          <th>Group</th>
+          <th>Action</th>
+        </tr>
+        </thead>
+        <!-- Table Body -->
+        <tbody>
+        <tr>
+          <!-- Device Dropdown -->
+          <td>
+            <select id="device-dropdown"></select>
+          </td>
+          <!-- Name Input -->
+          <td>
+            <input id="device-name" type="text" placeholder="Device Name" />
+          </td>
+          <!-- Group Dropdown -->
+          <td>
+            <select id="group-dropdown"></select>
+          </td>
+          <!-- Add Button -->
+          <td>
+            <button id="add-to-group-btn">Add</button>
+          </td>
+        </tr>
+        </tbody>
+      </table>
     </div>
     <div id="groups-container">
       <!-- Groups content dynamically generated here -->
