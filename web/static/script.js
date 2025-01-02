@@ -135,8 +135,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    document.getElementById('save-config-btn').onclick = saveConfig;
-
     // Show Notification
     function showNotification(message, isError = false) {
         const notification = document.getElementById('notification');
