@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
 )
 
 //go:embed static/* templates/*
@@ -25,7 +26,7 @@ type TemplateData struct {
 
 // UsageTracker returns info from the usage tracker.
 type UsageTracker interface {
-	GetSampleSummary() map[string]int
+	GetSampleSummary() map[string]models.GroupSummary
 	CalculateWindow(now time.Time) (time.Time, time.Time)
 	RemovePause()
 	SetPause(d time.Duration)
@@ -51,6 +52,7 @@ func NewServer(logger *zap.SugaredLogger, s UsageTracker, d DeviceGroupGetterSet
 	mux.HandleFunc("/pause", h.pauseHandler)
 	mux.HandleFunc("/reset", h.resetHandler)
 	mux.HandleFunc("/groupMACs", h.groupMACHandler)
+	mux.HandleFunc("/sampleSummary", h.usageSummaryHandler)
 
 	return &http.Server{
 		Addr:                         ":8081",

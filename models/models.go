@@ -29,6 +29,13 @@ type MapIpGroups map[Ip][]Group
 type MapDomainGroups map[Domain][]Group
 
 type NamedMAC struct {
-	MAC string `yaml:"mac"`
+	MAC  string `yaml:"mac"`
 	Name string `yaml:"name"`
+}
+
+// GroupSummary contains the used and total count of a group used by the usage tracker and web for reporting.
+type GroupSummary struct {
+	Used       int
+	Total      int
+	Percentage int
 }

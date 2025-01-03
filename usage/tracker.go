@@ -10,6 +10,7 @@ import (
 
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
 )
 
 type saveSamplesFunc func(string, *sync.Map) error
@@ -204,7 +205,7 @@ func (t *Tracker) AddSample(id string) {
 
 // HasExceededThreshold checks if a device has exceeded the threshold duration.
 func (t *Tracker) HasExceededThreshold(deviceID string) bool {
-	if t.pauseEndTime.After(time.Now()) {  // if the tracker is paused...
+	if t.pauseEndTime.After(time.Now()) { // if the tracker is paused...
 		// TODO: add test for HasExceededThreshold() when tracker is paused
 		return false
 	}
@@ -306,21 +307,36 @@ func (t *Tracker) CalculateWindow(now time.Time) (time.Time, time.Time) {
 
 // GetSampleSummary returns a map of device IDs to the number of samples seen.
 // Used by package web for reporting.
-func (t *Tracker) GetSampleSummary() map[string]int {
-	samples := make(map[string]int)
+func (t *Tracker) GetSampleSummary() map[string]models.GroupSummary {
+	samples := make(map[string]models.GroupSummary)
+
 	t.devices.Range(func(k, v interface{}) bool {
 		data := v.(*deviceData)
 		data.mu.Lock()
 		defer data.mu.Unlock()
 		count := 0
+		total := 0
 		for _, seen := range data.samples {
 			if seen {
 				count++
 			}
+			total++
 		}
-		samples[k.(string)] = count
+
+		usagePercent := int(float64(count) / config.AppCfg.TrackerConfig.Threshold.Minutes() * 100)
+		if usagePercent > 100 {
+			usagePercent = 100
+		}
+
+		samples[k.(string)] = models.GroupSummary{
+			Used:       count,
+			Total:      total,
+			Percentage: usagePercent,
+		}
+
 		return true
 	})
+
 	return samples
 }
 

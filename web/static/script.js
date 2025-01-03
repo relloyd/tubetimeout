@@ -25,20 +25,36 @@ document.getElementById("resetButton").addEventListener("click", () => {
 
 document.addEventListener('DOMContentLoaded', () => {
     const apiUrl = '/groupMACs';
+    const usageApiUrl = '/sampleSummary'; // Usage data endpoint
     let flatGroupMACs = [];
     let groups = [];
     let availableMACs = [];
+    let usageData = {}; // Store usage data
 
-    // Fetch initial configuration
+    // Fetch configuration and usage data
     async function fetchConfig() {
         const response = await fetch(apiUrl);
         flatGroupMACs = await response.json();
 
         // Extract groups dynamically
         groups = [...new Set(flatGroupMACs.map(entry => entry.group).filter(Boolean))];
+
+        // Fetch and display usage data
+        await fetchUsageData();
         renderDevices();
         renderGroups();
         updateGroupDropdown(); // Populate groups dropdown
+    }
+
+    // Fetch usage data from /sampleSummary
+    async function fetchUsageData() {
+        try {
+            const response = await fetch(usageApiUrl);
+            usageData = await response.json(); // Example: { "GroupA": { "used": 50, "total": 100, "percentage": 50 } }
+        } catch (error) {
+            console.error('Error fetching usage data:', error);
+            usageData = {}; // Default to empty data
+        }
     }
 
     // Render Devices Dropdown and Inputs
@@ -71,7 +87,6 @@ document.addEventListener('DOMContentLoaded', () => {
         nameInput.value = entry.name || '';
     }
 
-    // Update Group Dropdown
     function updateGroupDropdown() {
         const groupDropdown = document.getElementById('group-dropdown');
         groupDropdown.innerHTML = '';
@@ -92,8 +107,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         flatGroupMACs.forEach(entry => {
             if (entry.mac === mac) {
-                entry.name = name; // Update name
-                entry.group = group; // Assign group
+                entry.name = name;
+                entry.group = group;
             }
         });
 
@@ -167,15 +182,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const groupHeader = document.createElement('div');
             groupHeader.classList.add('group-header');
 
+            // Group Title
             const groupTitle = document.createElement('h3');
             groupTitle.textContent = groupName;
 
+            // Usage Info
+            const usageInfo = document.createElement('span');
+            const usage = usageData[groupName] || { used: 0, percentage: 0 };
+            usageInfo.textContent = `Used: ${usage.used} mins (${usage.percentage}%)`;
+
+            // Remove Group Button
             const removeGroupBtn = document.createElement('button');
             removeGroupBtn.textContent = 'Remove Group';
             removeGroupBtn.classList.add('remove-group-btn');
             removeGroupBtn.onclick = () => removeGroup(groupName);
 
             groupHeader.appendChild(groupTitle);
+            groupHeader.appendChild(usageInfo);
             groupHeader.appendChild(removeGroupBtn);
             groupDiv.appendChild(groupHeader);
 
@@ -183,7 +206,6 @@ document.addEventListener('DOMContentLoaded', () => {
             grouped[groupName].forEach(({ mac, name }) => {
                 const listItem = document.createElement('li');
                 const label = document.createElement('span');
-                // label.textContent = `${name} (${mac.replace(/:/g, '')})`;
                 label.textContent = `${mac.replace(/^:/g, '')} - ${name}`;
 
                 const removeBtn = document.createElement('button');

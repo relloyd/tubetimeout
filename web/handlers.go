@@ -22,11 +22,6 @@ func (h *Handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Gather data to use in the template.
 	_, nextResetTime := h.usage.CalculateWindow(time.Now())
-	usageMinutes := h.usage.GetSampleSummary()["youtube"]
-	usagePercent := int(float64(usageMinutes) / float64(config.AppCfg.TrackerConfig.Threshold.Minutes()) * 100)
-	if usagePercent > 100 {
-		usagePercent = 100
-	}
 	pe := h.usage.GetPauseEndTime()
 	pausedUntil := pe.Format(time.RFC1123) // RFC1123 = "Mon, 02 Jan 2006 15:04:05 MST"
 	if pe.IsZero() {
@@ -39,8 +34,6 @@ func (h *Handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 		UsagePeriod:    formatDuration(config.AppCfg.TrackerConfig.Retention),
 		UsageNextReset: nextResetTime,
 		UsageThreshold: formatDuration(config.AppCfg.TrackerConfig.Threshold),
-		UsageMinutes:   usageMinutes,
-		UsagePercent:   usagePercent,
 		PausedUntil:    pausedUntil,
 	}
 
@@ -92,6 +85,21 @@ func (h *Handler) groupMACHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+}
+
+func (h *Handler) usageSummaryHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	summary := h.usage.GetSampleSummary()
+	w.Header().Set("Content-Type", "application/json")
+	err := json.NewEncoder(w).Encode(summary)
+	if err != nil {
+		h.logger.Errorf("Error encoding sample summary response: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
 }
 
 // File server rootHandler for static files

@@ -21,15 +21,6 @@ build:
 build-release: test
 	go build -ldflags "-s -w" $(LD_FLAGS) -gcflags "all=-trimpath=$(pwd)" -o $(APP_SHORT) .
 
-install: build-release
-	@echo "Installing $(APP) with timestamp $(INSTALL_TIMESTAMP)..."
-	install -m 0755 $(APP_SHORT) $(INSTALL_DEST)/$(APP)-$(INSTALL_TIMESTAMP)
-	ln -sf $(INSTALL_DEST)/$(APP)-$(INSTALL_TIMESTAMP) $(INSTALL_DEST)/tt
-	@echo "Installation complete!"
-
-sync:
-	rsync -auv --delete-after --exclude=.git ./ root@tubetimeout:tubetimeout/
-
 debug: build
 	DEBUG_ENABLED=true LOG_LEVEL=debug dlv exec --headless --continue --accept-multiclient --listen=:56268 --api-version=2 $(APP_SHORT)
 	#	dlv exec --accept-multiclient --listen=:56268 --api-version=2 $(APP_SHORT)
@@ -39,6 +30,15 @@ debug-test:
 
 run: build
 	LOG_LEVEL=debug $(APP_SHORT)
+
+install: build-release
+	@echo "Installing $(APP) with timestamp $(INSTALL_TIMESTAMP)..."
+	install -m 0755 $(APP_SHORT) $(INSTALL_DEST)/$(APP)-$(INSTALL_TIMESTAMP)
+	ln -sf $(INSTALL_DEST)/$(APP)-$(INSTALL_TIMESTAMP) $(INSTALL_DEST)/tt
+	@echo "Installation complete!"
+
+sync:
+	rsync -auv --delete-after --exclude=.git ./ root@tubetimeout:tubetimeout/
 
 docker:
 	# Build docker image for local testing of nftables which is not available on MacOS
