@@ -265,3 +265,17 @@ select {
 .device-table button:hover {
     background-color: #0056b3;
 }
+
+.save-container {
+    display: flex;
+    justify-content: center; /* Center horizontally */
+    align-items: center;     /* Center vertically */
+    margin-top: 20px;        /* Add spacing from content above */
+}
+
+#save-config-btn {
+    display: none;          /* Initially hidden */
+    padding: 10px 20px;     /* Make it look better with padding */
+    font-size: 16px;        /* Slightly larger text for readability */
+    cursor: pointer;        /* Pointer cursor for better UX */
+}

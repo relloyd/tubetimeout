@@ -25,7 +25,9 @@ document.getElementById("resetButton").addEventListener("click", () => {
 
 document.addEventListener('DOMContentLoaded', () => {
     const apiUrl = '/groupMACs';
-    const usageApiUrl = '/sampleSummary'; // Usage data endpoint
+    const usageApiUrl = '/usageSummary'; // Usage data endpoint
+    const saveButton = document.getElementById('save-config-btn'); // Reference to Save Button
+
     let flatGroupMACs = [];
     let groups = [];
     let availableMACs = [];
@@ -116,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderDevices();
         renderGroups();
         updateGroupDropdown();
-        saveConfig();
+        showSaveButton();
     };
 
     // Add New Group
@@ -148,6 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             showNotification('Error saving configuration', true);
         }
+        hideSaveButton()
     }
 
     // Show Notification
@@ -228,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         renderDevices();
         renderGroups();
-        saveConfig();
+        showSaveButton();
     }
 
     function removeGroup(groupName) {
@@ -239,8 +242,19 @@ document.addEventListener('DOMContentLoaded', () => {
         updateGroupDropdown();
         renderDevices();
         renderGroups();
-        saveConfig();
+        showSaveButton();
     }
 
+    // Show Save Button
+    function showSaveButton() {
+        saveButton.style.display = 'inline-block';
+    }
+
+    // Hide Save Button
+    function hideSaveButton() {
+        saveButton.style.display = 'none';
+    }
+
+    saveButton.addEventListener('click', saveConfig); // Event listener for Save Button
     fetchConfig();
 });
