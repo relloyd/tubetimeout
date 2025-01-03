@@ -73,7 +73,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 		MaxQueueLen:  0xFFFF, // 65535
 		MaxPacketLen: 0xFFFF,
 		Copymode:     nfqueue.NfQnlCopyPacket,
-		Flags:        0,
+		Flags:        nfqueue.NfQaCfgFlagFailOpen,
 		WriteTimeout: 15 * time.Millisecond, // TODO: align timeout with packet delay ms
 		// AfFamily:     0,
 		// ReadTimeout:  0,
