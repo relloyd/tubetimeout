@@ -58,9 +58,6 @@ func main() {
 		_ = logger.Sync()
 	}(logger)
 
-	// Cleanup functions.
-	var cleanupFuncs []cleanupFunc
-
 	handleDebugging(logger, &config.AppCfg.DebugConfig)
 
 	// NFT rules to send traffic to NFQueue.
@@ -98,7 +95,7 @@ func main() {
 	dw.Start(ctx)
 	logger.Info("Destinations mapped")
 
-	// NFQueue to listen to and track packets in user space.
+	// NFQueue to process packets in user space.
 	q, err := nfq.NewNFQueueFilter(ctx, logger, &config.AppCfg.FilterConfig, t, mgr)
 	if err != nil {
 		logger.Fatalln("Failed to setup NFQueue filter:", err)
@@ -106,6 +103,7 @@ func main() {
 	logger.Info("NFQueue listener started")
 
 	// Cleanup functions.
+	var cleanupFuncs []cleanupFunc
 	cleanupFuncs = append(cleanupFuncs, func() error {
 		// Cancel the NFQ before closing NFQ else it will block!
 		// We probably want to remove the NFT rules before closing the NFQ but NFQ will have packets in flight that it cannot Accept with error: "netlink send: sendmsg: bad file descriptor".

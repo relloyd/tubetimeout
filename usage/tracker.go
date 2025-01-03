@@ -14,7 +14,7 @@ import (
 	"relloyd/tubetimeout/models"
 )
 
-type saveSamplesFunc func(string, *sync.Map) error
+type saveSamplesFunc func(*zap.SugaredLogger, string, *sync.Map) error
 
 var fnSaveSamples = saveSamplesFunc(saveSamples)
 
@@ -107,7 +107,7 @@ func saveSamplesPeriodically(ctx context.Context, logger *zap.SugaredLogger, dev
 	ticker := time.NewTicker(interval)
 	fn := func() {
 		// TODO: save samples safely by using a temporary file and renaming it.
-		if err := fnSaveSamples(filePath, devicesToSave); err != nil {
+		if err := fnSaveSamples(logger, filePath, devicesToSave); err != nil {
 			logger.Errorf("Failed to save samples to file: %v", err)
 		} else {
 			logger.Infof("Saved samples to file %q", filePath)
@@ -154,7 +154,7 @@ func loadSamples(path string) (*sync.Map, error) {
 	return m, nil
 }
 
-func saveSamples(path string, devices *sync.Map) error {
+func saveSamples(logger *zap.SugaredLogger, path string, devices *sync.Map) error {
 	// Prepare the DTO map.
 	samples := make(map[string]deviceDataDTO)
 
@@ -174,7 +174,7 @@ func saveSamples(path string, devices *sync.Map) error {
 	}
 
 	// Write the samples to the file.
-	return os.WriteFile(path, b, 0644)
+	return config.SafeWriteViaTemp(logger, path, string(b))
 }
 
 // AddSample records a sample for a given identifier at the current time.
@@ -346,10 +346,13 @@ func (t *Tracker) GetSampleSummary() map[string]models.GroupSummary {
 }
 
 func (t *Tracker) SetPause(d time.Duration) {
-	pauseEnd := time.Now().Add(d)
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.pauseEndTime = pauseEnd
+	if t.pauseEndTime.IsZero() {
+		t.pauseEndTime = time.Now().Add(d)
+		return
+	}
+	t.pauseEndTime = t.pauseEndTime.Add(d)
 }
 
 func (t *Tracker) GetPauseEndTime() time.Time {

@@ -40,7 +40,7 @@ func createAppHomeDirAndGetConfigFile(fileName string) (string, error) {
 	return filePath, nil
 }
 
-func safeWriteViaTemp(logger *zap.SugaredLogger, filePath string, data string) error {
+func SafeWriteViaTemp(logger *zap.SugaredLogger, filePath string, data string) error {
 	tempPath := filePath + ".tmp"
 
 	// Create a temporary file.

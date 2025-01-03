@@ -102,11 +102,10 @@ func (dw *DomainWatcher) Start(ctx context.Context) {
 		dw.notifyReceivers()
 	}
 
-	fn()
-
 	// Periodically resolve.
 	ticker := time.NewTicker(defaultInterval)
 	go func() {
+		fn()
 		for {
 			select {
 			case <-ctx.Done():

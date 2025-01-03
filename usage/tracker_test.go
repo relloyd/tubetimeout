@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
 )
 
@@ -30,7 +31,7 @@ func TestNewTracker(t *testing.T) {
 
 	// Mock the file saver func.
 	savedFileCount := 0
-	fnSaveSamples = func(path string, devices *sync.Map) error {
+	fnSaveSamples = func(logger *zap.SugaredLogger, path string, devices *sync.Map) error {
 		savedFileCount++
 		return nil
 	}
@@ -402,7 +403,7 @@ func saveSomeSamples(t *testing.T) (*sync.Map, *os.File, error) {
 		mu:      &sync.Mutex{},
 	})
 
-	err = saveSamples(tmpFile.Name(), devices)
+	err = saveSamples(config.MustGetLogger(), tmpFile.Name(), devices)
 
 	return devices, tmpFile, err
 }

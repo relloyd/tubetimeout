@@ -156,7 +156,7 @@ func (g *groupMACs) SaveGroupMACs(logger *zap.SugaredLogger, flatGroupMACs []Fla
 		return fmt.Errorf("failed to marshal group-macs to YAML: %w", err)
 	}
 
-	err = safeWriteViaTemp(logger, defaultGroupMacFilePath, string(yamlBytes))
+	err = SafeWriteViaTemp(logger, defaultGroupMacFilePath, string(yamlBytes))
 	if err != nil {
 		return fmt.Errorf("failed to write group-macs to file: %w", err)
 	}

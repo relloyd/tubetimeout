@@ -55,7 +55,7 @@ func TestSafeWriteViaTemp(t *testing.T) {
 	}()
 
 	// Run the function
-	safeWriteViaTemp(MustGetLogger(), testFilePath, testData)
+	SafeWriteViaTemp(MustGetLogger(), testFilePath, testData)
 
 	// Verify the original file exists
 	if _, err := os.Stat(testFilePath); os.IsNotExist(err) {

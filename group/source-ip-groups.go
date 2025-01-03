@@ -77,9 +77,9 @@ func (nw *NetWatcher) RegisterSourceIpGroupsReceivers(receivers ...SourceIpGroup
 // Start begins the periodic ARP scanning process and supports cancellation using context
 // TODO: add a test to check that scanNetworkAndNotify is called immediately and repeatedly.
 func (nw *NetWatcher) Start(ctx context.Context) {
-	scanNetworkAndNotify(nw)
 	ticker := time.NewTicker(1 * time.Minute)
 	go func() {
+		scanNetworkAndNotify(nw)
 		for {
 			select {
 			case <-ctx.Done():
