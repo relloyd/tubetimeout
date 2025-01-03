@@ -3,6 +3,7 @@ package usage
 import (
 	"context"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -100,12 +101,17 @@ func TestHasExceededThreshold(t *testing.T) {
 		t.Error("HasExceededThreshold returned true with no samples recorded")
 	}
 
-	// Case 2: Samples recorded but below threshold.
+	// Case 2a: Samples recorded but below threshold.
 	for i := 0; i < 5; i++ {
 		deviceData.samples[i] = true // Mark 5 minutes as seen.
 	}
 	if tracker.HasExceededThreshold(deviceID) {
 		t.Error("HasExceededThreshold returned true with samples below the threshold")
+	}
+
+	// Case 2b: Test case insensitivity.
+	if tracker.HasExceededThreshold(strings.ToUpper(deviceID)) {
+		t.Error("HasExceededThreshold didn't use lower case for the device ID")
 	}
 
 	// Case 3: Samples meet the threshold.
@@ -154,7 +160,7 @@ func TestAddSample(t *testing.T) {
 	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
 	assert.NoError(t, err, "NewTracker failed")
 
-	deviceID := "test-device"
+	deviceID := "Test-Device" // use mixed case to assert case insensitivity
 
 	// Mock current time to control time progression in tests.
 	now := time.Now().Truncate(cfg.Granularity)
@@ -164,10 +170,14 @@ func TestAddSample(t *testing.T) {
 		return now
 	}
 
-	// Case 1: Add a sample at the start of the buffer.
+	// Case 1a: Add a sample at the start of the buffer and verify that we cannot find the mixed case device ID.
 	tracker.AddSample(deviceID)
-
 	data, ok := tracker.devices.Load(deviceID)
+	assert.False(t, ok, "AddSample should not find data by mixed case device ID")
+
+	// Case 1b: Add a sample at the start of the buffer and verify that we can find the lower case device ID.
+	deviceID = strings.ToLower(deviceID)
+	data, ok = tracker.devices.Load(deviceID)
 	if !ok {
 		t.Fatalf("AddSample did not initialize device data")
 	}

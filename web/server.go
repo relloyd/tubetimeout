@@ -52,7 +52,7 @@ func NewServer(logger *zap.SugaredLogger, s UsageTracker, d DeviceGroupGetterSet
 	mux.HandleFunc("/pause", h.pauseHandler)
 	mux.HandleFunc("/reset", h.resetHandler)
 	mux.HandleFunc("/groupMACs", h.groupMACHandler)
-	mux.HandleFunc("/sampleSummary", h.usageSummaryHandler)
+	mux.HandleFunc("/usageSummary", h.usageSummaryHandler)
 
 	return &http.Server{
 		Addr:                         ":8081",

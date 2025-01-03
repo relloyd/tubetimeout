@@ -108,3 +108,5 @@ func TestGetAllGroupMACs(t *testing.T) {
 	// Expect 5 MACs in the result: 4 from the fake config file and 1 extra from the ARP scan.
 	assert.Equal(t, 5, len(allGroupMACs), "Number of MACs in the result")
 }
+
+

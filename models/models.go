@@ -35,7 +35,7 @@ type NamedMAC struct {
 
 // GroupSummary contains the used and total count of a group used by the usage tracker and web for reporting.
 type GroupSummary struct {
-	Used       int
-	Total      int
-	Percentage int
+	Used       int `json:"used"`
+	Total      int `json:"total"`
+	Percentage int `json:"percentage"`
 }

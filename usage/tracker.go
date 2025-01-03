@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -180,6 +181,8 @@ func saveSamples(path string, devices *sync.Map) error {
 func (t *Tracker) AddSample(id string) {
 	now := t.nowFunc() // Use nowFunc instead of time.Now
 
+	id = strings.ToLower(id) // force lower case for
+
 	lastWindowStart, _ := t.CalculateWindow(now)
 
 	// Get or initialize the device data.
@@ -209,6 +212,8 @@ func (t *Tracker) HasExceededThreshold(deviceID string) bool {
 		// TODO: add test for HasExceededThreshold() when tracker is paused
 		return false
 	}
+
+	deviceID = strings.ToLower(deviceID) // force lower case for deviceID
 
 	data, ok := t.devices.Load(deviceID)
 	if !ok {
