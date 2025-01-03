@@ -191,8 +191,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Usage Info
             const usageInfo = document.createElement('span');
-            const usage = usageData[groupName] || { used: 0, percentage: 0 };
-            usageInfo.textContent = `Used: ${usage.used} mins (${usage.percentage}%)`;
+            const usage = usageData[groupName.toLowerCase()] || { used: 0, percentage: 0 };
+            usageInfo.textContent = `${usage.used} mins (${usage.percentage}%) usage`;
 
             // Remove Group Button
             const removeGroupBtn = document.createElement('button');
