@@ -120,22 +120,12 @@ func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool
 
 	// Check if the source IP and destination domain are known.
 	srcGroup, srcOk := m.IsSrcIpGroupKnown(srcIp)
-	dstGroup, dstOk := m.IsDstIpGroupKnown(dstIp)
+	_, dstOk := m.IsDstIpGroupKnown(dstIp)
 	if !srcOk || !dstOk {
 		return []models.Group{}, false
 	}
-
-	// Return a list of groups where they intersect.
-	var intersection []models.Group
-	for _, src := range srcGroup {
-		for _, dst := range dstGroup {
-			if src == dst {
-				intersection = append(intersection, src)
-			}
-		}
-	}
-
-	return intersection, len(intersection) != 0 // return true if there are intersecting groups
+	// Return the list of source groups.
+	return srcGroup, true
 }
 
 // IsSrcIpDestDomainKnown checks if the source IP and destination domain are known and returns the intersection of groups.
@@ -157,22 +147,12 @@ func (m *Manager) IsSrcIpDestDomainKnown(srcIp models.Ip, dstDomain models.Domai
 
 	// Check if the source IP and destination domain are known.
 	srcGroup, srcOK := m.IsSrcIpGroupKnown(srcIp)
-	dstGroup, dstOK := m.IsDstDomainGroupKnown(dstDomain)
+	_, dstOK := m.IsDstDomainGroupKnown(dstDomain)
 	if !srcOK || !dstOK {
 		return []models.Group{}, false
 	}
-
-	// Else we aim to return the intersection of groups determined by the source IP and destination domain.
-	var intersection []models.Group
-	for _, src := range srcGroup {
-		for _, dst := range dstGroup {
-			if src == dst {
-				intersection = append(intersection, src)
-			}
-		}
-	}
-
-	return intersection, len(intersection) != 0 // return true if there are intersecting groups
+	// Return the list of source groups.
+	return srcGroup, true
 }
 
 func getMetaSrcIpDestGroup(srcIp models.Ip, dstGroup models.Group) models.Group {
