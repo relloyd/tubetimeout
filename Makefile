@@ -62,5 +62,11 @@ stop:
 status:
 	systemctl status tubetimeout
 
+disable:
+	systemctl disable tubetimeout
+
+enable:
+	systemctl enable tubetimeout
+
 logs:
 	journalctl -u tubetimeout.service -f
