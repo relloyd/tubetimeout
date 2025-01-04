@@ -102,7 +102,7 @@ func (m *Manager) IsDstDomainGroupKnown(domain models.Domain) ([]models.Group, b
 	return groups, true
 }
 
-// IsSrcDestIpKnown checks if the source and destination IPs are known and returns the groups they intersect.
+// IsSrcDestIpKnown checks if the source and destination IPs are known and returns the src groups.
 func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool) {
 	// If the manager should match all source IPs as if they're in their own group...
 	if managerModeMatchAllSourceIps {

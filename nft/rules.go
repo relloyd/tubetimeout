@@ -151,6 +151,9 @@ func NewNFTRules(logger *zap.SugaredLogger, cfg *config.FilterConfig) (*Rules, e
 		return nil, fmt.Errorf("failed to create remote IP set")
 	}
 
+	// TODO: test that UDP packets are dropped from local IPs.
+	rules.dropUDPFromToLocalIPs() // drop UDP to/from the local IP set.
+
 	// Create NFTables rules for src-dest and dest-src combinations.
 	err = rules.addNFTablesRuleForSets(cfg.OutboundQueueNumber, rules.nameSetLocal, rules.nameSetRemote)
 	if err != nil {
@@ -167,6 +170,61 @@ func NewNFTRules(logger *zap.SugaredLogger, cfg *config.FilterConfig) (*Rules, e
 	}
 
 	return rules, nil
+}
+
+func (q *Rules) dropUDPFromToLocalIPs() {
+	directions := []uint32{12, 16} // 12 for source IP; 16 for destination IP
+	// Drop UDP
+	for _, direction := range directions {
+		rule := &nftables.Rule{
+			Table: q.table,
+			Chain: q.chain,
+			Exprs: []expr.Any{
+				// Match source IP in the set
+				// Extract the source IP address into register 1
+				&expr.Payload{
+					DestRegister: 1,                             // Store in register 1
+					Base:         expr.PayloadBaseNetworkHeader, // Network header
+					Offset:       direction,                     // Offset 12 for IPv4 source IP
+					Len:          4,                             // Length: 4 bytes for IPv4 address
+				},
+				// Check if the source IP is in the YouTube IP set
+				&expr.Lookup{
+					SourceRegister: 1,
+					SetName:        q.nameSetLocal, // drop UDP to/from the local IPs.
+				},
+				// Match UDP protocol
+				&expr.Payload{
+					DestRegister: 2,                             // Store in register 2
+					Base:         expr.PayloadBaseNetworkHeader, // Network header
+					Offset:       9,                             // Protocol field offset in IPv4 header
+					Len:          1,                             // Length: 1 byte
+				},
+				&expr.Cmp{
+					Op:       expr.CmpOpEq,
+					Register: 2,
+					Data:     []byte{17}, // 17 = UDP
+				},
+				// Match UDP destination port range (0-65535)
+				&expr.Payload{
+					DestRegister: 3,
+					Base:         expr.PayloadBaseTransportHeader,
+					Offset:       2, // UDP header - Destination Port (2 bytes at offset 2)
+					Len:          2, // Match 2 bytes (16-bit port)
+				},
+				&expr.Range{
+					Register: 3,
+					FromData: []byte{0x00, 0x00}, // Port 0
+					ToData:   []byte{0xFF, 0xFF}, // Port 65535
+				},
+				// Drop action
+				&expr.Verdict{
+					Kind: expr.VerdictDrop,
+				},
+			},
+		}
+		q.conn.AddRule(rule)
+	}
 }
 
 // UpdateDestIpDomains is a callback that saves the supplied Ip addresses and updates the nft rules using them.

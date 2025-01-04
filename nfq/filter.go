@@ -73,12 +73,13 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 		MaxQueueLen:  0xFFFF, // 65535
 		MaxPacketLen: 0xFFFF,
 		Copymode:     nfqueue.NfQnlCopyPacket,
-		Flags:        nfqueue.NfQaCfgFlagFailOpen,
+		Flags:        0,
 		WriteTimeout: 15 * time.Millisecond, // TODO: align timeout with packet delay ms
 		// AfFamily:     0,
 		// ReadTimeout:  0,
 		// WriteTimeout: 15 * time.Second,
 		// Logger:       &log.Logger{},
+		// Flags:        nfqueue.NfQaCfgFlagFailOpen,
 	})
 
 	if err != nil {
@@ -162,6 +163,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 					zap.String("decision", decision),
 					zap.String("direction", direction),
 					zap.String("proto", proto),
+					zap.String("protocol-byte", string(protocol)),
 					zap.String("src", pips.src.String()),
 					zap.String("dest", pips.dst.String()),
 					zap.String("group", string(grp)))
