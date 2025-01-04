@@ -42,7 +42,7 @@ func Test_addNFTablesRuleForSingleDestAddr(t *testing.T) {
 	r, err := rules.conn.GetRules(rules.table, rules.chain)
 	t.Log("num rules = ", r)
 	assert.NoError(t, err, "conn.GetRules() error = %v", err)
-	assert.Equal(t, 2, len(r), "expected 2 default rules")
+	assert.Equal(t, 4, len(r), "expected 4 default rules") // 2 src-dest rules; 2 udp blocking rules
 
 	// Add a single rule.
 	err = rules.addNFTablesRuleForSingleDestAddr("10.20.30.1") // add any old rule
@@ -54,7 +54,7 @@ func Test_addNFTablesRuleForSingleDestAddr(t *testing.T) {
 	r, err = rules.conn.GetRules(rules.table, rules.chain)
 	t.Log("num rules = ", r)
 	assert.NoError(t, err, "conn.GetRules() error = %v", err)
-	assert.Equal(t, 3, len(r), "expected 2 default plus 1 rules = 3")
+	assert.Equal(t, 5, len(r), "expected 4 default plus 1 rules = 5") // 2 src-dest rules; 2 udp blocking rules; 1 new rule
 }
 
 func Test_addNFTablesRuleForSets(t *testing.T) {
@@ -66,7 +66,7 @@ func Test_addNFTablesRuleForSets(t *testing.T) {
 
 	r, err := rules.conn.GetRules(rules.table, rules.chain)
 	assert.NoError(t, err, "conn.GetRules() error = %v", err)
-	assert.Equal(t, 2, len(r), "2 default rules expected")
+	assert.Equal(t, 4, len(r), "4 default rules expected") // 2 src-dest rules; 2 udp blocking rules
 	for _, v := range r {
 		assert.Equal(t, rules.tableName, v.Table.Name, "rule created for unexpected table")
 		assert.Equal(t, rules.chainName, v.Chain.Name, "rule created for unexpected chain")

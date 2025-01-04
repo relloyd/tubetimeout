@@ -178,7 +178,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return acc;
         }, {});
 
-        Object.keys(grouped).forEach(groupName => {
+        const sortedGroupNames = Object.keys(grouped).sort();
+
+        sortedGroupNames.forEach(groupName => {
             const groupDiv = document.createElement('div');
             groupDiv.classList.add('group');
 
