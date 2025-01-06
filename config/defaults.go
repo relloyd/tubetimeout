@@ -76,4 +76,5 @@ type ProxyConfig struct {
 
 type WebConfig struct {
 	WebEnabled bool `envconfig:"ENABLED" default:"true"`
+	WebPort    int  `envconfig:"PORT" default:"80"`
 }

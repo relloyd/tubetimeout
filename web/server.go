@@ -55,7 +55,7 @@ func NewServer(logger *zap.SugaredLogger, s UsageTracker, d DeviceGroupGetterSet
 	mux.HandleFunc("/usageSummary", h.usageSummaryHandler)
 
 	return &http.Server{
-		Addr:                         ":8081",
+		Addr:                         fmt.Sprintf(":%d", config.AppCfg.WebConfig.WebPort),
 		Handler:                      mux,
 		DisableGeneralOptionsHandler: false,
 		TLSConfig:                    nil,
