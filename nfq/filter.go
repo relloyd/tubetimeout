@@ -113,7 +113,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 		id := *a.PacketID
 
 		if a.Payload == nil { // if there's no payload then accept the packet.
-			f.logger.Warn("Payload is nil")
+			f.logger.Warn("Payload is nil for packet", zap.Uint32("id", id))
 			acceptPacket(f.logger, nf, id)
 			return 0 // 1 to exit clean; -1 to signal error; 0 to continue
 		}

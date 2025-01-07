@@ -60,9 +60,9 @@ type TrackerConfig struct {
 
 type FilterConfig struct {
 	// PacketDropPercentage is the percentage of packets to drop.
-	PacketDropPercentage float32 `envconfig:"PACKET_DROP_PCT" default:"0.30"`
+	PacketDropPercentage float32 `envconfig:"PACKET_DROP_PCT" default:"0.40"`
 	// PacketDelayPercentage is the percentage of packets to delay evaluated after dropping.
-	PacketDelayPercentage float32       `envconfig:"PACKET_DELAY_PCT" default:"0.50"`
+	PacketDelayPercentage float32       `envconfig:"PACKET_DELAY_PCT" default:"0.90"`
 	PacketDelayMs         time.Duration `envconfig:"PACKET_DELAY_MS" default:"100ms"`
 	PacketJitterMs        time.Duration `envconfig:"PACKET_DELAY_JITTER_MS" default:"50ms"`
 	PacketDropUDP         bool          `envconfig:"PACKET_DROP_UDP" default:"true"`
