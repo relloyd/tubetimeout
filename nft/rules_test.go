@@ -66,7 +66,7 @@ func Test_addNFTablesRuleForSets(t *testing.T) {
 
 	r, err := rules.conn.GetRules(rules.table, rules.chain)
 	assert.NoError(t, err, "conn.GetRules() error = %v", err)
-	assert.Equal(t, 4, len(r), "3 default rules expected") // 2 src-dest rules; 1 udp blocking rule instead of 2 because IP sets aren't ready
+	assert.Equal(t, 3, len(r), "3 default rules expected") // 2 src-dest rules; 1 udp blocking rule instead of 2 because IP sets aren't ready
 	for _, v := range r {
 		assert.Equal(t, rules.tableName, v.Table.Name, "rule created for unexpected table")
 		assert.Equal(t, rules.chainName, v.Chain.Name, "rule created for unexpected chain")
