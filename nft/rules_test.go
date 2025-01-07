@@ -32,7 +32,7 @@ func Test_New(t *testing.T) {
 }
 
 func Test_addNFTablesRuleForSingleDestAddr(t *testing.T) {
-	// t.Cleanup(cleanupFunc)
+	t.Cleanup(cleanupFunc)
 	defaultTableName = "test_table"
 
 	rules, err := NewNFTRules(config.MustGetLogger(), &config.FilterConfig{})
