@@ -3,6 +3,7 @@ package nft
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"sync"
@@ -10,6 +11,7 @@ import (
 	"github.com/google/nftables"
 	"github.com/google/nftables/expr"
 	"go.uber.org/zap"
+	"golang.org/x/sys/unix"
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/models"
 )
@@ -151,8 +153,7 @@ func NewNFTRules(logger *zap.SugaredLogger, cfg *config.FilterConfig) (*Rules, e
 		return nil, fmt.Errorf("failed to create remote IP set")
 	}
 
-	// TODO: test that UDP packets are dropped from local IPs.
-	rules.dropUDPFromToLocalIPs() // drop UDP to/from the local IP set.
+	rules.dropUDPPorts() // drop UDP to/from the local IP set.
 
 	// Create NFTables rules for src-dest and dest-src combinations.
 	err = rules.addNFTablesRuleForSets(cfg.OutboundQueueNumber, rules.nameSetLocal, rules.nameSetRemote)
@@ -170,6 +171,64 @@ func NewNFTRules(logger *zap.SugaredLogger, cfg *config.FilterConfig) (*Rules, e
 	}
 
 	return rules, nil
+}
+
+// dropUDPPorts creates a rule to drop UDP packets for IPs in the source/local IP set.
+// TODO: test that UDP packets are dropped from local IPs.
+func (q *Rules) dropUDPPorts() {
+	// Define a set for UDP ports to match
+	set := &nftables.Set{
+		Table:   q.table,
+		Name:    "udp_ports",
+		KeyType: nftables.TypeInetService, // Port number type
+	}
+	err := q.conn.AddSet(set, nil)
+	if err != nil {
+		q.logger.Fatalf("Failed to create set of UDP ports: %v", err)
+	}
+
+	// Add elements to the set (UDP ports to block)
+	elements := []nftables.SetElement{
+		{Key: []byte{0x01, 0xf4}}, // Port 500 NAT-T
+		{Key: []byte{0x11, 0x94}}, // Port 4500 NAT-T
+		{Key: []byte{0x01, 0xBB}}, // Port 443
+	}
+	if err := q.conn.SetAddElements(set, elements); err != nil {
+		log.Fatalf("Failed to add elements to set: %v", err)
+	}
+
+	// Create a rule to match UDP packets with destination ports in the set
+	q.conn.AddRule(&nftables.Rule{
+		Table: q.table,
+		Chain: q.chain,
+		Exprs: []expr.Any{
+			// Match UDP protocol
+			&expr.Meta{
+				Key:      expr.MetaKeyL4PROTO,
+				Register: 1,
+			},
+			&expr.Cmp{
+				Op:       expr.CmpOpEq,
+				Register: 1,
+				Data:     []byte{unix.IPPROTO_UDP},
+			},
+			// Match destination port in set
+			&expr.Payload{
+				DestRegister: 2,
+				Base:         expr.PayloadBaseTransportHeader,
+				Offset:       2, // UDP header destination port offset
+				Len:          2, // Length of port
+			},
+			&expr.Lookup{
+				SourceRegister: 2,
+				SetName:        set.Name,
+			},
+			// Drop the packet
+			&expr.Verdict{
+				Kind: expr.VerdictDrop,
+			},
+		},
+	})
 }
 
 func (q *Rules) dropUDPFromToLocalIPs() {

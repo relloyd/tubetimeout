@@ -10,6 +10,7 @@ import (
 	"github.com/florianl/go-nfqueue"
 	"github.com/mdlayher/netlink"
 	"go.uber.org/zap"
+	"golang.org/x/sys/unix"
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/models"
 	"relloyd/tubetimeout/usage"
@@ -32,7 +33,7 @@ type packetIPs struct {
 }
 
 type NFQueueFilter struct {
-	Nfq    *nfqueue.Nfqueue
+	Nfq    []*nfqueue.Nfqueue
 	t      *usage.Tracker
 	g      ManagerI
 	logger *zap.Logger
@@ -43,6 +44,7 @@ type NFQueueFilter struct {
 // Ip addresses for which to perform filtering.
 // If the packets are destined for any of the injected Ips then filtering happens based on
 // <LOGIC-TBC>
+// TODO: unit test captuing two NFQs to ensure they are both created and running.
 func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *config.FilterConfig, t *usage.Tracker, g ManagerI) (*NFQueueFilter, error) {
 	var err error
 
@@ -54,15 +56,27 @@ func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *confi
 	f.logger = logger.Desugar()
 	f.g = g
 	f.t = t
-	f.Nfq, err = f.startNFQueueFilter(ctx, cfg, cfg.OutboundQueueNumber, packetDirectionOutbound)
+
+	nfq1, err := f.startNFQueueFilter(ctx, cfg, cfg.OutboundQueueNumber, packetDirectionOutbound)
 	if err != nil {
 		return nil, err
 	}
-	f.Nfq, err = f.startNFQueueFilter(ctx, cfg, cfg.InboundQueueNumber, packetDirectionInbound)
+
+	nfq2, err := f.startNFQueueFilter(ctx, cfg, cfg.InboundQueueNumber, packetDirectionInbound)
 	if err != nil {
 		return nil, err
 	}
+
+	f.Nfq = []*nfqueue.Nfqueue{nfq1, nfq2}
+
 	return f, nil
+}
+
+func acceptPacket(logger *zap.Logger, nf *nfqueue.Nfqueue, id uint32) {
+	err := nf.SetVerdict(id, nfqueue.NfAccept)
+	if err != nil {
+		logger.Error("Error setting verdict", zap.Error(err))
+	}
 }
 
 func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.FilterConfig, queueNumber uint16, mode packetDirection) (*nfqueue.Nfqueue, error) {
@@ -70,12 +84,12 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 	nf, err := nfqueue.Open(&nfqueue.Config{
 		NetNS:        0,
 		NfQueue:      queueNumber,
-		MaxQueueLen:  0xFFFF, // 65535
-		MaxPacketLen: 0xFFFF,
+		MaxQueueLen:  4096, // 0xFFFF, // 65535
+		MaxPacketLen: 4096, // we only need enough length for a packet which is MTU bounced to user space.
 		Copymode:     nfqueue.NfQnlCopyPacket,
 		Flags:        0,
 		WriteTimeout: 15 * time.Millisecond, // TODO: align timeout with packet delay ms
-		// AfFamily:     0,
+		AfFamily:     unix.AF_INET,
 		// ReadTimeout:  0,
 		// WriteTimeout: 15 * time.Second,
 		// Logger:       &log.Logger{},
@@ -100,18 +114,15 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 
 		if a.Payload == nil { // if there's no payload then accept the packet.
 			f.logger.Warn("Payload is nil")
-			err = nf.SetVerdict(id, nfqueue.NfAccept)
-			if err != nil {
-				f.logger.Error("Error setting verdict", zap.Error(err))
-				return -1
-			}
-			return 0
+			acceptPacket(f.logger, nf, id)
+			return 0 // 1 to exit clean; -1 to signal error; 0 to continue
 		}
 
 		pips, err = getPacketIPs(a)
 		if err != nil {
 			f.logger.Error("Error getting packet IPs", zap.Error(err))
-			return -1
+			acceptPacket(f.logger, nf, id)
+			return 0 // 1 to exit clean; -1 to signal error; 0 to continue
 		}
 
 		// Check if the packet is for any of the resolved IPs.
@@ -163,7 +174,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 					zap.String("decision", decision),
 					zap.String("direction", direction),
 					zap.String("proto", proto),
-					zap.String("protocol-byte", string(protocol)),
+					zap.Uint8("protocol-byte", protocol),
 					zap.String("src", pips.src.String()),
 					zap.String("dest", pips.dst.String()),
 					zap.String("group", string(grp)))
@@ -179,7 +190,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 		err = nf.SetVerdict(id, verdict)
 		if err != nil {
 			f.logger.Error("Error setting verdict: %v", zap.Error(err))
-			retval = 1 // 1 to exit clean; -1 to signal error; 0 to continue
+			retval = 0 // 1 to exit clean; -1 to signal error; 0 to continue
 		}
 
 		return retval
@@ -190,10 +201,8 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 			if err := ctx.Err(); err == nil { // if the context is still active...
 				f.logger.Error("NFQ error handler caught", zap.Error(err))
 			}
-			// TODO: decide how error handler should return 0 or -1 or cancel everything.
 		}
-
-		return -1 // to stop receiving messages return something different from 0.
+		return -1 // 1 to exit clean; -1 to signal error; 0 to continue
 	}
 
 	err = nf.RegisterWithErrorFunc(ctx, fnPacketHandler, fnErrorHandler)

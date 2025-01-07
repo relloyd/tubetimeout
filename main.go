@@ -113,9 +113,11 @@ func main() {
 		if err != nil {
 			return fmt.Errorf("error removing NFT rules: %w", err)
 		}
-		err = q.Nfq.Close() // cancel its context above before calling Close() else it will block.
-		if err != nil {
-			return fmt.Errorf("error closing NFQ: %w", err)
+		for _, nf := range q.Nfq {
+			err = nf.Close() // cancel its context above before calling Close() else it will block.
+			if err != nil {
+				return fmt.Errorf("error closing NFQ: %w", err)
+			}
 		}
 		return nil
 	})
