@@ -459,3 +459,26 @@ func TestCorruptFile(t *testing.T) {
 	_, err = loadSamples(tmpFile.Name())
 	assert.Error(t, err, "Expected error for corrupt file")
 }
+
+// TestResetSamples tests resetting samples for a device.
+func TestResetSamples(t *testing.T) {
+	// Setup: Create a tracker with 1-hour retention and 1-minute granularity.
+	cfg := &config.TrackerConfig{
+		Retention:   1 * time.Hour,
+		Granularity: 1 * time.Minute,
+		Threshold:   10 * time.Minute,
+	}
+
+	testDevice := strings.ToLower("test-device") // use explicit lower case device ID
+
+	tracker, err := NewTracker(context.Background(), config.MustGetLogger(), cfg)
+	assert.NoError(t, err, "NewTracker failed")
+
+	tracker.AddSample(testDevice)
+	_, ok := tracker.devices.Load(testDevice)
+	assert.True(t, ok, "Device should exist in tracker")
+
+	tracker.ResetSamples(testDevice)
+	_, ok = tracker.devices.Load(testDevice)
+	assert.False(t, ok, "Device should not be found in tracker")
+}
