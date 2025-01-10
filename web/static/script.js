@@ -25,7 +25,7 @@ document.getElementById("resetButton").addEventListener("click", () => {
 
 document.addEventListener('DOMContentLoaded', () => {
     const apiUrl = '/groupMACs';
-    const usageApiUrl = '/usageSummary'; // Usage data endpoint
+    const usageApiUrl = '/usage'; // Usage data endpoint
     const saveButton = document.getElementById('save-config-btn'); // Reference to Save Button
 
     let flatGroupMACs = [];

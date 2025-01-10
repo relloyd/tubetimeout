@@ -87,18 +87,31 @@ func (h *Handler) groupMACHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 }
 
-func (h *Handler) usageSummaryHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) usageHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
 
-	summary := h.usage.GetSampleSummary()
-	w.Header().Set("Content-Type", "application/json")
-	err := json.NewEncoder(w).Encode(summary)
-	if err != nil {
-		h.logger.Errorf("Error encoding sample summary response: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	if r.Method == http.MethodPost {
+		summary := h.usage.GetSampleSummary()
+		w.Header().Set("Content-Type", "application/json")
+		err := json.NewEncoder(w).Encode(summary)
+		if err != nil {
+			h.logger.Errorf("Error encoding sample summary response: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if r.Method == http.MethodDelete {
+		deviceID := r.URL.Query().Get("deviceID")
+		if deviceID != "" {
+			h.usage.ResetSamples(deviceID)
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]string{"message": "samples reset for deviceID"})
+		}
+		return
 	}
 }
 
@@ -139,8 +152,8 @@ func (h *Handler) pauseHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(fmt.Sprintf("Paused for %d minutes", duration)))
 }
 
-// resetHandler is an API endpoint for /reset
-func (h *Handler) resetHandler(w http.ResponseWriter, r *http.Request) {
+// pauseResetHandler is an API endpoint for /reset
+func (h *Handler) pauseResetHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
