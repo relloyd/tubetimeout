@@ -35,7 +35,7 @@ type packetIPs struct {
 type NFQueueFilter struct {
 	Nfq    []*nfqueue.Nfqueue
 	t      *usage.Tracker
-	g      ManagerI
+	m      ManagerI
 	logger *zap.Logger
 }
 
@@ -45,7 +45,7 @@ type NFQueueFilter struct {
 // If the packets are destined for any of the injected Ips then filtering happens based on
 // <LOGIC-TBC>
 // TODO: unit test captuing two NFQs to ensure they are both created and running.
-func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *config.FilterConfig, t *usage.Tracker, g ManagerI) (*NFQueueFilter, error) {
+func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *config.FilterConfig, t *usage.Tracker, m ManagerI) (*NFQueueFilter, error) {
 	var err error
 
 	if cfg.PacketDropPercentage < 0 || cfg.PacketDropPercentage > 1 {
@@ -54,7 +54,7 @@ func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *confi
 
 	f := &NFQueueFilter{}
 	f.logger = logger.Desugar()
-	f.g = g
+	f.m = m
 	f.t = t
 
 	nfq1, err := f.startNFQueueFilter(ctx, cfg, cfg.OutboundQueueNumber, packetDirectionOutbound)
@@ -142,13 +142,13 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 
 		if mode == packetDirectionOutbound { // if the mode is outbound...
 			// Check if the source and destination Ip addresses are known.
-			groups, ok = f.g.IsSrcDestIpKnown(models.Ip(pips.src.String()), models.Ip(pips.dst.String()))
+			groups, ok = f.m.IsSrcDestIpKnown(models.Ip(pips.src.String()), models.Ip(pips.dst.String()))
 			direction = "outbound"
 		} else { // else if the mode is inbound...
 			// Expect the source and destination to be reversed.
 			// Source IPs will be the public IPs that we added to our destination mapping.
 			// Destinations IPs will be the local network.
-			groups, ok = f.g.IsSrcDestIpKnown(models.Ip(pips.dst.String()), models.Ip(pips.src.String()))
+			groups, ok = f.m.IsSrcDestIpKnown(models.Ip(pips.dst.String()), models.Ip(pips.src.String()))
 			direction = "inbound"
 		}
 
