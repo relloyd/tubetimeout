@@ -3,7 +3,8 @@ Description=tubetimeout
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/tt --your-flags
+ExecStart=/usr/local/bin/tt
+Environment=LOG_LEVEL=info
 WorkingDirectory=/root
 Restart=always
 User=root
