@@ -148,7 +148,7 @@ func (h *Handler) resetHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Reset the usage tracker pause timer.
 	h.logger.Info("Pause timer reset triggered")
-	h.usage.RemovePause()
+	h.usage.DeletePause()
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("Reset successful"))

@@ -28,7 +28,7 @@ type TemplateData struct {
 type UsageTracker interface {
 	GetSampleSummary() map[string]models.GroupSummary
 	CalculateWindow(now time.Time) (time.Time, time.Time)
-	RemovePause()
+	DeletePause()
 	SetPause(d time.Duration)
 	GetPauseEndTime() time.Time
 }

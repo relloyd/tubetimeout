@@ -361,7 +361,7 @@ func (t *Tracker) GetPauseEndTime() time.Time {
 	return t.pauseEndTime
 }
 
-func (t *Tracker) RemovePause() {
+func (t *Tracker) DeletePause() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.pauseEndTime = time.Time{}
