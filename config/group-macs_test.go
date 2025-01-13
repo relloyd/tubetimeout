@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -54,7 +55,7 @@ func TestGetGroupMACs(t *testing.T) {
 	setupConfig(t)
 
 	// Call the function under test.
-	gm, err := GroupMACs.GetConfig()
+	gm, err := GroupMACs.GetConfig(MustGetLogger())
 	if err != nil {
 		t.Fatalf("GetConfig returned an error: %v", err)
 	}
@@ -87,6 +88,19 @@ func TestGetGroupMACs(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestGetGroupMACsFileNotFound(t *testing.T) {
+	td, err := os.MkdirTemp("", "test-mac-groups-*.yaml")
+	assert.NoError(t, err, "Failed to create temp dir")
+
+	// Hack functions so the temp file is returned to GetConfig().
+	defaultGroupMacFilePath = "non-existent-file.yaml"
+	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(f string) (string, error) { return path.Join(td, f), nil }
+
+	// Call the function under test.
+	_, err = GroupMACs.GetConfig(MustGetLogger())
+	assert.ErrorIs(t, err, ErrorGroupMacFileNotFound, "Error type")
 }
 
 // Test cases

@@ -44,7 +44,7 @@ var (
 	groupMacsLoaderFunc = FuncGroupMacsLoader(config.GroupMACs.GetConfig)
 )
 
-type FuncGroupMacsLoader func() (config.GroupMACsConfig, error)
+type FuncGroupMacsLoader func(logger *zap.SugaredLogger) (config.GroupMACsConfig, error)
 
 type SourceIpGroupsReceiver interface {
 	UpdateSourceIpGroups(newData models.MapIpGroups)
@@ -120,7 +120,7 @@ func scanNetworkAndNotify(nw *NetWatcher) {
 // scanNetwork performs an ARP scan and maps MAC addresses to IPs
 func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) models.MapIpGroups {
 	// Load YAML data each time.
-	gm, err := groupMacsLoaderFunc()
+	gm, err := groupMacsLoaderFunc(logger)
 	if errors.Is(err, config.ErrorGroupMacFileNotFound) { // if there is an error loading the YAML data...
 		// Log the error and configure all IPs subject to all groups.
 		logger.Warnf("Source IPs will be tracked individually. MAC-Groups file not configured: %v", err)

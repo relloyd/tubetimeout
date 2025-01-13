@@ -44,7 +44,7 @@ type groupMACs struct {
 }
 
 // GetConfig parses the defaultGroupMacFilePath YAML file.
-func (g *groupMACs) GetConfig() (GroupMACsConfig, error) {
+func (g *groupMACs) GetConfig(logger *zap.SugaredLogger) (GroupMACsConfig, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -59,7 +59,14 @@ func (g *groupMACs) GetConfig() (GroupMACsConfig, error) {
 	}
 
 	yamlFile, err := os.ReadFile(defaultGroupMacFilePath)
-	if err != nil {
+	if err != nil && os.IsNotExist(err) { // if the file needs creating...
+		// Create the file with an empty config.
+		err = SafeWriteViaTemp(logger, defaultGroupMacFilePath, "")
+		if err != nil {
+			return GroupMACsConfig{}, fmt.Errorf("failed to create group-macs file: %w", err)
+		}
+		return GroupMACsConfig{}, nil
+	} else if err != nil {
 		return GroupMACsConfig{}, fmt.Errorf("%w: %v: %v", ErrorGroupMacFileNotFound, err, defaultGroupMacFilePath)
 	}
 
@@ -75,8 +82,8 @@ func (g *groupMACs) GetConfig() (GroupMACsConfig, error) {
 // GetAllGroupMACs returns all the group-macs from the config file and ARP scan.
 func (g *groupMACs) GetAllGroupMACs(logger *zap.SugaredLogger) ([]FlatGroupMAC, error) {
 	// Load the configured group-macs from disk.
-	gm, err := g.GetConfig()
-	if err != nil {
+	gm, err := g.GetConfig(logger)
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 

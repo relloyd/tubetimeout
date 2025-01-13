@@ -2,14 +2,20 @@ package group
 
 import (
 	"fmt"
+	"sync"
 
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/models"
+	"relloyd/tubetimeout/monitor"
 )
 
 var (
 	// managerModeMatchAllSourceIps is a flag to determine if the manager should match all source IPs (true) or aim for the intersection of source dest groups determined by source desk IPs (false).
 	managerModeMatchAllSourceIps = false
+	// rollingWindowSize is the size of the rolling window for the traffic monitor.
+	rollingWindowSize = 5
+	// fnNewTrafficMonitor is a function to create a new traffic monitor.
+	fnNewTrafficMonitor = monitor.NewAverageTrafficMonitor
 )
 
 type Manager struct {
@@ -18,6 +24,7 @@ type Manager struct {
 	destIpGroups     models.IpGroups
 	destIpDomains    models.IpDomains
 	destDomainGroups models.DomainGroups
+	trafficMonitor   *sync.Map
 }
 
 func NewManager(logger *zap.SugaredLogger) *Manager {
@@ -27,6 +34,7 @@ func NewManager(logger *zap.SugaredLogger) *Manager {
 		destIpGroups:     models.IpGroups{Data: make(models.MapIpGroups)},
 		destIpDomains:    models.IpDomains{Data: make(models.MapIpDomain)},
 		destDomainGroups: models.DomainGroups{Data: make(models.MapDomainGroups)},
+		trafficMonitor:   &sync.Map{},
 	}
 	return m
 }
@@ -124,6 +132,10 @@ func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool
 	if !srcOk || !dstOk {
 		return []models.Group{}, false
 	}
+	// Count traffic usage for the source IP and group combination.
+	for _, g := range srcGroup {
+		m.countTraffic(fmt.Sprintf("%v-%v", g, string(srcIp)), 1)
+	}
 	// Return the list of source groups.
 	return srcGroup, true
 }
@@ -157,4 +169,10 @@ func (m *Manager) IsSrcIpDestDomainKnown(srcIp models.Ip, dstDomain models.Domai
 
 func getMetaSrcIpDestGroup(srcIp models.Ip, dstGroup models.Group) models.Group {
 	return models.Group(fmt.Sprintf("%v:%v", srcIp, dstGroup))
+}
+
+func (m *Manager) countTraffic(key string, count int) bool {
+	tm, _ := m.trafficMonitor.LoadOrStore(key, fnNewTrafficMonitor(m.logger, key, rollingWindowSize))
+
+	return tm.(*monitor.AverageTrafficMonitor).CountTraffic(count)
 }

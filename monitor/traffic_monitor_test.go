@@ -1,4 +1,4 @@
-package usage
+package monitor
 
 import (
 	"testing"

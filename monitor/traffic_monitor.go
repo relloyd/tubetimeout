@@ -1,4 +1,4 @@
-package usage
+package monitor
 
 import (
 	"sync"
@@ -12,6 +12,7 @@ var nowFunc = time.Now
 
 type AverageTrafficMonitor struct {
 	logger             *zap.SugaredLogger
+	monitorName        string // arbitrary monitorName for the monitor
 	rollingWindowSize  int
 	rollingCounts      []int
 	rollingAverages    []float64 // use float64 for gonum/stat functions
@@ -21,9 +22,10 @@ type AverageTrafficMonitor struct {
 	mu                 *sync.Mutex
 }
 
-func NewAverageTrafficMonitor(logger *zap.SugaredLogger, rollingWindowSize int) *AverageTrafficMonitor {
+func NewAverageTrafficMonitor(logger *zap.SugaredLogger, name string, rollingWindowSize int) *AverageTrafficMonitor {
 	return &AverageTrafficMonitor{
 		logger:            logger,
+		monitorName:       name,
 		rollingWindowSize: rollingWindowSize,
 		rollingCounts:     make([]int, rollingWindowSize),
 		rollingAverages:   make([]float64, rollingWindowSize),
@@ -69,14 +71,15 @@ func (a *AverageTrafficMonitor) isActive(currentRate float64, k float64) bool {
 	isActive := currentRate > activeThreshold
 
 	a.logger.With(
-		"rolling counts", a.rollingCounts,
-		"rolling averages", a.rollingAverages,
+		"monitorName", a.monitorName,
+		"rollingCounts", a.rollingCounts,
+		"rollingAverages", a.rollingAverages,
 		"mean", mean,
 		"stdDev", stdDev,
 		"activeThreshold", activeThreshold,
 		"currentRate", currentRate,
 		"isActive", isActive,
-	).Debugf("isActive() called")
+	).Debugf("monitor isActive() called")
 
 	return isActive
 }
