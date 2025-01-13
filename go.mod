@@ -10,6 +10,8 @@ require (
 	github.com/mdlayher/netlink v1.7.2
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.27.0
+	golang.org/x/sys v0.28.0
+	gonum.org/v1/gonum v0.15.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -23,6 +25,5 @@ require (
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
-	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 )

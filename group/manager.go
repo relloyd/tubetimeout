@@ -61,8 +61,8 @@ func (m *Manager) UpdateDestDomainGroups(newData models.MapDomainGroups) {
 	m.destDomainGroups.Data = newData
 }
 
-// IsSrcIpGroupKnown checks if the source IP is known and returns the groups it belongs to.
-func (m *Manager) IsSrcIpGroupKnown(ip models.Ip) ([]models.Group, bool) {
+// isSrcIpGroupKnown checks if the source IP is known and returns the groups it belongs to.
+func (m *Manager) isSrcIpGroupKnown(ip models.Ip) ([]models.Group, bool) {
 	m.sourceIpGroups.Mu.RLock()
 	defer m.sourceIpGroups.Mu.RUnlock()
 	groups, ok := m.sourceIpGroups.Data[ip]
@@ -72,8 +72,8 @@ func (m *Manager) IsSrcIpGroupKnown(ip models.Ip) ([]models.Group, bool) {
 	return groups, true
 }
 
-// IsDstIpGroupKnown checks if the destination IP is known and returns the groups it belongs to.
-func (m *Manager) IsDstIpGroupKnown(ip models.Ip) ([]models.Group, bool) {
+// isDstIpGroupKnown checks if the destination IP is known and returns the groups it belongs to.
+func (m *Manager) isDstIpGroupKnown(ip models.Ip) ([]models.Group, bool) {
 	m.destIpGroups.Mu.RLock()
 	defer m.destIpGroups.Mu.RUnlock()
 	groups, ok := m.destIpGroups.Data[ip]
@@ -83,16 +83,16 @@ func (m *Manager) IsDstIpGroupKnown(ip models.Ip) ([]models.Group, bool) {
 	return groups, true
 }
 
-// IsDstIpDomainKnown checks if the destination IP is known and returns the domain it belongs to.
-func (m *Manager) IsDstIpDomainKnown(ip string) (models.Domain, bool) {
+// isDstIpDomainKnown checks if the destination IP is known and returns the domain it belongs to.
+func (m *Manager) isDstIpDomainKnown(ip string) (models.Domain, bool) {
 	m.destIpDomains.Mu.RLock()
 	defer m.destIpDomains.Mu.RUnlock()
 	domain, ok := m.destIpDomains.Data[models.Ip(ip)]
 	return domain, ok
 }
 
-// IsDstDomainGroupKnown checks if the destination domain is known and returns the groups it belongs to.
-func (m *Manager) IsDstDomainGroupKnown(domain models.Domain) ([]models.Group, bool) {
+// isDstDomainGroupKnown checks if the destination domain is known and returns the groups it belongs to.
+func (m *Manager) isDstDomainGroupKnown(domain models.Domain) ([]models.Group, bool) {
 	m.destDomainGroups.Mu.RLock()
 	defer m.destDomainGroups.Mu.RUnlock()
 	groups, ok := m.destDomainGroups.Data[domain]
@@ -108,7 +108,7 @@ func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool
 	if managerModeMatchAllSourceIps {
 		// Create a return set of groups using metadata.
 		var retval []models.Group
-		dstGroup, dstOk := m.IsDstIpGroupKnown(dstIp)
+		dstGroup, dstOk := m.isDstIpGroupKnown(dstIp)
 		if dstOk {
 			for _, dg := range dstGroup {
 				retval = append(retval, getMetaSrcIpDestGroup(srcIp, dg))
@@ -119,8 +119,8 @@ func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool
 	}
 
 	// Check if the source IP and destination domain are known.
-	srcGroup, srcOk := m.IsSrcIpGroupKnown(srcIp)
-	_, dstOk := m.IsDstIpGroupKnown(dstIp)
+	srcGroup, srcOk := m.isSrcIpGroupKnown(srcIp)
+	_, dstOk := m.isDstIpGroupKnown(dstIp)
 	if !srcOk || !dstOk {
 		return []models.Group{}, false
 	}
@@ -135,7 +135,7 @@ func (m *Manager) IsSrcIpDestDomainKnown(srcIp models.Ip, dstDomain models.Domai
 	if managerModeMatchAllSourceIps {
 		// Create a return set of groups using metadata.
 		var retval []models.Group
-		dstGroup, dstOk := m.IsDstDomainGroupKnown(dstDomain)
+		dstGroup, dstOk := m.isDstDomainGroupKnown(dstDomain)
 		if dstOk {
 			for _, dg := range dstGroup {
 				retval = append(retval, getMetaSrcIpDestGroup(srcIp, dg))
@@ -146,8 +146,8 @@ func (m *Manager) IsSrcIpDestDomainKnown(srcIp models.Ip, dstDomain models.Domai
 	}
 
 	// Check if the source IP and destination domain are known.
-	srcGroup, srcOK := m.IsSrcIpGroupKnown(srcIp)
-	_, dstOK := m.IsDstDomainGroupKnown(dstDomain)
+	srcGroup, srcOK := m.isSrcIpGroupKnown(srcIp)
+	_, dstOK := m.isDstDomainGroupKnown(dstDomain)
 	if !srcOK || !dstOK {
 		return []models.Group{}, false
 	}

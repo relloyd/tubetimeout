@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"relloyd/tubetimeout/config"
 )
 
 func TestAverageTrafficMonitor(t *testing.T) {
@@ -16,18 +17,17 @@ func TestAverageTrafficMonitor(t *testing.T) {
 
 	// Initialize the AverageTrafficMonitor with a rolling window size of 5
 	rollingWindowSize := 5
-	monitor := NewAverageTrafficMonitor(rollingWindowSize)
+	monitor := NewAverageTrafficMonitor(config.MustGetLogger(), rollingWindowSize)
 
 	// Simulate traffic counting over a 6-minute period to test wrap-around
 	startTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
 	mockTime = startTime
 
 	trafficCounts := []int{60, 120, 180, 240, 300, 360} // Traffic per minute
+
 	for i, count := range trafficCounts {
-		mockTime = startTime.Add(time.Duration(i) * time.Minute)
-		for j := 0; j < count; j++ {
-			monitor.CountTraffic(1) // Count traffic incrementally
-		}
+		mockTime = startTime.Add(time.Duration(i) * time.Minute) // cause the avg for the last minute to be evaluated
+		monitor.CountTraffic(count)
 	}
 
 	// Expected rolling counts after wrap-around
@@ -40,10 +40,9 @@ func TestAverageTrafficMonitor(t *testing.T) {
 	}
 
 	// Verify the rolling counts after wrap-around
-	actualCounts := monitor.rollingCounts
 	for i, expected := range expectedCounts {
-		if actualCounts[i] != expected {
-			t.Errorf("Minute %d: expected count %d, got %d", i, expected, actualCounts[i])
+		if monitor.rollingCounts[i] != expected {
+			t.Errorf("Minute %d: expected count %d, got %d", i, expected, monitor.rollingCounts[i])
 		}
 	}
 
@@ -57,10 +56,9 @@ func TestAverageTrafficMonitor(t *testing.T) {
 	}
 
 	// Verify the rolling averages after wrap-around
-	actualAverages := monitor.GetRollingAverages()
 	for i, expected := range expectedAverages {
-		if actualAverages[i] != expected {
-			t.Errorf("Minute %d: expected average %f, got %f", i, expected, actualAverages[i])
+		if monitor.rollingAverages[i] != expected {
+			t.Errorf("Minute %d: expected average %f, got %f", i, expected, monitor.rollingAverages[i])
 		}
 	}
 }
@@ -74,7 +72,7 @@ func TestAverageTrafficMonitor_IsActive(t *testing.T) {
 
 	// Initialize the AverageTrafficMonitor with a rolling window size of 5
 	rollingWindowSize := 5
-	monitor := NewAverageTrafficMonitor(rollingWindowSize)
+	monitor := NewAverageTrafficMonitor(config.MustGetLogger(), rollingWindowSize)
 
 	// Simulate traffic counting over a 6-minute period to test wrap-around
 	startTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -86,7 +84,46 @@ func TestAverageTrafficMonitor_IsActive(t *testing.T) {
 		monitor.CountTraffic(count)
 	}
 
-	// Test IsActive function with different rates and thresholds.
-	assert.True(t, monitor.IsActive(5, 1.0), "should be active")
-	assert.False(t,  monitor.IsActive(3, 1.0), "should be inactive")
+	// Test isActive function with different rates and thresholds.
+	assert.True(t, monitor.isActive(5, 1.0), "should be active")
+	assert.False(t, monitor.isActive(3, 1.0), "should be inactive")
+}
+
+func TestAverageTrafficMonitor_CountTraffic_ActiveResults(t *testing.T) {
+	config.AppCfg.LogLevel = "debug"
+	logger := config.MustGetLogger()
+
+	// Initialize the AverageTrafficMonitor with a rolling window size of 5
+	rollingWindowSize := 5
+	monitor := NewAverageTrafficMonitor(logger, rollingWindowSize)
+
+	// Define a mock nowFunc to control time in tests
+	var mockTime time.Time
+	nowFunc = func() time.Time {
+		return mockTime
+	}
+
+	// Simulate traffic counting over a 6-minute period to test wrap-around
+	startTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	mockTime = startTime
+
+	trafficCounts := []int{60, 60, 60, 60, 60, 60} // Flat traffic levels
+	for i, count := range trafficCounts {
+		mockTime = startTime.Add(time.Duration(i) * time.Minute) // cause the avg for the last minute to be evaluated
+		monitor.CountTraffic(count)
+	}
+
+	trafficCounts = []int{120, 60, 60, 60, 60, 60} // Spike the traffic
+	var activeStatuses []bool
+	for i, count := range trafficCounts {
+		mockTime = startTime.Add(time.Duration(i) * time.Minute) 
+		activeStatuses = append(activeStatuses, monitor.CountTraffic(count))
+	}
+
+	// Expected active results
+	expectedActiveResults := []bool{false, true, false, false, false, true}
+	for i, expected := range expectedActiveResults {
+		got := activeStatuses[i]
+		assert.Equal(t, expected, got, "Minute %d: expected active %t, got %t", i, expected, got)
+	}
 }

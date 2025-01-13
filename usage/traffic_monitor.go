@@ -1,67 +1,91 @@
 package usage
 
 import (
+	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"gonum.org/v1/gonum/stat"
 )
 
 var nowFunc = time.Now
 
 type AverageTrafficMonitor struct {
-	rollingWindowSize int
-	rollingCounts     []int
-	rollingAverages   []float64 // use float64 for gonum/stat functions
-	totalCount        int
-	lastMinuteIdx     int
+	logger             *zap.SugaredLogger
+	rollingWindowSize  int
+	rollingCounts      []int
+	rollingAverages    []float64 // use float64 for gonum/stat functions
+	totalCount         int
+	lastMinuteIdx      int
+	isLastMinuteActive bool
+	mu                 *sync.Mutex
 }
 
-func NewAverageTrafficMonitor(rollingWindowSize int) *AverageTrafficMonitor {
+func NewAverageTrafficMonitor(logger *zap.SugaredLogger, rollingWindowSize int) *AverageTrafficMonitor {
 	return &AverageTrafficMonitor{
+		logger:            logger,
 		rollingWindowSize: rollingWindowSize,
 		rollingCounts:     make([]int, rollingWindowSize),
 		rollingAverages:   make([]float64, rollingWindowSize),
+		mu:                &sync.Mutex{},
 	}
 }
 
-func (a *AverageTrafficMonitor) CountTraffic(count int) {
+// CountTraffic increments the count of packets for the current minute.
+// It returns true if the rate for the previous minute is deemed "active" based on the rolling average.
+func (a *AverageTrafficMonitor) CountTraffic(count int) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	currentMinuteIdx := nowFunc().Minute() % a.rollingWindowSize
-
 	// If we've moved to a new minute
 	if currentMinuteIdx != a.lastMinuteIdx {
 		// Compute the average for the completed minute
 		a.rollingAverages[a.lastMinuteIdx] = float64(a.rollingCounts[a.lastMinuteIdx]) / 60 // Assuming 60 seconds per minute
-
 		// Subtract the completed minute's count from the total count
 		a.totalCount -= a.rollingCounts[currentMinuteIdx]
-
 		// Clear the count for the new minute
 		a.rollingCounts[currentMinuteIdx] = 0
-
+		// Determine if the rate for the previous minute is "active"
+		a.isLastMinuteActive = a.isActive(a.rollingAverages[currentMinuteIdx], 1)
 		// Update the last minute index
 		a.lastMinuteIdx = currentMinuteIdx
 	}
-
 	// Add the packet count to the current minute's count
 	a.rollingCounts[currentMinuteIdx] += count
 	a.totalCount += count
+	return a.isLastMinuteActive
 }
 
-func (a *AverageTrafficMonitor) GetRollingAverages() []float64 {
-	return a.rollingAverages
-}
-
-// IsActive determines if the traffic rate is deemed "active" i.e. true, based on the current rate.
+// isActive determines if the traffic rate is deemed "active" i.e. true, based on the current rate.
 // k is the number of standard deviations above the mean to consider as the threshold for "active".
 // currentRate is in packets per second.
-func (a *AverageTrafficMonitor) IsActive(currentRate int, k float64) bool {
+func (a *AverageTrafficMonitor) isActive(currentRate float64, k float64) bool {
 	// Calculate mean and standard deviation.
 	mean := stat.Mean(a.rollingAverages, nil)
 	stdDev := stat.StdDev(a.rollingAverages, nil)
-
 	// Define active threshold.
 	activeThreshold := mean + k*stdDev
-
 	// Determine if the current rate exceeds the threshold.
-	return float64(currentRate) > activeThreshold
+	isActive := currentRate > activeThreshold
+
+	a.logger.With(
+		"rolling counts", a.rollingCounts,
+		"rolling averages", a.rollingAverages,
+		"isLastMinuteActive", a.isLastMinuteActive,
+		"mean", mean,
+		"stdDev", stdDev,
+		"activeThreshold", activeThreshold,
+		"currentRate", currentRate,
+		"isActive", isActive,
+	).Debugf("isActive() called")
+
+	return isActive
 }
+
+// // getLastMinuteIdx returns the index of the last minute in the rolling window.
+// func getLastMinuteIdx(currentIndex int, moduloSize int) int {
+// 	if currentIndex == 0 {
+// 		return moduloSize - 1
+// 	}
+// 	return currentIndex - 1
+// }
