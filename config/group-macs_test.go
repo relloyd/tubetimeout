@@ -22,6 +22,11 @@ groups:
     name: ""
   - mac: "22:33:44:55:66:77"
     name: ""
+unusedMACs: 
+  - mac: "11:22:33:44:55:66"
+    name: "unused-device"
+  - mac: "22:33:44:55:66:77"
+    name: "unused-device-2"
 `
 	// Create a temporary file to hold the YAML content
 	tempFile, err := os.CreateTemp("", "test-mac-groups-*.yaml")
@@ -60,9 +65,8 @@ func TestGetGroupMACs(t *testing.T) {
 		"group2": {{MAC: "CC:DD:EE:FF:00:11", Name: ""}, {MAC: "22:33:44:55:66:77", Name: ""}},
 	}
 
-	if len(gm.Groups) != len(expectedGroups) {
-		t.Fatalf("Expected %d groups, got %d", len(expectedGroups), len(gm.Groups))
-	}
+	assert.Equal(t, len(expectedGroups), len(gm.Groups), "Number of groups")
+	assert.Equal(t, 2, len(gm.UnusedMACs), "Number of unused MACs")
 
 	for group, namedMacs := range expectedGroups {
 		parsedMacs, ok := gm.Groups[group]
@@ -97,7 +101,8 @@ func TestGetAllGroupMACs(t *testing.T) {
 ? (192.168.1.12) at CC:DD:EE:FF:00:11
 ? (192.168.1.12) at CC:DD:EE:FF:00:22 on wlan0
 ? (192.168.1.12) at CC:DD:EE:FF:00:22 on eth0
-? (192.168.68.88) at <incomplete> on eth0
+? (192.168.1.13) at 22:33:44:55:66:77 on this-is-in-the-unused-macs-data-above
+? (192.168.68.88) at <incomplete> on eth0-to-be-excluded
 `, nil
 	}
 
@@ -105,8 +110,9 @@ func TestGetAllGroupMACs(t *testing.T) {
 	allGroupMACs, err := GroupMACs.GetAllGroupMACs(MustGetLogger())
 	// Validate the result.
 	assert.NoError(t, err, "GetAllGroupMACs returned an error")
-	// Expect 5 MACs in the result: 4 from the fake config file and 1 extra from the ARP scan.
-	assert.Equal(t, 5, len(allGroupMACs), "Number of MACs in the result")
+	// Expect 6 MACs in the result:
+	// 4 from the fake config file
+	// 1 extra from the ARP scan
+	// 1 from the unused MACs in the config file, as 1 of the unused MACs is also present in the fake ARP scan results.
+	assert.Equal(t, 6, len(allGroupMACs), "Number of MACs in the result")
 }
-
-

@@ -27,7 +27,8 @@ var ARPCmd = func() (string, error) {
 
 // GroupMACsConfig represents the YAML structure saved to disk.
 type GroupMACsConfig struct {
-	Groups map[models.Group][]models.NamedMAC `yaml:"groups"` // group: [mac1, mac2, ...]
+	Groups     map[models.Group][]models.NamedMAC `yaml:"groups"`     // group: [mac1, mac2, ...]
+	UnusedMACs []models.NamedMAC                  `yaml:"unusedMACs"` // MACs that are not in a group
 }
 
 // FlatGroupMAC represents the JSON structure used to get/set the group-macs from the web API.
@@ -92,6 +93,17 @@ func (g *groupMACs) GetAllGroupMACs(logger *zap.SugaredLogger) ([]FlatGroupMAC, 
 			macs[namedMAC.MAC] = true
 		}
 	}
+	// Add the unused MACs with names to allGroupMACs.
+	for _, namedMAC := range gm.UnusedMACs {
+		if _, seen := macs[namedMAC.MAC]; !seen { // if we haven't already seen this MAC...
+			allGroupMACs = append(allGroupMACs, FlatGroupMAC{
+				Group: "",
+				MAC:   namedMAC.MAC,
+				Name:  namedMAC.Name,
+			})
+			macs[namedMAC.MAC] = true
+		}
+	}
 
 	// Execute ARP scan to get all MACs.
 	output, err := ARPCmd()
@@ -132,25 +144,31 @@ func (g *groupMACs) SaveGroupMACs(logger *zap.SugaredLogger, flatGroupMACs []Fla
 
 	// Convert the JSON structure to the group-macs YAML structure.
 	groups := make(map[models.Group][]models.NamedMAC)
+	unusedMACs := make([]models.NamedMAC, 0)
 	for _, flatGroupMAC := range flatGroupMACs {
-		if flatGroupMAC.Group == "" || flatGroupMAC.MAC == "" { // if the group isn't worth saving...
-			continue
-		}
-		// Create the group if it doesn't already exist.
-		group := models.Group(flatGroupMAC.Group)
-		if _, ok := groups[group]; !ok {
-			groups[group] = []models.NamedMAC{}
-		}
+		if flatGroupMAC.Group != "" && flatGroupMAC.MAC != "" { // if the group is worth saving...
+			// Create the group if it doesn't already exist.
+			group := models.Group(flatGroupMAC.Group)
+			if _, ok := groups[group]; !ok { // if the group doesn't already exist...
+				groups[group] = []models.NamedMAC{}
+			}
 
-		// Add the MAC to the group.
-		groups[group] = append(groups[group], models.NamedMAC{
-			MAC:  flatGroupMAC.MAC,
-			Name: flatGroupMAC.Name, // Name may be blank.
-		})
+			// Append the namedMAC to the group.
+			groups[group] = append(groups[group], models.NamedMAC{
+				MAC:  flatGroupMAC.MAC,
+				Name: flatGroupMAC.Name, // Name may be blank.
+			})
+		} else if flatGroupMAC.MAC != "" { // if the MAC is worth remembering...
+			// Append the MAC to the unusedMACs.
+			unusedMACs = append(unusedMACs, models.NamedMAC{
+				MAC:  flatGroupMAC.MAC,
+				Name: flatGroupMAC.Name, // Name may be blank.
+			})
+		}
 	}
 
 	// Marshal the group-macs to YAML.
-	gc := GroupMACsConfig{Groups: groups} // TODO: do we really need Groups at the top level?
+	gc := GroupMACsConfig{Groups: groups}
 	yamlBytes, err := yaml.Marshal(gc)
 	if err != nil {
 		return fmt.Errorf("failed to marshal group-macs to YAML: %w", err)

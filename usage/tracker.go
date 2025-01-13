@@ -366,3 +366,8 @@ func (t *Tracker) DeletePause() {
 	defer t.mu.Unlock()
 	t.pauseEndTime = time.Time{}
 }
+
+func (t *Tracker) ResetSamples(deviceID string) {
+	deviceID = strings.ToLower(deviceID)
+	t.devices.Delete(deviceID)
+}

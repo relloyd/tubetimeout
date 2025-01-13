@@ -31,6 +31,7 @@ type UsageTracker interface {
 	DeletePause()
 	SetPause(d time.Duration)
 	GetPauseEndTime() time.Time
+	ResetSamples(deviceID string)
 }
 
 type DeviceGroupGetterSetter interface {
@@ -39,8 +40,8 @@ type DeviceGroupGetterSetter interface {
 }
 
 type Handler struct {
-	logger *zap.SugaredLogger
-	usage  UsageTracker
+	logger       *zap.SugaredLogger
+	usage        UsageTracker
 	deviceGroups DeviceGroupGetterSetter
 }
 
@@ -50,9 +51,9 @@ func NewServer(logger *zap.SugaredLogger, s UsageTracker, d DeviceGroupGetterSet
 	mux.HandleFunc("/", h.rootHandler)
 	mux.HandleFunc("/static/", h.staticHandler)
 	mux.HandleFunc("/pause", h.pauseHandler)
-	mux.HandleFunc("/reset", h.resetHandler)
+	mux.HandleFunc("/reset", h.pauseResetHandler)
 	mux.HandleFunc("/groupMACs", h.groupMACHandler)
-	mux.HandleFunc("/usageSummary", h.usageSummaryHandler)
+	mux.HandleFunc("/usage", h.usageHandler)
 
 	return &http.Server{
 		Addr:                         fmt.Sprintf(":%d", config.AppCfg.WebConfig.WebPort),
