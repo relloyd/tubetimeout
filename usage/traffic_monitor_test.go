@@ -106,17 +106,23 @@ func TestAverageTrafficMonitor_CountTraffic_ActiveResults(t *testing.T) {
 	// Simulate traffic counting over a 6-minute period to test wrap-around
 	startTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
 	mockTime = startTime
+	var activeStatuses []bool
 
 	trafficCounts := []int{60, 60, 60, 60, 60, 60} // Flat traffic levels
 	for i, count := range trafficCounts {
 		mockTime = startTime.Add(time.Duration(i) * time.Minute) // cause the avg for the last minute to be evaluated
-		monitor.CountTraffic(count)
+		activeStatuses = append(activeStatuses, monitor.CountTraffic(count))
 	}
 
-	trafficCounts = []int{120, 60, 60, 60, 60, 60} // Spike the traffic
-	var activeStatuses []bool
+	trafficCounts = []int{120, 120, 120, 60, 60, 60} // Spike the traffic then go flat
 	for i, count := range trafficCounts {
 		mockTime = startTime.Add(time.Duration(i) * time.Minute) 
+		activeStatuses = append(activeStatuses, monitor.CountTraffic(count))
+	}
+
+	trafficCounts = []int{20, 20, 20, 60, 60, 60} // Lower the traffic then go flat
+	for i, count := range trafficCounts {
+		mockTime = startTime.Add(time.Duration(i) * time.Minute)
 		activeStatuses = append(activeStatuses, monitor.CountTraffic(count))
 	}
 

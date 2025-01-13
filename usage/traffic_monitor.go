@@ -46,7 +46,7 @@ func (a *AverageTrafficMonitor) CountTraffic(count int) bool {
 		// Clear the count for the new minute
 		a.rollingCounts[currentMinuteIdx] = 0
 		// Determine if the rate for the previous minute is "active"
-		a.isLastMinuteActive = a.isActive(a.rollingAverages[currentMinuteIdx], 1)
+		a.isLastMinuteActive = a.isActive(a.rollingAverages[a.lastMinuteIdx], 1)
 		// Update the last minute index
 		a.lastMinuteIdx = currentMinuteIdx
 	}
@@ -71,7 +71,6 @@ func (a *AverageTrafficMonitor) isActive(currentRate float64, k float64) bool {
 	a.logger.With(
 		"rolling counts", a.rollingCounts,
 		"rolling averages", a.rollingAverages,
-		"isLastMinuteActive", a.isLastMinuteActive,
 		"mean", mean,
 		"stdDev", stdDev,
 		"activeThreshold", activeThreshold,
