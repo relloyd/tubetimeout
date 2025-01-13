@@ -60,7 +60,7 @@ func (g *groupMACs) GetConfig(logger *zap.SugaredLogger) (GroupMACsConfig, error
 
 	yamlFile, err := os.ReadFile(defaultGroupMacFilePath)
 	if err != nil && os.IsNotExist(err) { // if the file needs creating...
-		// Create the file with an empty config.
+		// Create the file with zero data.
 		err = SafeWriteViaTemp(logger, defaultGroupMacFilePath, "")
 		if err != nil {
 			return GroupMACsConfig{}, fmt.Errorf("failed to create group-macs file: %w", err)

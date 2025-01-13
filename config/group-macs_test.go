@@ -91,16 +91,22 @@ func TestGetGroupMACs(t *testing.T) {
 }
 
 func TestGetGroupMACsFileNotFound(t *testing.T) {
-	td, err := os.MkdirTemp("", "test-mac-groups-*.yaml")
+	td, err := os.MkdirTemp("", "test-mac-groups-config-*")
 	assert.NoError(t, err, "Failed to create temp dir")
 
 	// Hack functions so the temp file is returned to GetConfig().
 	defaultGroupMacFilePath = "non-existent-file.yaml"
-	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(f string) (string, error) { return path.Join(td, f), nil }
+	expectedConfigFilePath := path.Join(td, defaultGroupMacFilePath)
+	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(f string) (string, error) { return expectedConfigFilePath, nil }
+	t.Cleanup(func() {
+		_ = os.Remove(expectedConfigFilePath)
+	})
 
 	// Call the function under test.
 	_, err = GroupMACs.GetConfig(MustGetLogger())
-	assert.ErrorIs(t, err, ErrorGroupMacFileNotFound, "Error type")
+	_, err = os.Stat(expectedConfigFilePath)
+	assert.NoError(t, err, "Failed to get config file info")
+	assert.True(t, !os.IsNotExist(err), "Expected a config file to be created")
 }
 
 // Test cases
