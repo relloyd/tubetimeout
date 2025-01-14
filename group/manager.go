@@ -134,6 +134,7 @@ func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool
 	}
 	// Count traffic usage for the source IP and group combination.
 	for _, g := range srcGroup {
+		// TODO: add a test for manager.countTraffic being used.
 		m.countTraffic(fmt.Sprintf("%v-%v", g, string(srcIp)), 1)
 	}
 	// Return the list of source groups.
