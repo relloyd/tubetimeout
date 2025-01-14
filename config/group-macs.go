@@ -165,7 +165,7 @@ func (g *groupMACs) SaveGroupMACs(logger *zap.SugaredLogger, flatGroupMACs []Fla
 				MAC:  flatGroupMAC.MAC,
 				Name: flatGroupMAC.Name, // Name may be blank.
 			})
-		} else if flatGroupMAC.MAC != "" { // if the MAC is worth remembering...
+		} else if flatGroupMAC.MAC != "" { // else if the MAC has a name and is worth remembering...
 			// Append the MAC to the unusedMACs.
 			unusedMACs = append(unusedMACs, models.NamedMAC{
 				MAC:  flatGroupMAC.MAC,
