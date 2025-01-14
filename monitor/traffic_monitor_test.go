@@ -8,6 +8,8 @@ import (
 	"relloyd/tubetimeout/config"
 )
 
+var monitorNameForTesting = "test-monitor"
+
 func TestAverageTrafficMonitor(t *testing.T) {
 	// Define a mock nowFunc to control time in tests
 	var mockTime time.Time
@@ -17,7 +19,7 @@ func TestAverageTrafficMonitor(t *testing.T) {
 
 	// Initialize the AverageTrafficMonitor with a rolling window size of 5
 	rollingWindowSize := 5
-	monitor := NewAverageTrafficMonitor(config.MustGetLogger(), rollingWindowSize)
+	monitor := NewAverageTrafficMonitor(config.MustGetLogger(), monitorNameForTesting, rollingWindowSize)
 
 	// Simulate traffic counting over a 6-minute period to test wrap-around
 	startTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -72,7 +74,7 @@ func TestAverageTrafficMonitor_IsActive(t *testing.T) {
 
 	// Initialize the AverageTrafficMonitor with a rolling window size of 5
 	rollingWindowSize := 5
-	monitor := NewAverageTrafficMonitor(config.MustGetLogger(), rollingWindowSize)
+	monitor := NewAverageTrafficMonitor(config.MustGetLogger(), monitorNameForTesting, rollingWindowSize)
 
 	// Simulate traffic counting over a 6-minute period to test wrap-around
 	startTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -95,7 +97,7 @@ func TestAverageTrafficMonitor_CountTraffic_ActiveResults(t *testing.T) {
 
 	// Initialize the AverageTrafficMonitor with a rolling window size of 5
 	rollingWindowSize := 5
-	monitor := NewAverageTrafficMonitor(logger, rollingWindowSize)
+	monitor := NewAverageTrafficMonitor(logger, monitorNameForTesting, rollingWindowSize)
 
 	// Define a mock nowFunc to control time in tests
 	var mockTime time.Time
@@ -116,7 +118,7 @@ func TestAverageTrafficMonitor_CountTraffic_ActiveResults(t *testing.T) {
 
 	trafficCounts = []int{120, 120, 120, 60, 60, 60} // Spike the traffic then go flat
 	for i, count := range trafficCounts {
-		mockTime = startTime.Add(time.Duration(i) * time.Minute) 
+		mockTime = startTime.Add(time.Duration(i) * time.Minute)
 		activeStatuses = append(activeStatuses, monitor.CountTraffic(count))
 	}
 

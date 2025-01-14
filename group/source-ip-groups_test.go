@@ -5,13 +5,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/models"
 )
 
 func TestScanNetwork(t *testing.T) {
 	// Mock loader function
-	mockLoaderFunc := func() (config.GroupMACsConfig, error) {
+	mockLoaderFunc := func(logger *zap.SugaredLogger) (config.GroupMACsConfig, error) {
 		return config.GroupMACsConfig{
 			Groups: map[models.Group][]models.NamedMAC{
 				"group1": {{MAC: "00:11:22:33:44:55", Name: ""}, {MAC: "66:77:88:99:AA:BB", Name: ""}},
@@ -58,7 +59,7 @@ func TestScanNetwork(t *testing.T) {
 
 	// Test the case where the group-macs file is not found.
 	// Expect all IPs to be in the default group.
-	groupMacsLoaderFunc = func() (config.GroupMACsConfig, error) {
+	groupMacsLoaderFunc = func(logger *zap.SugaredLogger) (config.GroupMACsConfig, error) {
 		return config.GroupMACsConfig{}, config.ErrorGroupMacFileNotFound
 	}
 	mig = scanNetwork(config.MustGetLogger(), mockARPCommand)

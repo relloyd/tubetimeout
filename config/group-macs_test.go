@@ -46,6 +46,14 @@ unusedMACs:
 		t.Fatalf("Failed to close temp file: %v", err)
 	}
 
+	oldDefaultCreateAppHomeDirAndGetConfigFilePathFunc := DefaultCreateAppHomeDirAndGetConfigFilePathFunc
+	oldDefaultGroupMacFilePath := defaultGroupMacFilePath
+	t.Cleanup(func() {
+		DefaultCreateAppHomeDirAndGetConfigFilePathFunc = oldDefaultCreateAppHomeDirAndGetConfigFilePathFunc
+		defaultGroupMacFilePath = oldDefaultGroupMacFilePath
+		groupMACsFileUpdated = false
+	})
+
 	// Hack functions so the temp file is returned to GetConfig().
 	defaultGroupMacFilePath = tempFile.Name()                                                          // override the default file path with temp file above.
 	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(f string) (string, error) { return f, nil } // override the function that uses the home dir for config files.
@@ -90,33 +98,6 @@ func TestGetGroupMACs(t *testing.T) {
 	}
 }
 
-func TestGetGroupMACsFileNotFound(t *testing.T) {
-	td, err := os.MkdirTemp("", "test-mac-groups-config-*")
-	assert.NoError(t, err, "Failed to create temp dir")
-
-	// Save values to restore later.
-	oldDefaultGroupMacFilePath := defaultGroupMacFilePath
-	oldDefaultCreateAppHomeDirAndGetConfigFilePathFunc := DefaultCreateAppHomeDirAndGetConfigFilePathFunc
-
-	// Hack functions so the temp file is returned to GetConfig().
-	defaultGroupMacFilePath = "non-existent-file.yaml"
-	expectedConfigFilePath := path.Join(td, defaultGroupMacFilePath)
-	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(f string) (string, error) { return expectedConfigFilePath, nil }
-
-	t.Cleanup(func() {
-		_ = os.Remove(expectedConfigFilePath)
-		defaultGroupMacFilePath = oldDefaultGroupMacFilePath
-		DefaultCreateAppHomeDirAndGetConfigFilePathFunc = oldDefaultCreateAppHomeDirAndGetConfigFilePathFunc
-	})
-
-	// Call the function under test.
-	_, err = GroupMACs.GetConfig(MustGetLogger())
-	_, err = os.Stat(expectedConfigFilePath)
-	assert.NoError(t, err, "Failed to get config file info")
-	assert.True(t, !os.IsNotExist(err), "Expected a config file to be created")
-}
-
-// Test cases
 func TestGetAllGroupMACs(t *testing.T) {
 	setupConfig(t)
 
@@ -142,4 +123,33 @@ func TestGetAllGroupMACs(t *testing.T) {
 	// 1 extra from the ARP scan
 	// 1 from the unused MACs in the config file, as 1 of the unused MACs is also present in the fake ARP scan results.
 	assert.Equal(t, 6, len(allGroupMACs), "Number of MACs in the result")
+}
+
+func TestGetGroupMACsFileNotFound(t *testing.T) {
+	td, err := os.MkdirTemp("", "test-mac-groups-config-*")
+	assert.NoError(t, err, "Failed to create temp dir")
+
+	// Save values to restore later.
+	oldDefaultGroupMacFilePath := defaultGroupMacFilePath
+	oldDefaultCreateAppHomeDirAndGetConfigFilePathFunc := DefaultCreateAppHomeDirAndGetConfigFilePathFunc
+
+	// Hack functions so the temp file is returned to GetConfig().
+	defaultGroupMacFilePath = "auto-created-file.yaml"
+	groupMACsFileUpdated = false
+	expectedConfigFilePath := path.Join(td, defaultGroupMacFilePath)
+	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(f string) (string, error) { return expectedConfigFilePath, nil }
+
+	// Cleanup.
+	t.Cleanup(func() {
+		_ = os.Remove(expectedConfigFilePath)
+		defaultGroupMacFilePath = oldDefaultGroupMacFilePath
+		DefaultCreateAppHomeDirAndGetConfigFilePathFunc = oldDefaultCreateAppHomeDirAndGetConfigFilePathFunc
+		groupMACsFileUpdated = false
+	})
+
+	// Call the function under test.
+	_, err = GroupMACs.GetConfig(MustGetLogger())
+	_, err = os.Stat(expectedConfigFilePath)
+	assert.NoError(t, err, "Failed to stat the config file")
+	assert.False(t, os.IsNotExist(err), "Expected a config file to be created")
 }
