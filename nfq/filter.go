@@ -97,12 +97,12 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("could not open nfqueue socket: %v", err)
+		return nil, fmt.Errorf("could not open nfqueue socket: %w", err)
 	}
 
 	// Avoid receiving ENOBUFS errors.
 	if err := nf.SetOption(netlink.NoENOBUFS, true); err != nil {
-		return nil, fmt.Errorf("failed to set netlink option %v: %v", netlink.NoENOBUFS, err)
+		return nil, fmt.Errorf("failed to set netlink option %v: %w", netlink.NoENOBUFS, err)
 	}
 
 	fnPacketHandler := func(a nfqueue.Attribute) int {
@@ -169,7 +169,6 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 						}
 					}
 				} // else accept the packet as the threshold is not exceeded...
-				// f.logger.Debug("%v %v %v packet from %v to %v (group %v)", decision, direction, proto, pips.src, pips.dst, grp)
 				f.logger.Debug("handled packet",
 					zap.String("decision", decision),
 					zap.String("direction", direction),
@@ -189,7 +188,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 
 		err = nf.SetVerdict(id, verdict)
 		if err != nil {
-			f.logger.Error("Error setting verdict: %v", zap.Error(err))
+			f.logger.Error("Error setting verdict", zap.Error(err))
 			retval = 0 // 1 to exit clean; -1 to signal error; 0 to continue
 		}
 
@@ -207,7 +206,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 
 	err = nf.RegisterWithErrorFunc(ctx, fnPacketHandler, fnErrorHandler)
 	if err != nil {
-		return nil, fmt.Errorf("error registering nfqueue callback: %v", err)
+		return nil, fmt.Errorf("error registering nfqueue callback: %w", err)
 	}
 
 	return nf, nil
