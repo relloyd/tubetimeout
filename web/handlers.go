@@ -88,12 +88,12 @@ func (h *Handler) groupMACHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) usageHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	if r.Method == http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
 
-	if r.Method == http.MethodPost {
+	if r.Method == http.MethodGet {
 		summary := h.usage.GetSampleSummary()
 		w.Header().Set("Content-Type", "application/json")
 		err := json.NewEncoder(w).Encode(summary)
