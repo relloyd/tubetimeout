@@ -88,6 +88,8 @@ func (h *Handler) groupMACHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) usageHandler(w http.ResponseWriter, r *http.Request) {
+	// TODO: test the methods for usageHandler as we borked them before!
+
 	if r.Method == http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
@@ -145,7 +147,7 @@ func (h *Handler) pauseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add a pause to the usage tracker.
-	h.logger.Info("Usage tracker paused for %d minutes\n", duration)
+	h.logger.Infof("Usage tracker paused for %d minutes\n", duration)
 	h.usage.SetPause(time.Duration(duration) * time.Minute)
 
 	w.WriteHeader(http.StatusOK)

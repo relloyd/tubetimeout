@@ -181,6 +181,11 @@ func saveSamples(logger *zap.SugaredLogger, path string, devices *sync.Map) erro
 func (t *Tracker) AddSample(id string) {
 	now := t.nowFunc() // Use nowFunc instead of time.Now
 
+	if t.pauseEndTime.After(now) { // if the tracker is paused...
+		// TODO: add test for AddSample() when tracker is paused
+		return
+	}
+
 	id = strings.ToLower(id) // force lower case for
 
 	lastWindowStart, _ := t.CalculateWindow(now)

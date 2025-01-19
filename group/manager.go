@@ -111,7 +111,7 @@ func (m *Manager) isDstDomainGroupKnown(domain models.Domain) ([]models.Group, b
 }
 
 // IsSrcDestIpKnown checks if the source and destination IPs are known and returns the src groups.
-func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool) {
+func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip, direction models.Direction) ([]models.Group, bool) {
 	// If the manager should match all source IPs as if they're in their own group...
 	if managerModeMatchAllSourceIps {
 		// Create a return set of groups using metadata.
@@ -132,11 +132,15 @@ func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool
 	if !srcOk || !dstOk {
 		return []models.Group{}, false
 	}
+
 	// Count traffic usage for the source IP and group combination.
-	for _, g := range srcGroup {
-		// TODO: add a test for manager.countTraffic being used.
-		m.countTraffic(fmt.Sprintf("%v-%v", g, string(srcIp)), 1)
+	if direction != "" {
+		for _, g := range srcGroup {
+			// TODO: add a test for manager.countTraffic being used.
+			m.countTraffic(fmt.Sprintf("%v-%v", g, string(srcIp)), 1, direction)
+		}
 	}
+
 	// Return the list of source groups.
 	return srcGroup, true
 }
@@ -172,8 +176,8 @@ func getMetaSrcIpDestGroup(srcIp models.Ip, dstGroup models.Group) models.Group 
 	return models.Group(fmt.Sprintf("%v:%v", srcIp, dstGroup))
 }
 
-func (m *Manager) countTraffic(key string, count int) bool {
+func (m *Manager) countTraffic(key string, count int, direction models.Direction) bool {
 	tm, _ := m.trafficMonitor.LoadOrStore(key, fnNewTrafficMonitor(m.logger, key, rollingWindowSize))
 
-	return tm.(*monitor.AverageTrafficMonitor).CountTraffic(count)
+	return tm.(*monitor.AverageTrafficMonitor).CountTraffic(count, direction)
 }

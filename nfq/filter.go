@@ -16,16 +16,9 @@ import (
 	"relloyd/tubetimeout/usage"
 )
 
-const (
-	packetDirectionOutbound packetDirection = "outbound"
-	packetDirectionInbound  packetDirection = "inbound"
-)
-
 type ManagerI interface {
-	IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool)
+	IsSrcDestIpKnown(srcIp, dstIp models.Ip, direction models.Direction) ([]models.Group, bool)
 }
-
-type packetDirection string
 
 type packetIPs struct {
 	src net.IP
@@ -57,12 +50,12 @@ func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *confi
 	f.m = m
 	f.t = t
 
-	nfq1, err := f.startNFQueueFilter(ctx, cfg, cfg.OutboundQueueNumber, packetDirectionOutbound)
+	nfq1, err := f.startNFQueueFilter(ctx, cfg, cfg.OutboundQueueNumber, models.Egress)
 	if err != nil {
 		return nil, err
 	}
 
-	nfq2, err := f.startNFQueueFilter(ctx, cfg, cfg.InboundQueueNumber, packetDirectionInbound)
+	nfq2, err := f.startNFQueueFilter(ctx, cfg, cfg.InboundQueueNumber, models.Ingress)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +72,7 @@ func acceptPacket(logger *zap.Logger, nf *nfqueue.Nfqueue, id uint32) {
 	}
 }
 
-func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.FilterConfig, queueNumber uint16, mode packetDirection) (*nfqueue.Nfqueue, error) {
+func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.FilterConfig, queueNumber uint16, direction models.Direction) (*nfqueue.Nfqueue, error) {
 	// Open a new NFQueue
 	nf, err := nfqueue.Open(&nfqueue.Config{
 		NetNS:        0,
@@ -129,7 +122,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 		// TODO: add a tracker for each group as there may be many.
 		var groups []models.Group
 		var ok bool
-		var direction, decision string
+		var decision string
 		var verdict = nfqueue.NfAccept
 		var proto = "proto-unknown"
 
@@ -140,16 +133,14 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 			proto = "UDP"
 		}
 
-		if mode == packetDirectionOutbound { // if the mode is outbound...
+		if direction == models.Egress { // if the mode is outbound...
 			// Check if the source and destination Ip addresses are known.
-			groups, ok = f.m.IsSrcDestIpKnown(models.Ip(pips.src.String()), models.Ip(pips.dst.String()))
-			direction = "outbound"
+			groups, ok = f.m.IsSrcDestIpKnown(models.Ip(pips.src.String()), models.Ip(pips.dst.String()), models.Egress)
 		} else { // else if the mode is inbound...
 			// Expect the source and destination to be reversed.
 			// Source IPs will be the public IPs that we added to our destination mapping.
 			// Destinations IPs will be the local network.
-			groups, ok = f.m.IsSrcDestIpKnown(models.Ip(pips.dst.String()), models.Ip(pips.src.String()))
-			direction = "inbound"
+			groups, ok = f.m.IsSrcDestIpKnown(models.Ip(pips.dst.String()), models.Ip(pips.src.String()), models.Ingress)
 		}
 
 		if ok { // if the packet IPs are known...
@@ -171,7 +162,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 				} // else accept the packet as the threshold is not exceeded...
 				f.logger.Debug("handled packet",
 					zap.String("decision", decision),
-					zap.String("direction", direction),
+					zap.String("direction", string(direction)),
 					zap.String("proto", proto),
 					zap.Uint8("protocol-byte", protocol),
 					zap.String("src", pips.src.String()),
@@ -180,7 +171,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 			}
 		} else { // else accept the packet since the src/dest are not known...
 			f.logger.Debug("Accept unregistered",
-				zap.String("direction", direction),
+				zap.String("direction", string(direction)),
 				zap.String("proto", proto),
 				zap.String("src", pips.src.String()),
 				zap.String("dest", pips.dst.String()))

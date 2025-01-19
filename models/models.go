@@ -39,3 +39,10 @@ type GroupSummary struct {
 	Total      int `json:"total"`
 	Percentage int `json:"percentage"`
 }
+
+type Direction string
+
+const (
+	Ingress Direction = "in"
+	Egress  Direction = "out"
+)
