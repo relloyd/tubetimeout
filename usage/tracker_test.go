@@ -55,13 +55,13 @@ func TestNewTracker(t *testing.T) {
 	}
 
 	// Tracker with threshold 0 should default to 1 minute.
-	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg, mtc)
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
 	assert.NoError(t, err, "NewTracker failed")
 	assert.Equal(t, 1*time.Minute, tracker.threshold, "NewTracker did not set threshold to 1m")
 
 	// Another tracker for more stuff.
 	cfg.Threshold = 10 * time.Minute
-	tracker, err = NewTracker(ctx, config.MustGetLogger(), cfg, mtc)
+	tracker, err = NewTracker(ctx, config.MustGetLogger(), cfg)
 
 	assert.NoError(t, err, "NewTracker failed")
 	assert.NotNil(t, tracker, "NewTracker returned nil")
@@ -95,7 +95,7 @@ func TestHasExceededThreshold(t *testing.T) {
 		Granularity: 1 * time.Minute,
 	}
 
-	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg, mtc)
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
 	assert.NoError(t, err, "NewTracker failed")
 
 	// Simulate a device data structure with pre-allocated samples.
@@ -171,7 +171,7 @@ func TestAddSample(t *testing.T) {
 		Threshold:   10 * time.Minute,
 	}
 
-	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg, mtc)
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
 	assert.NoError(t, err, "NewTracker failed")
 
 	deviceID := "Test-Device" // use mixed case to assert case insensitivity
@@ -185,7 +185,7 @@ func TestAddSample(t *testing.T) {
 	}
 
 	// Case 1a: Add a sample at the start of the buffer and verify that we cannot find the mixed case device ID.
-	tracker.AddSample(deviceID, 1, models.Ingress) // TODO: add sample with correct packetLen and direction
+	tracker.AddSample(deviceID, 1, models.Ingress)
 	data, ok := tracker.devices.Load(deviceID)
 	assert.False(t, ok, "AddSample should not find data by mixed case device ID")
 
@@ -261,7 +261,7 @@ func TestGetIndex(t *testing.T) {
 		Retention:   1 * time.Hour,
 		Granularity: 1 * time.Minute,
 	}
-	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg, mtc)
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
 	assert.NoError(t, err, "NewTracker failed")
 
 	startTime := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
@@ -294,7 +294,7 @@ func TestSyncWindow(t *testing.T) {
 		Retention:   1 * time.Hour,
 	}
 
-	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg, mtc) // No threshold needed for this test.
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg) // No threshold needed for this test.
 	assert.NoError(t, err, "NewTracker failed")
 
 	// Simulate a device data structure.
@@ -484,7 +484,7 @@ func TestResetSamples(t *testing.T) {
 
 	testDevice := strings.ToLower("test-device") // use explicit lower case device ID
 
-	tracker, err := NewTracker(context.Background(), config.MustGetLogger(), cfg, mtc)
+	tracker, err := NewTracker(context.Background(), config.MustGetLogger(), cfg)
 	assert.NoError(t, err, "NewTracker failed")
 
 	tracker.AddSample(testDevice, 1, models.Ingress)

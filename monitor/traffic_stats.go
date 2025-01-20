@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	nowFunc        = time.Now
+	nowFunc = time.Now
 )
 
 type trafficStats struct {
@@ -19,10 +19,10 @@ type trafficStats struct {
 	rollingWindowSize     int
 	isLastMinuteActive    bool
 	rollingCounts         map[models.Direction][]int
-	rollingAverages       map[models.Direction][]float64 // use float64 for gonum/stat functions
 	rollingPacketLenTotal map[models.Direction][]int
 	totalCount            map[models.Direction]int
 	lastMinuteIdx         map[models.Direction]int
+	lastActiveTime        time.Time
 }
 
 func newTrafficStats(logger *zap.SugaredLogger, name string, rollingWindowSize int) *trafficStats {
@@ -31,7 +31,6 @@ func newTrafficStats(logger *zap.SugaredLogger, name string, rollingWindowSize i
 		monitorName:           name,
 		rollingWindowSize:     rollingWindowSize,
 		rollingCounts:         make(map[models.Direction][]int),
-		rollingAverages:       make(map[models.Direction][]float64),
 		rollingPacketLenTotal: make(map[models.Direction][]int),
 		totalCount:            make(map[models.Direction]int),
 		lastMinuteIdx:         make(map[models.Direction]int),
@@ -39,8 +38,6 @@ func newTrafficStats(logger *zap.SugaredLogger, name string, rollingWindowSize i
 	}
 	a.rollingCounts[models.Ingress] = make([]int, rollingWindowSize)
 	a.rollingCounts[models.Egress] = make([]int, rollingWindowSize)
-	a.rollingAverages[models.Egress] = make([]float64, rollingWindowSize)
-	a.rollingAverages[models.Ingress] = make([]float64, rollingWindowSize)
 	a.rollingPacketLenTotal[models.Ingress] = make([]int, rollingWindowSize)
 	a.rollingPacketLenTotal[models.Egress] = make([]int, rollingWindowSize)
 	return a
@@ -58,8 +55,6 @@ func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection m
 	if currentMinuteIdx != lastMinuteIndex {
 		// Determine if the rate for the previous minute is "active"
 		a.isLastMinuteActive = a.isActive(lastMinuteIndex)
-		// Compute the average for the completed minute
-		a.rollingAverages[trafficDirection][lastMinuteIndex] = float64(a.rollingCounts[trafficDirection][lastMinuteIndex]) / 60 // Assuming 60 seconds per minute
 		// Subtract the completed minute's count from the total count
 		a.totalCount[trafficDirection] -= a.rollingCounts[trafficDirection][currentMinuteIdx]
 		// Clear the counts for the new minute
