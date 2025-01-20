@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/group"
+	monitor2 "relloyd/tubetimeout/monitor"
 	"relloyd/tubetimeout/nfq"
 	"relloyd/tubetimeout/nft"
 	"relloyd/tubetimeout/proxy"
@@ -69,7 +70,7 @@ func main() {
 	logger.Info("NFTables rules created")
 
 	// Usage tracker.
-	t, err := usage.NewTracker(ctx, logger, &config.AppCfg.TrackerConfig, )
+	t, err := usage.NewTracker(ctx, logger, &config.AppCfg.TrackerConfig)
 	if err != nil {
 		logger.Fatalln("Failed to setup usage tracker:", err)
 	}
@@ -95,8 +96,11 @@ func main() {
 	dw.Start(ctx)
 	logger.Info("Destinations mapped")
 
+	// Traffic Monitor.
+	monitor := monitor2.NewTrafficCounter(logger, 5)
+
 	// NFQueue to process packets in user space.
-	q, err := nfq.NewNFQueueFilter(ctx, logger, &config.AppCfg.FilterConfig, t, mgr)
+	q, err := nfq.NewNFQueueFilter(ctx, logger, &config.AppCfg.FilterConfig, t, mgr,monitor)
 	if err != nil {
 		logger.Fatalln("Failed to setup NFQueue filter:", err)
 	}

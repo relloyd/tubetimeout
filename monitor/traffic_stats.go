@@ -10,30 +10,9 @@ import (
 
 var (
 	nowFunc        = time.Now
-	trafficMonitor = &sync.Map{}
 )
 
-type TrafficCounter interface {
-	CountTraffic(key string, count int, packetLen int, direction models.Direction) bool
-}
-
-func NewTrafficMonitor(logger *zap.SugaredLogger, rollingWindowSize int) *TrafficMonitor {
-	return &TrafficMonitor{}
-}
-
-// TODO: implement deletion of traffic monitor entries when keys expire.
-
-type TrafficMonitor struct {
-	logger            *zap.SugaredLogger
-	rollingWindowSize int
-}
-
-func (t *TrafficMonitor) CountTraffic(key string, count int, packetLen int, direction models.Direction) bool {
-	tm, _ := trafficMonitor.LoadOrStore(key, newAverageTrafficMonitor(t.logger, key, t.rollingWindowSize))
-	return tm.(*averageTrafficMonitor).countTraffic(count, packetLen, direction)
-}
-
-type averageTrafficMonitor struct {
+type trafficStats struct {
 	mu                    *sync.Mutex
 	logger                *zap.SugaredLogger
 	monitorName           string // arbitrary monitorName for the monitor
@@ -46,8 +25,8 @@ type averageTrafficMonitor struct {
 	lastMinuteIdx         map[models.Direction]int
 }
 
-func newAverageTrafficMonitor(logger *zap.SugaredLogger, name string, rollingWindowSize int) *averageTrafficMonitor {
-	a := &averageTrafficMonitor{
+func newTrafficStats(logger *zap.SugaredLogger, name string, rollingWindowSize int) *trafficStats {
+	a := &trafficStats{
 		logger:                logger,
 		monitorName:           name,
 		rollingWindowSize:     rollingWindowSize,
@@ -69,7 +48,7 @@ func newAverageTrafficMonitor(logger *zap.SugaredLogger, name string, rollingWin
 
 // countTraffic increments the count of packets for the current minute.
 // It returns true if the rate for the previous minute is deemed "active" based on the rolling average.
-func (a *averageTrafficMonitor) countTraffic(count int, packetLen int, trafficDirection models.Direction) bool {
+func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection models.Direction) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	currentMinuteIdx := nowFunc().Minute() % a.rollingWindowSize
@@ -99,7 +78,7 @@ func (a *averageTrafficMonitor) countTraffic(count int, packetLen int, trafficDi
 }
 
 // isActive determines if the traffic rate is deemed "active" i.e. true, based on the current rate.
-func (a *averageTrafficMonitor) isActive(lastMinuteIndex int) bool {
+func (a *trafficStats) isActive(lastMinuteIndex int) bool {
 	// ratios := make([]float64, a.rollingWindowSize)
 	deltas := make([]float64, a.rollingWindowSize)
 	deltasPacketLen := make([]int, a.rollingWindowSize)

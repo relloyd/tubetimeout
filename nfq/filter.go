@@ -25,9 +25,9 @@ type packetIPs struct {
 
 type NFQueueFilter struct {
 	Nfq    []*nfqueue.Nfqueue
-	t      usage.TrackerI
-	m      group.ManagerI
-	c      monitor.TrafficCounter
+	ut     usage.TrackerI
+	gm     group.ManagerI
+	tc     monitor.TrafficCounter
 	logger *zap.Logger
 }
 
@@ -37,30 +37,30 @@ type NFQueueFilter struct {
 // If the packets are destined for any of the injected Ips then filtering happens based on
 // <LOGIC-TBC>
 // TODO: unit test captuing two NFQs to ensure they are both created and running.
-func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *config.FilterConfig, t usage.TrackerI, m group.ManagerI, c monitor.TrafficCounter) (*NFQueueFilter, error) {
+func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *config.FilterConfig, ut usage.TrackerI, gm group.ManagerI, tc monitor.TrafficCounter) (*NFQueueFilter, error) {
 	var err error
 
 	if cfg.PacketDropPercentage < 0 || cfg.PacketDropPercentage > 1 {
 		return nil, fmt.Errorf("packet drop percentage must be between 0 and 100")
 	}
 
-	if t == nil {
+	if ut == nil {
 		return nil, fmt.Errorf("tracker must be supplied")
 	}
 
-	if m == nil {
+	if gm == nil {
 		return nil, fmt.Errorf("manager must be supplied")
 	}
 
-	if c == nil {
+	if tc == nil {
 		return nil, fmt.Errorf("counter must be supplied")
 	}
 
 	f := &NFQueueFilter{}
 	f.logger = logger.Desugar()
-	f.m = m
-	f.t = t
-	f.c = c
+	f.gm = gm
+	f.ut = ut
+	f.tc = tc
 
 	nfq1, err := f.startNFQueueFilter(ctx, cfg, cfg.OutboundQueueNumber, models.Egress)
 	if err != nil {
@@ -139,21 +139,21 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 
 		if direction == models.Egress { // if the mode is outbound...
 			// Check if the source and destination Ip addresses are known.
-			groups, ok = f.m.IsSrcDestIpKnown(models.Ip(pips.src.String()), models.Ip(pips.dst.String()))
+			groups, ok = f.gm.IsSrcDestIpKnown(models.Ip(pips.src.String()), models.Ip(pips.dst.String()))
 		} else { // else if the mode is inbound...
 			// Expect the source and destination to be reversed.
 			// Source IPs will be the public IPs that we added to our destination mapping.
 			// Destinations IPs will be the local network.
-			groups, ok = f.m.IsSrcDestIpKnown(models.Ip(pips.dst.String()), models.Ip(pips.src.String()))
+			groups, ok = f.gm.IsSrcDestIpKnown(models.Ip(pips.dst.String()), models.Ip(pips.src.String()))
 		}
 
 		if ok { // if the packet IPs are known...
 			for _, grp := range groups { // for each group...
-				decision = "accept"                        // assume success
-				if f.c.CountTraffic(fmt.Sprintf("%v-%v", grp, pips.src.String()), 1, l, direction) { // if the key is active...
-					f.t.AddSample(string(grp), l, direction)   // remember that we saw it
+				decision = "accept"                                                                   // assume success
+				if f.tc.CountTraffic(fmt.Sprintf("%v-%v", grp, pips.src.String()), 1, l, direction) { // if the key is considered active...
+					f.ut.AddSample(string(grp), l, direction) // remember that we saw it
 				}
-				if f.t.HasExceededThreshold(string(grp)) { // if the threshold is exceeded for this group...
+				if f.ut.HasExceededThreshold(string(grp)) { // if the threshold is exceeded for this group...
 					if rand.Float32() < cfg.PacketDropPercentage || (proto == "UDP" && cfg.PacketDropUDP) { // if we should drop the packet...
 						decision = "drop"
 						verdict = nfqueue.NfDrop

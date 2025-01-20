@@ -18,9 +18,9 @@ func TestAverageTrafficMonitor(t *testing.T) {
 		return mockTime
 	}
 
-	// Initialize the averageTrafficMonitor with a rolling window size of 5
+	// Initialize the trafficStats with a rolling window size of 5
 	rollingWindowSize := 5
-	monitor := newAverageTrafficMonitor(config.MustGetLogger(), monitorNameForTesting, rollingWindowSize)
+	monitor := newTrafficStats(config.MustGetLogger(), monitorNameForTesting, rollingWindowSize)
 
 	// Simulate traffic counting over a 6-minute period to test wrap-around
 	startTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -80,9 +80,9 @@ func TestAverageTrafficMonitor_IsActive(t *testing.T) {
 		return mockTime
 	}
 
-	// Initialize the averageTrafficMonitor with a rolling window size of 5
+	// Initialize the trafficStats with a rolling window size of 5
 	rollingWindowSize := 5
-	monitor := newAverageTrafficMonitor(config.MustGetLogger(), monitorNameForTesting, rollingWindowSize)
+	monitor := newTrafficStats(config.MustGetLogger(), monitorNameForTesting, rollingWindowSize)
 
 	// Simulate traffic counting over a 6-minute period to test wrap-around
 	startTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -106,9 +106,9 @@ func TestAverageTrafficMonitor_CountTraffic_ActiveResults(t *testing.T) {
 	config.AppCfg.LogLevel = "debug"
 	logger := config.MustGetLogger()
 
-	// Initialize the averageTrafficMonitor with a rolling window size of 5.
+	// Initialize the trafficStats with a rolling window size of 5.
 	rollingWindowSize := 5
-	monitor := newAverageTrafficMonitor(logger, monitorNameForTesting, rollingWindowSize)
+	monitor := newTrafficStats(logger, monitorNameForTesting, rollingWindowSize)
 
 	// Define a mock nowFunc to control time in tests.
 	var mockTime time.Time

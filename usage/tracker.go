@@ -12,7 +12,6 @@ import (
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/models"
-	"relloyd/tubetimeout/monitor"
 )
 
 type saveSamplesFunc func(*zap.SugaredLogger, string, *sync.Map) error
@@ -50,15 +49,10 @@ type Tracker struct {
 	sampleSize      int              // The number of slots in the circular buffer
 	nowFunc         func() time.Time // Function to get the current time (defaults to time.Now)
 	pauseEndTime    time.Time        // The time when the pause ends
-	trafficCounter  monitor.TrafficCounter
 }
 
-// NewTracker initializes a Tracker with preallocated slices for each device.
-func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.TrackerConfig, counter monitor.TrafficCounter) (*Tracker, error) {
-	if counter == nil {
-		return nil, fmt.Errorf("missing traffic counter in call to NewTracker()")
-	}
-
+// NewTracker initializes a Tracker with pre-allocated slices for each device.
+func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.TrackerConfig) (*Tracker, error) {
 	sampleSize := int(cfg.Retention / cfg.Granularity)
 
 	if cfg.Retention > 7*24*time.Hour {
@@ -85,7 +79,6 @@ func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.Trac
 		windowStartDay:  cfg.StartDay,
 		windowStartTime: cfg.StartTime,
 		nowFunc:         time.Now, // Default to time.Now
-		trafficCounter:  counter,
 	}
 
 	// Load & save existing sample data.
