@@ -11,7 +11,20 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
 )
+
+type mockTrafficCounter struct{
+	count int
+	packetLen int
+	direction models.Direction
+}
+
+func (m *mockTrafficCounter) CountTraffic(count int, packetLen int, trafficDirection models.Direction) bool {
+	return true
+}
+
+var mtc = &mockTrafficCounter{}
 
 func TestNewTracker(t *testing.T) {
 	ctx := context.Background()
@@ -42,13 +55,13 @@ func TestNewTracker(t *testing.T) {
 	}
 
 	// Tracker with threshold 0 should default to 1 minute.
-	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg, mtc)
 	assert.NoError(t, err, "NewTracker failed")
 	assert.Equal(t, 1*time.Minute, tracker.threshold, "NewTracker did not set threshold to 1m")
 
 	// Another tracker for more stuff.
 	cfg.Threshold = 10 * time.Minute
-	tracker, err = NewTracker(ctx, config.MustGetLogger(), cfg)
+	tracker, err = NewTracker(ctx, config.MustGetLogger(), cfg, mtc)
 
 	assert.NoError(t, err, "NewTracker failed")
 	assert.NotNil(t, tracker, "NewTracker returned nil")
@@ -82,7 +95,7 @@ func TestHasExceededThreshold(t *testing.T) {
 		Granularity: 1 * time.Minute,
 	}
 
-	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg, mtc)
 	assert.NoError(t, err, "NewTracker failed")
 
 	// Simulate a device data structure with pre-allocated samples.
@@ -158,7 +171,7 @@ func TestAddSample(t *testing.T) {
 		Threshold:   10 * time.Minute,
 	}
 
-	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg, mtc)
 	assert.NoError(t, err, "NewTracker failed")
 
 	deviceID := "Test-Device" // use mixed case to assert case insensitivity
@@ -172,7 +185,7 @@ func TestAddSample(t *testing.T) {
 	}
 
 	// Case 1a: Add a sample at the start of the buffer and verify that we cannot find the mixed case device ID.
-	tracker.AddSample(deviceID)
+	tracker.AddSample(deviceID, 1, models.Ingress) // TODO: add sample with correct packetLen and direction
 	data, ok := tracker.devices.Load(deviceID)
 	assert.False(t, ok, "AddSample should not find data by mixed case device ID")
 
@@ -191,7 +204,7 @@ func TestAddSample(t *testing.T) {
 
 	// Case 2: Add a sample at a later time within the same hour.
 	now = now.Add(5 * cfg.Granularity) // Advance time by 5 minutes.
-	tracker.AddSample(deviceID)
+	tracker.AddSample(deviceID, 1, models.Ingress)
 
 	index = tracker.getIndex(now, dd.start)
 	if !dd.samples[index] {
@@ -200,7 +213,7 @@ func TestAddSample(t *testing.T) {
 
 	// Case 3: Add a sample after the retention period has passed.
 	now = now.Add(cfg.Retention) // Advance time by 1 hour.
-	tracker.AddSample(deviceID)  // This should reset the whole buffer and record a new one.
+	tracker.AddSample(deviceID, 1, models.Ingress)  // This should reset the whole buffer and record a new one.
 	// Case 3a: Verify that the device data was reinitialized.
 	data, ok = tracker.devices.Load(deviceID)
 	if !ok {
@@ -216,7 +229,7 @@ func TestAddSample(t *testing.T) {
 	// Case 4: Add multiple samples in rapid succession.
 	now = now.Add(2 * cfg.Granularity) // Advance time by 2 minutes.
 	for i := 0; i < 3; i++ {
-		tracker.AddSample(deviceID)
+		tracker.AddSample(deviceID, 1, models.Ingress)
 		index = tracker.getIndex(now, dd.start)
 		if !dd.samples[index] {
 			t.Errorf("AddSample failed to mark the sample at index %d on iteration %d", index, i)
@@ -226,7 +239,7 @@ func TestAddSample(t *testing.T) {
 
 	// Case 5: Add a sample with a large time jump forward.
 	now = now.Add(2 * cfg.Retention) // Advance time by 2 hours.
-	tracker.AddSample(deviceID)
+	tracker.AddSample(deviceID, 1, models.Ingress)
 	// Case 5a: Verify that the device data was reinitialized.
 	data, ok = tracker.devices.Load(deviceID)
 	if !ok {
@@ -248,7 +261,7 @@ func TestGetIndex(t *testing.T) {
 		Retention:   1 * time.Hour,
 		Granularity: 1 * time.Minute,
 	}
-	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg, mtc)
 	assert.NoError(t, err, "NewTracker failed")
 
 	startTime := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
@@ -281,7 +294,7 @@ func TestSyncWindow(t *testing.T) {
 		Retention:   1 * time.Hour,
 	}
 
-	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg) // No threshold needed for this test.
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg, mtc) // No threshold needed for this test.
 	assert.NoError(t, err, "NewTracker failed")
 
 	// Simulate a device data structure.
@@ -471,10 +484,10 @@ func TestResetSamples(t *testing.T) {
 
 	testDevice := strings.ToLower("test-device") // use explicit lower case device ID
 
-	tracker, err := NewTracker(context.Background(), config.MustGetLogger(), cfg)
+	tracker, err := NewTracker(context.Background(), config.MustGetLogger(), cfg, mtc)
 	assert.NoError(t, err, "NewTracker failed")
 
-	tracker.AddSample(testDevice)
+	tracker.AddSample(testDevice, 1, models.Ingress)
 	_, ok := tracker.devices.Load(testDevice)
 	assert.True(t, ok, "Device should exist in tracker")
 

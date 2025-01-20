@@ -12,13 +12,11 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
 	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/group"
 	"relloyd/tubetimeout/models"
+	"relloyd/tubetimeout/monitor"
 	"relloyd/tubetimeout/usage"
 )
-
-type ManagerI interface {
-	IsSrcDestIpKnown(srcIp, dstIp models.Ip, direction models.Direction) ([]models.Group, bool)
-}
 
 type packetIPs struct {
 	src net.IP
@@ -27,8 +25,9 @@ type packetIPs struct {
 
 type NFQueueFilter struct {
 	Nfq    []*nfqueue.Nfqueue
-	t      *usage.Tracker
-	m      ManagerI
+	t      usage.TrackerI
+	m      group.ManagerI
+	c      monitor.TrafficCounter
 	logger *zap.Logger
 }
 
@@ -38,17 +37,30 @@ type NFQueueFilter struct {
 // If the packets are destined for any of the injected Ips then filtering happens based on
 // <LOGIC-TBC>
 // TODO: unit test captuing two NFQs to ensure they are both created and running.
-func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *config.FilterConfig, t *usage.Tracker, m ManagerI) (*NFQueueFilter, error) {
+func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *config.FilterConfig, t usage.TrackerI, m group.ManagerI, c monitor.TrafficCounter) (*NFQueueFilter, error) {
 	var err error
 
 	if cfg.PacketDropPercentage < 0 || cfg.PacketDropPercentage > 1 {
 		return nil, fmt.Errorf("packet drop percentage must be between 0 and 100")
 	}
 
+	if t == nil {
+		return nil, fmt.Errorf("tracker must be supplied")
+	}
+
+	if m == nil {
+		return nil, fmt.Errorf("manager must be supplied")
+	}
+
+	if c == nil {
+		return nil, fmt.Errorf("counter must be supplied")
+	}
+
 	f := &NFQueueFilter{}
 	f.logger = logger.Desugar()
 	f.m = m
 	f.t = t
+	f.c = c
 
 	nfq1, err := f.startNFQueueFilter(ctx, cfg, cfg.OutboundQueueNumber, models.Egress)
 	if err != nil {
@@ -99,21 +111,13 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 	}
 
 	fnPacketHandler := func(a nfqueue.Attribute) int {
-		var err error
-		var pips packetIPs
 		var retval = 0 // 0 to continue the loop; 1 to exit cleanly; -1 to stop receiving messages
 
 		id := *a.PacketID
 
-		if a.Payload == nil { // if there's no payload then accept the packet.
-			f.logger.Warn("Payload is nil for packet", zap.Uint32("id", id))
-			acceptPacket(f.logger, nf, id)
-			return 0 // 1 to exit clean; -1 to signal error; 0 to continue
-		}
-
-		pips, err = getPacketIPs(a)
+		pips, l, err := getPacketIPs(a)
 		if err != nil {
-			f.logger.Error("Error getting packet IPs", zap.Error(err))
+			f.logger.Error("Error getting packet data", zap.Error(err))
 			acceptPacket(f.logger, nf, id)
 			return 0 // 1 to exit clean; -1 to signal error; 0 to continue
 		}
@@ -135,18 +139,20 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 
 		if direction == models.Egress { // if the mode is outbound...
 			// Check if the source and destination Ip addresses are known.
-			groups, ok = f.m.IsSrcDestIpKnown(models.Ip(pips.src.String()), models.Ip(pips.dst.String()), models.Egress)
+			groups, ok = f.m.IsSrcDestIpKnown(models.Ip(pips.src.String()), models.Ip(pips.dst.String()))
 		} else { // else if the mode is inbound...
 			// Expect the source and destination to be reversed.
 			// Source IPs will be the public IPs that we added to our destination mapping.
 			// Destinations IPs will be the local network.
-			groups, ok = f.m.IsSrcDestIpKnown(models.Ip(pips.dst.String()), models.Ip(pips.src.String()), models.Ingress)
+			groups, ok = f.m.IsSrcDestIpKnown(models.Ip(pips.dst.String()), models.Ip(pips.src.String()))
 		}
 
 		if ok { // if the packet IPs are known...
 			for _, grp := range groups { // for each group...
 				decision = "accept"                        // assume success
-				f.t.AddSample(string(grp))                 // remember that we saw it
+				if f.c.CountTraffic(fmt.Sprintf("%v-%v", grp, pips.src.String()), 1, l, direction) { // if the key is active...
+					f.t.AddSample(string(grp), l, direction)   // remember that we saw it
+				}
 				if f.t.HasExceededThreshold(string(grp)) { // if the threshold is exceeded for this group...
 					if rand.Float32() < cfg.PacketDropPercentage || (proto == "UDP" && cfg.PacketDropUDP) { // if we should drop the packet...
 						decision = "drop"
@@ -154,7 +160,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 					} else { // else introduce a delay for the packet and accept...
 						if cfg.PacketDelayMs > 0 && rand.Float32() < cfg.PacketDelayPercentage {
 							decision = "delay"
-							time.Sleep(applyJitter(cfg.PacketDelayMs, cfg.PacketJitterMs)) // Delay the packet
+							time.Sleep(ApplyJitter(cfg.PacketDelayMs, cfg.PacketJitterMs)) // Delay the packet
 						} else {
 							decision = "accept"
 						}
@@ -206,23 +212,30 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 // Source Ip (bytes 12-15 in IPv4 header)
 // Destination Ip (bytes 16-19 in IPv4 header)
 // getPacketIPs extracts the source and destination Ip addresses from the packet payload.
-func getPacketIPs(a nfqueue.Attribute) (packetIPs, error) {
-	// TODO: handle empty payload and return nf -> Accept
-	payload := *a.Payload
+func getPacketIPs(a nfqueue.Attribute) (packetIPs, int, error) {
+	if a.Payload == nil { // if there's no payload...
+		return packetIPs{}, 0, fmt.Errorf("payload is nil")
+		// f.logger.Warn("Payload is nil for packet", zap.Uint32("id", id))
+		// acceptPacket(f.logger, nf, id)
+		// return 0 // 1 to exit clean; -1 to signal error; 0 to continue
+	}
 
-	if len(payload) < 20 { // if the payload is too short for ipv4 header...
-		return packetIPs{}, fmt.Errorf("payload too short for IPv4 header")
+	payload := *a.Payload
+	length := len(payload)
+
+	if length < 20 { // if the payload is too short for ipv4 header...
+		return packetIPs{}, 0, fmt.Errorf("payload too short for IPv4 header")
 	}
 
 	return packetIPs{
 		src: payload[12:16],
 		dst: payload[16:20],
-	}, nil
+	}, length, nil
 }
 
 // applyJitter generates a random delay based on a base delay and jitter range.
 // Suggest ms values for baseDelayMs and jitterRangeMs.
-func applyJitter(baseDelayMs, jitterRangeMs time.Duration) time.Duration {
+func ApplyJitter(baseDelayMs, jitterRangeMs time.Duration) time.Duration {
 	// Generate a random jitter in the range [-jitterRange, +jitterRange]
 	jitter := time.Duration((rand.Float64()*2 - 1) * float64(jitterRangeMs))
 	totalDelay := baseDelayMs + jitter

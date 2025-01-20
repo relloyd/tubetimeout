@@ -2,11 +2,9 @@ package group
 
 import (
 	"fmt"
-	"sync"
 
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/models"
-	"relloyd/tubetimeout/monitor"
 )
 
 var (
@@ -14,9 +12,11 @@ var (
 	managerModeMatchAllSourceIps = false
 	// rollingWindowSize is the size of the rolling window for the traffic monitor.
 	rollingWindowSize = 5
-	// fnNewTrafficMonitor is a function to create a new traffic monitor.
-	fnNewTrafficMonitor = monitor.NewAverageTrafficMonitor
 )
+
+type ManagerI interface {
+	IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool)
+}
 
 type Manager struct {
 	logger           *zap.SugaredLogger
@@ -24,7 +24,6 @@ type Manager struct {
 	destIpGroups     models.IpGroups
 	destIpDomains    models.IpDomains
 	destDomainGroups models.DomainGroups
-	trafficMonitor   *sync.Map
 }
 
 func NewManager(logger *zap.SugaredLogger) *Manager {
@@ -34,7 +33,6 @@ func NewManager(logger *zap.SugaredLogger) *Manager {
 		destIpGroups:     models.IpGroups{Data: make(models.MapIpGroups)},
 		destIpDomains:    models.IpDomains{Data: make(models.MapIpDomain)},
 		destDomainGroups: models.DomainGroups{Data: make(models.MapDomainGroups)},
-		trafficMonitor:   &sync.Map{},
 	}
 	return m
 }
@@ -111,7 +109,7 @@ func (m *Manager) isDstDomainGroupKnown(domain models.Domain) ([]models.Group, b
 }
 
 // IsSrcDestIpKnown checks if the source and destination IPs are known and returns the src groups.
-func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip, direction models.Direction) ([]models.Group, bool) {
+func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip) ([]models.Group, bool) {
 	// If the manager should match all source IPs as if they're in their own group...
 	if managerModeMatchAllSourceIps {
 		// Create a return set of groups using metadata.
@@ -131,14 +129,6 @@ func (m *Manager) IsSrcDestIpKnown(srcIp, dstIp models.Ip, direction models.Dire
 	_, dstOk := m.isDstIpGroupKnown(dstIp)
 	if !srcOk || !dstOk {
 		return []models.Group{}, false
-	}
-
-	// Count traffic usage for the source IP and group combination.
-	if direction != "" {
-		for _, g := range srcGroup {
-			// TODO: add a test for manager.countTraffic being used.
-			m.countTraffic(fmt.Sprintf("%v-%v", g, string(srcIp)), 1, direction)
-		}
 	}
 
 	// Return the list of source groups.
@@ -174,10 +164,4 @@ func (m *Manager) IsSrcIpDestDomainKnown(srcIp models.Ip, dstDomain models.Domai
 
 func getMetaSrcIpDestGroup(srcIp models.Ip, dstGroup models.Group) models.Group {
 	return models.Group(fmt.Sprintf("%v:%v", srcIp, dstGroup))
-}
-
-func (m *Manager) countTraffic(key string, count int, direction models.Direction) bool {
-	tm, _ := m.trafficMonitor.LoadOrStore(key, fnNewTrafficMonitor(m.logger, key, rollingWindowSize))
-
-	return tm.(*monitor.AverageTrafficMonitor).CountTraffic(count, direction)
 }

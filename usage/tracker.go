@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/models"
+	"relloyd/tubetimeout/monitor"
 )
 
 type saveSamplesFunc func(*zap.SugaredLogger, string, *sync.Map) error
@@ -33,12 +34,13 @@ type deviceDataDTO struct {
 }
 
 type TrackerI interface {
-	AddSample(id string)
+	AddSample(id string, packetLen int, direction models.Direction)
 	HasExceededThreshold(deviceID string) bool
 }
 
 type Tracker struct {
 	logger          *zap.SugaredLogger
+	mu              *sync.Mutex
 	devices         *sync.Map     // Map of device IDs (string) to *deviceData
 	retention       time.Duration // The retention period for samples
 	granularity     time.Duration // The time granularity for sampling
@@ -48,11 +50,15 @@ type Tracker struct {
 	sampleSize      int              // The number of slots in the circular buffer
 	nowFunc         func() time.Time // Function to get the current time (defaults to time.Now)
 	pauseEndTime    time.Time        // The time when the pause ends
-	mu              *sync.Mutex
+	trafficCounter  monitor.TrafficCounter
 }
 
 // NewTracker initializes a Tracker with preallocated slices for each device.
-func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.TrackerConfig) (*Tracker, error) {
+func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.TrackerConfig, counter monitor.TrafficCounter) (*Tracker, error) {
+	if counter == nil {
+		return nil, fmt.Errorf("missing traffic counter in call to NewTracker()")
+	}
+
 	sampleSize := int(cfg.Retention / cfg.Granularity)
 
 	if cfg.Retention > 7*24*time.Hour {
@@ -70,6 +76,7 @@ func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.Trac
 
 	t := &Tracker{
 		logger:          logger,
+		mu:              &sync.Mutex{},
 		devices:         &sync.Map{},
 		retention:       cfg.Retention,
 		granularity:     cfg.Granularity,
@@ -78,7 +85,7 @@ func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.Trac
 		windowStartDay:  cfg.StartDay,
 		windowStartTime: cfg.StartTime,
 		nowFunc:         time.Now, // Default to time.Now
-		mu:              &sync.Mutex{},
+		trafficCounter:  counter,
 	}
 
 	// Load & save existing sample data.
@@ -178,7 +185,7 @@ func saveSamples(logger *zap.SugaredLogger, path string, devices *sync.Map) erro
 }
 
 // AddSample records a sample for a given identifier at the current time.
-func (t *Tracker) AddSample(id string) {
+func (t *Tracker) AddSample(id string, packetLen int, direction models.Direction) {
 	now := t.nowFunc() // Use nowFunc instead of time.Now
 
 	if t.pauseEndTime.After(now) { // if the tracker is paused...

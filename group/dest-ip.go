@@ -175,7 +175,8 @@ func (dw *DomainWatcher) notifyReceivers() {
 	dw.mu.RLock()
 	defer dw.mu.RUnlock()
 
-	dw.logger.Infof("Domain watcher notifying receivers of IP domains: %v", dw.destIpDomains.Data)
+	dw.logger.Infof("Domain watcher notifying receivers of %v IP domains", len(dw.destIpDomains.Data))
+	dw.logger.Debugf("Domain watcher notifying receivers of IP domains: %v", dw.destIpDomains.Data)
 	for _, receiver := range dw.destIpDomainReceivers {
 		newData := make(models.MapIpDomain)
 		dw.destIpDomains.Mu.RLock()
@@ -186,7 +187,8 @@ func (dw *DomainWatcher) notifyReceivers() {
 		dw.destIpDomains.Mu.RUnlock()
 	}
 
-	dw.logger.Infof("Domain watcher notifying receivers of IP groups: %v", dw.destIpGroups.Data)
+	dw.logger.Infof("Domain watcher notifying receivers of %v IP groups", len(dw.destIpGroups.Data))
+	dw.logger.Debugf("Domain watcher notifying receivers of IP groups: %v", dw.destIpGroups.Data)
 	for _, gr := range dw.destIpGroupReceivers {
 		newData := make(models.MapIpGroups)
 		dw.destIpGroups.Mu.RLock()
@@ -212,7 +214,7 @@ func resolveDomainsConcurrently(logger *zap.SugaredLogger, domains []models.Doma
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				logger.Errorf("Error resolving %s: %v", d, err)
+				logger.Warnf("Error resolving %s: %v", d, err)
 				// results[d] = nil
 			} else {
 				for _, ip := range ips {

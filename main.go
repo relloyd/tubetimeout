@@ -69,7 +69,7 @@ func main() {
 	logger.Info("NFTables rules created")
 
 	// Usage tracker.
-	t, err := usage.NewTracker(ctx, logger, &config.AppCfg.TrackerConfig)
+	t, err := usage.NewTracker(ctx, logger, &config.AppCfg.TrackerConfig, )
 	if err != nil {
 		logger.Fatalln("Failed to setup usage tracker:", err)
 	}
