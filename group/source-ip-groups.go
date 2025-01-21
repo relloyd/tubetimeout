@@ -41,29 +41,34 @@ type arpCommand func() (string, error)
 
 var (
 	ARPCmd              = config.ARPCmd // ARPCmd is the default ARP command
-	groupMacsLoaderFunc = FuncGroupMacsLoader(config.GroupMACs.GetConfig)
+	groupMacsLoaderFunc = funcGroupMacsLoader(config.GroupMACs.GetConfig)
 )
 
-type FuncGroupMacsLoader func(logger *zap.SugaredLogger) (config.GroupMACsConfig, error)
+type funcGroupMacsLoader func(logger *zap.SugaredLogger) (config.GroupMACsConfig, error)
 
 type SourceIpGroupsReceiver interface {
 	UpdateSourceIpGroups(newData models.MapIpGroups)
 }
 
+type SourceIpMACReceiver interface {
+	UpdateSourceIpMACs(newData models.MapIpMACs)
+}
+
 // NetWatcher manages ARP scanning and registered callbacks
 type NetWatcher struct {
-	logger         *zap.SugaredLogger
-	sourceIpGroups models.MapIpGroups
-	callbacks      []SourceIpGroupsReceiver
-	mu             sync.Mutex
+	logger               *zap.SugaredLogger
+	sourceIpGroups       models.MapIpGroups
+	callbacksForIpGroups []SourceIpGroupsReceiver
+	callbacksForIpMACs   []SourceIpMACReceiver
+	mu                   sync.Mutex
 }
 
 // NewNetWatcher creates a new NetWatcher instance
 func NewNetWatcher(logger *zap.SugaredLogger) *NetWatcher {
 	return &NetWatcher{
-		logger:         logger,
-		sourceIpGroups: make(map[models.Ip][]models.Group),
-		callbacks:      []SourceIpGroupsReceiver{},
+		logger:               logger,
+		sourceIpGroups:       make(map[models.Ip][]models.Group),
+		callbacksForIpGroups: []SourceIpGroupsReceiver{},
 	}
 }
 
@@ -71,7 +76,13 @@ func NewNetWatcher(logger *zap.SugaredLogger) *NetWatcher {
 func (nw *NetWatcher) RegisterSourceIpGroupsReceivers(receivers ...SourceIpGroupsReceiver) {
 	nw.mu.Lock()
 	defer nw.mu.Unlock()
-	nw.callbacks = append(nw.callbacks, receivers...)
+	nw.callbacksForIpGroups = append(nw.callbacksForIpGroups, receivers...)
+}
+
+func (nw *NetWatcher) RegisterSourceIpMACReceivers(receivers ...SourceIpMACReceiver) {
+	nw.mu.Lock()
+	defer nw.mu.Unlock()
+	nw.callbacksForIpMACs = append(nw.callbacksForIpMACs, receivers...)
 }
 
 // Start begins the periodic ARP scanning process and supports cancellation using context
@@ -95,11 +106,10 @@ func (nw *NetWatcher) Start(ctx context.Context) {
 // TODO: stop always notifying everyone when in managerModeMatchAllSourceIps mode.
 func scanNetworkAndNotify(nw *NetWatcher) {
 	// Perform ARP scan and get updated map
-	newMapIpGroups := scanNetwork(nw.logger, ARPCmd) // Empty map returned if no groups are set up.
+	newMapIpGroups, newMapIpMACs := scanNetwork(nw.logger, ARPCmd) // Empty map returned if no groups are set up.
 
 	nw.logger.Debugf("ARP scan results: %v", newMapIpGroups)
 
-	// Compare with existing data
 	nw.mu.Lock()
 	defer nw.mu.Unlock()
 
@@ -110,15 +120,21 @@ func scanNetworkAndNotify(nw *NetWatcher) {
 		// Send IpGroups to all registered callbacks.
 		nw.logger.Infof("ARP scan detected changes in source IPs: %v", newMapIpGroups)
 		nw.sourceIpGroups = newMapIpGroups
-		for _, cb := range nw.callbacks {
-			cb.UpdateSourceIpGroups(newMapIpGroups)
+		for _, cb := range nw.callbacksForIpGroups { // for each callback...
+			cb.UpdateSourceIpGroups(duplicateMap(newMapIpGroups)) // send a copy of the new IP groups.
 		}
-		nw.logger.Debugf("ARP scan notified %d callbacks", len(nw.callbacks))
+		nw.logger.Debugf("ARP scan notified %d callbacks", len(nw.callbacksForIpGroups))
+	}
+
+	if newMapIpMACs != nil && len(newMapIpMACs) > 0 { // if there are any IP-MACs to notify downstream...
+		for _, cb := range nw.callbacksForIpMACs { // for each callback...
+			cb.UpdateSourceIpMACs(duplicateMap(newMapIpMACs)) // send a copy of the new IP-MACs.
+		}
 	}
 }
 
 // scanNetwork performs an ARP scan and maps MAC addresses to IPs
-func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) models.MapIpGroups {
+func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) (models.MapIpGroups, models.MapIpMACs) {
 	// Load YAML data each time.
 	gm, err := groupMacsLoaderFunc(logger)
 	if errors.Is(err, config.ErrorGroupMacFileNotFound) { // if there is an error loading the YAML data...
@@ -135,14 +151,15 @@ func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) models.MapIpGroup
 	// TODO: add tests to check that managerModeMatchAllSourceIps is set correctly when the YAML file is missing or has an error.
 	// TODO: add tests to check that managerModeMatchAllSourceIps is set correctly when the YAML file is added.
 
-	// Initialize map
+	// Initialize maps
 	mig := make(map[models.Ip][]models.Group)
+	mim := make(map[models.Ip]models.MAC)
 
 	// Execute ARP scan
 	output, err := arpCmd()
 	if err != nil {
 		logger.Errorf("Error running ARP command: %v", err)
-		return nil
+		return nil, nil
 	}
 
 	// Parse ARP output
@@ -153,8 +170,9 @@ func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) models.MapIpGroup
 			continue
 		}
 
-		arpIp := strings.Trim(fields[1], "()") // field zero may be '?' as the hostnames haven't been looked up
+		arpIp := strings.Trim(fields[1], "()") // field zero may be '?' as the hostnames haven't been looked up.
 		arpMAC := fields[3]
+		mim[models.Ip(arpIp)] = models.MAC(arpMAC) // save the MAC address for the IP.
 
 		if managerModeMatchAllSourceIps && gm.Groups == nil { // if there are no groups of MACs found...
 			// Set each source IP into the default group.
@@ -172,5 +190,18 @@ func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) models.MapIpGroup
 		}
 	}
 
-	return mig
+	return mig, mim
+}
+
+// duplicateMap creates a shallow copy of the original map.
+func duplicateMap[K comparable, V any](original map[K]V) map[K]V {
+	// Create a new map with the same type and capacity as the original.
+	newCopy := make(map[K]V, len(original))
+
+	// Iterate over the original map and copy each key-value pair
+	for key, value := range original {
+		newCopy[key] = value
+	}
+
+	return newCopy
 }

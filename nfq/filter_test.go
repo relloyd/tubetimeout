@@ -12,12 +12,12 @@ import (
 )
 
 func TestNewNFQueueFilter(t *testing.T) {
-	ctx:= context.Background()
+	ctx := context.Background()
 	logger := config.MustGetLogger()
-	counter := monitor.NewTrafficCounter(logger, 5)
+	counter := monitor.NewTrafficMap(logger, 5)
 
 	tracker, err := usage.NewTracker(ctx, logger, &config.AppCfg.TrackerConfig, counter)
-	assert.NoError(t, err, "unexpected error getting NewTrafficCounter")
+	assert.NoError(t, err, "unexpected error getting NewTrafficMap")
 
 	manager := group.NewManager(logger)
 

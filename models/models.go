@@ -4,6 +4,17 @@ import (
 	"sync"
 )
 
+type Ip string
+type Domain string
+type Group string
+type MAC string
+
+type MapGroupDomains map[Group][]Domain
+type MapIpDomain map[Ip]Domain
+type MapIpGroups map[Ip][]Group
+type MapIpMACs map[Ip]MAC
+type MapDomainGroups map[Domain][]Group
+
 type IpDomains struct {
 	Data MapIpDomain
 	Mu   sync.RWMutex
@@ -14,19 +25,15 @@ type IpGroups struct {
 	Mu   sync.RWMutex
 }
 
+type IpMACs struct {
+	Data MapIpMACs
+	Mu   sync.RWMutex
+}
+
 type DomainGroups struct {
 	Data MapDomainGroups
 	Mu   sync.RWMutex
 }
-
-type Ip string
-type Domain string
-type Group string
-
-type MapGroupDomains map[Group][]Domain
-type MapIpDomain map[Ip]Domain
-type MapIpGroups map[Ip][]Group
-type MapDomainGroups map[Domain][]Group
 
 type NamedMAC struct {
 	MAC  string `yaml:"mac"`

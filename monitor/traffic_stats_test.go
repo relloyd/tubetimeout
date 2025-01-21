@@ -11,7 +11,7 @@ import (
 
 var monitorNameForTesting = "test-monitor"
 
-func TestAverageTrafficMonitor(t *testing.T) {
+func TestAverageTrafficStats(t *testing.T) {
 	// Define a mock nowFunc to control time in tests
 	var mockTime time.Time
 	nowFunc = func() time.Time {
@@ -73,7 +73,7 @@ func TestAverageTrafficMonitor(t *testing.T) {
 	// }
 }
 
-func TestAverageTrafficMonitor_IsActive(t *testing.T) {
+func TestAverageTrafficStats_IsActive(t *testing.T) {
 	// Define a mock nowFunc to control time in tests
 	var mockTime time.Time
 	nowFunc = func() time.Time {
@@ -102,7 +102,7 @@ func TestAverageTrafficMonitor_IsActive(t *testing.T) {
 	// assert.False(t, monitor.isActive(3, 1.0), "should be inactive")
 }
 
-func TestAverageTrafficMonitor_CountTraffic_ActiveResults(t *testing.T) {
+func TestAverageTrafficStats_CountTraffic_ActiveResults(t *testing.T) {
 	config.AppCfg.LogLevel = "debug"
 	logger := config.MustGetLogger()
 

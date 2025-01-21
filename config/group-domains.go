@@ -41,7 +41,8 @@ type GroupDomainsConfig struct {
 	GroupDomains models.MapGroupDomains `yaml:"groups"` // group: [domain1, domain2, ...]
 }
 
-// LoadGroupDomains parses the YAML file
+// LoadGroupDomains parses the default group domains YAML file and returns the map of group domains.
+// Superseded by FetchYouTubeDomains for now to fetch the latest list of YouTube domains.
 func LoadGroupDomains() (models.MapGroupDomains, error) {
 	if !groupMACsFileUpdated { // if we should update the file path with the app home dir...
 		var err error

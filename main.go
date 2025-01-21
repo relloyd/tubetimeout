@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/group"
-	monitor2 "relloyd/tubetimeout/monitor"
+	"relloyd/tubetimeout/monitor"
 	"relloyd/tubetimeout/nfq"
 	"relloyd/tubetimeout/nft"
 	"relloyd/tubetimeout/proxy"
@@ -76,31 +76,31 @@ func main() {
 	}
 	logger.Info("Usage tracker created")
 
+	// Traffic Monitor.
+	trafficMap := monitor.NewTrafficMap(logger, 5)
+	logger.Info("Traffic monitor started")
+
 	// Group manager.
 	mgr := group.NewManager(logger)
 	logger.Info("Group manager created")
 
 	// Sources.
 	w := group.NewNetWatcher(logger)
-	w.RegisterSourceIpGroupsReceivers(mgr)
-	w.RegisterSourceIpGroupsReceivers(rules)
+	w.RegisterSourceIpGroupsReceivers(mgr, rules)
+	w.RegisterSourceIpMACReceivers(trafficMap)
 	w.Start(ctx)
 	logger.Info("Sources mapped")
 
 	// Destinations.
 	dw := group.NewDomainWatcher(logger)
-	dw.RegisterDestDomainGroupReceivers(mgr)
 	dw.RegisterDestIpGroupReceivers(mgr)
-	dw.RegisterDestIpDomainReceivers(mgr)
-	dw.RegisterDestIpDomainReceivers(rules)
+	dw.RegisterDestDomainGroupReceivers(mgr)     // TODO: remove unused DestDomainGroupReceivers in mgr if/when the proxy feature is removed as it is essentially wasted effort keeping the structs sync'd.
+	dw.RegisterDestIpDomainReceivers(mgr, rules) // TODO: remove unused DestIpDomainReceivers in mgr if/when the proxy feature is removed as it is essentially wasted effort keeping the structs sync'd.
 	dw.Start(ctx)
 	logger.Info("Destinations mapped")
 
-	// Traffic Monitor.
-	monitor := monitor2.NewTrafficCounter(logger, 5)
-
 	// NFQueue to process packets in user space.
-	q, err := nfq.NewNFQueueFilter(ctx, logger, &config.AppCfg.FilterConfig, t, mgr,monitor)
+	q, err := nfq.NewNFQueueFilter(ctx, logger, &config.AppCfg.FilterConfig, t, mgr, trafficMap)
 	if err != nil {
 		logger.Fatalln("Failed to setup NFQueue filter:", err)
 	}
@@ -148,8 +148,8 @@ func main() {
 		})
 	}
 
+	// Web server start.
 	if config.AppCfg.WebConfig.WebEnabled {
-		// Web server start.
 		s := web.NewServer(logger, t, config.GroupMACs)
 		go func() {
 			if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -176,7 +176,7 @@ func main() {
 	<-sigs
 	logger.Info("Signal received, shutting down...")
 
-	// Cleanup and exit.
+	// Clean up and exit.
 	failure := false
 	for _, f := range cleanupFuncs {
 		if err := f(); err != nil {

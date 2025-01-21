@@ -13,9 +13,9 @@ import (
 	"relloyd/tubetimeout/models"
 )
 
-type FuncGroupDomainsLoader func(logger *zap.SugaredLogger) (models.MapGroupDomains, error)
+type funcGroupDomainsLoader func(logger *zap.SugaredLogger) (models.MapGroupDomains, error)
 
-var fnGroupDomainLoader = FuncGroupDomainsLoader(config.FetchYouTubeDomains)
+var fnGroupDomainLoader = funcGroupDomainsLoader(config.FetchYouTubeDomains)
 
 type DestIpDomainReceiver interface {
 	UpdateDestIpDomains(newIps models.MapIpDomain)

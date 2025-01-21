@@ -22,7 +22,7 @@ type trafficStats struct {
 	rollingPacketLenTotal map[models.Direction][]int
 	totalCount            map[models.Direction]int
 	lastMinuteIdx         map[models.Direction]int
-	lastActiveTime        time.Time
+	lastActiveTimeUTC     time.Time
 }
 
 func newTrafficStats(logger *zap.SugaredLogger, name string, rollingWindowSize int) *trafficStats {
@@ -34,6 +34,7 @@ func newTrafficStats(logger *zap.SugaredLogger, name string, rollingWindowSize i
 		rollingPacketLenTotal: make(map[models.Direction][]int),
 		totalCount:            make(map[models.Direction]int),
 		lastMinuteIdx:         make(map[models.Direction]int),
+		lastActiveTimeUTC:     time.Now().UTC(),
 		mu:                    &sync.Mutex{},
 	}
 	a.rollingCounts[models.Ingress] = make([]int, rollingWindowSize)
@@ -74,7 +75,8 @@ func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection m
 
 // isActive determines if the traffic rate is deemed "active" i.e. true, based on the current rate.
 func (a *trafficStats) isActive(lastMinuteIndex int) bool {
-	// ratios := make([]float64, a.rollingWindowSize)
+	a.lastActiveTimeUTC = nowFunc().UTC()
+
 	deltas := make([]float64, a.rollingWindowSize)
 	deltasPacketLen := make([]int, a.rollingWindowSize)
 	winners := make([]models.Direction, a.rollingWindowSize)
@@ -95,17 +97,12 @@ func (a *trafficStats) isActive(lastMinuteIndex int) bool {
 		deltasPacketLen[i] = ingressPacketLenTotal - egressPacketLenTotal
 	}
 
-	// meanIngress := stat.Mean(a.rollingAverages[models.Ingress], nil)
-	// meanEgress := stat.Mean(a.rollingAverages[models.Egress], nil)
-	// meanRatios := stat.Mean(ratios, nil)
-	// meanDeltas := stat.Mean(deltas, nil)
-
 	a.logger.With(
 		"monitorName", a.monitorName,
 		"rollingCounts", a.rollingCounts,
 		"packetLenTotal", a.rollingPacketLenTotal,
-		"deltas", deltas,
-		"deltasPacketLen", deltasPacketLen,
+		"deltaCount", deltas,
+		"deltaPacketLen", deltasPacketLen,
 		"winners", winners,
 		"lastMinuteWinner", winners[lastMinuteIndex],
 	).Infof("monitor stats")
