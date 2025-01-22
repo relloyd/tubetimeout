@@ -129,6 +129,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 		var decision string
 		var verdict = nfqueue.NfAccept
 		var proto = "proto-unknown"
+		var srcIp, dstIp models.Ip
 
 		protocol := (*a.Payload)[9] // Protocol field in IPv4
 		if protocol == 6 {
@@ -137,20 +138,24 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 			proto = "UDP"
 		}
 
-		if direction == models.Egress { // if the mode is outbound...
-			// Check if the source and destination Ip addresses are known.
-			groups, ok = f.gm.IsSrcDestIpKnown(models.Ip(pips.src.String()), models.Ip(pips.dst.String()))
+		// TODO: test that source and dest IPs are reversed in filter for Egress vs Ingress.
+		if direction == models.Egress { // if the direction is outbound...
+			srcIp = models.Ip(pips.src.String())
+			dstIp = models.Ip(pips.dst.String())
 		} else { // else if the mode is inbound...
 			// Expect the source and destination to be reversed.
 			// Source IPs will be the public IPs that we added to our destination mapping.
 			// Destinations IPs will be the local network.
-			groups, ok = f.gm.IsSrcDestIpKnown(models.Ip(pips.dst.String()), models.Ip(pips.src.String()))
+			srcIp = models.Ip(pips.dst.String())
+			dstIp = models.Ip(pips.src.String())
 		}
 
-		if ok { // if the packet IPs are known...
+		groups, ok = f.gm.IsSrcDestIpKnown(srcIp, dstIp) // check if the source and destination Ip addresses are known.
+		if ok {                                          // if the packet IPs are known...
 			for _, grp := range groups { // for each group...
-				decision = "accept"                                             // assume success
-				if f.tc.CountTraffic(grp, models.Ip(pips.src.String()), 1, l, direction) { // if the group-ip key is considered active...
+				decision = "accept"                                 // assume success
+				active := f.tc.CountTraffic(grp, srcIp, direction, 1, l)
+				if active { // if the group-ip key is considered active...
 					f.ut.AddSample(string(grp), l, direction) // remember that we saw it
 				}
 				if f.ut.HasExceededThreshold(string(grp)) { // if the threshold is exceeded for this group...
@@ -173,7 +178,8 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 					zap.Uint8("protocol-byte", protocol),
 					zap.String("src", pips.src.String()),
 					zap.String("dest", pips.dst.String()),
-					zap.String("group", string(grp)))
+					zap.String("group", string(grp)),
+					zap.Bool("active", active))
 			}
 		} else { // else accept the packet since the src/dest are not known...
 			f.logger.Debug("Accept unregistered",

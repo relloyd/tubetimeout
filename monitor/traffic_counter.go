@@ -12,7 +12,7 @@ import (
 )
 
 type TrafficCounter interface {
-	CountTraffic(group models.Group, ip models.Ip, count int, packetLen int, direction models.Direction) bool
+	CountTraffic(group models.Group, ip models.Ip, direction models.Direction, count int, packetLen int) bool
 }
 
 type TrafficMap struct {
@@ -33,7 +33,7 @@ func NewTrafficMap(logger *zap.SugaredLogger, rollingWindowSize int) *TrafficMap
 	}
 }
 
-func (t *TrafficMap) CountTraffic(group models.Group, ip models.Ip, count int, packetLen int, direction models.Direction) bool {
+func (t *TrafficMap) CountTraffic(group models.Group, ip models.Ip, direction models.Direction, count int, packetLen int) bool {
 	t.ipMACs.Mu.RLock()
 	defer t.ipMACs.Mu.RUnlock()
 	mac, ok := t.ipMACs.Data[ip]
