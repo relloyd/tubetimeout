@@ -11,8 +11,12 @@ import (
 )
 
 func TestScanNetwork(t *testing.T) {
+	// Set the loader function to the mock
+	originalLoaderFunc := groupMacsLoaderFunc
+	defer func() { groupMacsLoaderFunc = originalLoaderFunc }()
+
 	// Mock loader function
-	mockLoaderFunc := func(logger *zap.SugaredLogger) (config.GroupMACsConfig, error) {
+	groupMacsLoaderFunc = func(logger *zap.SugaredLogger) (config.GroupMACsConfig, error) {
 		return config.GroupMACsConfig{
 			Groups: map[models.Group][]models.NamedMAC{
 				"group1": {{MAC: "00:11:22:33:44:55", Name: ""}, {MAC: "66:77:88:99:AA:BB", Name: ""}},
@@ -20,11 +24,6 @@ func TestScanNetwork(t *testing.T) {
 			},
 		}, nil
 	}
-
-	// Set the loader function to the mock
-	originalLoaderFunc := groupMacsLoaderFunc
-	defer func() { groupMacsLoaderFunc = originalLoaderFunc }()
-	groupMacsLoaderFunc = mockLoaderFunc
 
 	// Define a mock ARP command that returns a fixed output
 	mockARPCommand := func() (string, error) {
@@ -35,9 +34,8 @@ func TestScanNetwork(t *testing.T) {
 `, nil
 	}
 
-	// Call the function under test
+	// Call the function under test.
 	mig, mim := scanNetwork(config.MustGetLogger(), mockARPCommand)
-
 	// Validate the IP MACs.
 	expectedMig := map[models.Ip][]models.Group{
 		"192.168.1.10": {"group1"},
@@ -55,9 +53,8 @@ func TestScanNetwork(t *testing.T) {
 			t.Errorf("Ip %s: expected %v, got %v", ip, expectedGroups, groups)
 		}
 	}
-
 	// Validate the IP MACs.
-	expectedMim := map[models.Ip]models.MAC {
+	expectedMim := models.MapIpMACs {
 		"192.168.1.10": "00:11:22:33:44:55",
 		"192.168.1.11": "66:77:88:99:AA:BB",
 		"192.168.1.12": "CC:DD:EE:FF:00:11",
@@ -76,6 +73,7 @@ func TestScanNetwork(t *testing.T) {
 	groupMacsLoaderFunc = func(logger *zap.SugaredLogger) (config.GroupMACsConfig, error) {
 		return config.GroupMACsConfig{}, config.ErrorGroupMacFileNotFound
 	}
+	// Call the function under test.
 	mig, mim = scanNetwork(config.MustGetLogger(), mockARPCommand)
 	// Validate the IP Groups.
 	expectedMig = map[models.Ip][]models.Group{
@@ -99,5 +97,7 @@ func TestScanNetwork(t *testing.T) {
 	assert.Equal(t, expectedMim, mim, "unexpected IP MACs returned from scanNetwork")
 }
 
-// TODO: test that the callback is called when the ARP scan is triggered
-//  and for when the MAC-Group mapping is empty and we default to every IP
+// TODO: test that the source IPs and MACs callbacks are called when the ARP scan is triggered
+//  and when the MAC-Group mapping is empty and we default to every IP
+//  and in what cases we get zero macs
+//  and that the IP-MACs callbacks are executed when we have data for them

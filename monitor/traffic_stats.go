@@ -16,25 +16,26 @@ type trafficStats struct {
 	mu                    *sync.Mutex
 	logger                *zap.SugaredLogger
 	monitorName           string // arbitrary monitorName for the monitor
-	rollingWindowSize     int
-	isLastMinuteActive    bool
-	rollingCounts         map[models.Direction][]int
-	rollingPacketLenTotal map[models.Direction][]int
+	windowSize            int
 	totalCount            map[models.Direction]int
+	rollingCounts         map[models.Direction][]int // TODO: maybe remove rollingCounts of packets if packet len is good enough to determine activity.
+	rollingPacketLenTotal map[models.Direction][]int
 	lastMinuteIdx         map[models.Direction]int
-	lastActiveTimeUTC     time.Time
+	isLastMinuteActive    bool
+	lastActiveTimeUTC     time.Time // the time at which stats were last counted
 }
 
 func newTrafficStats(logger *zap.SugaredLogger, name string, rollingWindowSize int) *trafficStats {
 	a := &trafficStats{
 		logger:                logger,
 		monitorName:           name,
-		rollingWindowSize:     rollingWindowSize,
+		windowSize:            rollingWindowSize,
 		rollingCounts:         make(map[models.Direction][]int),
 		rollingPacketLenTotal: make(map[models.Direction][]int),
 		totalCount:            make(map[models.Direction]int),
 		lastMinuteIdx:         make(map[models.Direction]int),
-		lastActiveTimeUTC:     time.Now().UTC(),
+		lastActiveTimeUTC:     nowFunc().UTC(),
+		isLastMinuteActive:    true, // assume the status is active until we get stats for the first minute
 		mu:                    &sync.Mutex{},
 	}
 	a.rollingCounts[models.Ingress] = make([]int, rollingWindowSize)
@@ -49,8 +50,11 @@ func newTrafficStats(logger *zap.SugaredLogger, name string, rollingWindowSize i
 func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection models.Direction) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	currentMinuteIdx := nowFunc().Minute() % a.rollingWindowSize
+	currentMinuteIdx := nowFunc().Minute() % a.windowSize
 	lastMinuteIndex := a.lastMinuteIdx[trafficDirection]
+
+	// Remember activity status for each call.
+	a.lastActiveTimeUTC = nowFunc().UTC()
 
 	// If we've moved to a new minute
 	if currentMinuteIdx != lastMinuteIndex {
@@ -75,39 +79,23 @@ func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection m
 
 // isActive determines if the traffic rate is deemed "active" i.e. true, based on the current rate.
 func (a *trafficStats) isActive(lastMinuteIndex int) bool {
-	a.lastActiveTimeUTC = nowFunc().UTC()
+	deltasPacketLen := make([]int, a.windowSize)
 
-	deltas := make([]float64, a.rollingWindowSize)
-	deltasPacketLen := make([]int, a.rollingWindowSize)
-	winners := make([]models.Direction, a.rollingWindowSize)
-
-	for i := range a.rollingCounts[models.Ingress] {
-		ingressCount := float64(a.rollingCounts[models.Ingress][i])
-		egressCount := float64(a.rollingCounts[models.Egress][i])
-		deltas[i] = ingressCount - egressCount
-
-		if ingressCount > egressCount {
-			winners[i] = models.Ingress
-		} else {
-			winners[i] = models.Egress
-		}
-
-		ingressPacketLenTotal := a.rollingPacketLenTotal[models.Ingress][i]
-		egressPacketLenTotal := a.rollingPacketLenTotal[models.Egress][i]
-		deltasPacketLen[i] = ingressPacketLenTotal - egressPacketLenTotal
+	for i := range a.rollingPacketLenTotal[models.Ingress] {
+		deltasPacketLen[i] = a.rollingPacketLenTotal[models.Ingress][i] - a.rollingPacketLenTotal[models.Egress][i]
 	}
 
 	a.logger.With(
 		"monitorName", a.monitorName,
-		"rollingCounts", a.rollingCounts,
-		"packetLenTotal", a.rollingPacketLenTotal,
-		"deltaCount", deltas,
-		"deltaPacketLen", deltasPacketLen,
-		"winners", winners,
-		"lastMinuteWinner", winners[lastMinuteIndex],
+		"packetLenTotals", a.rollingPacketLenTotal,
+		"deltas", deltasPacketLen,
 	).Infof("monitor stats")
 
-	return true
+	if (a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] == 0 && a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] == 0) ||
+		a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] > a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] {
+		return true
+	}
+	return false
 }
 
 // func nonZero(num float64) float64 {
