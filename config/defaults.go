@@ -30,7 +30,6 @@ type AppConfig struct {
 	DebugConfig   DebugConfig   `envconfig:"DEBUG"`
 	TrackerConfig TrackerConfig `envconfig:"TRACKER"`
 	FilterConfig  FilterConfig  `envconfig:"FILTER"`
-	ProxyConfig   ProxyConfig   `envconfig:"PROXY"`
 	WebConfig     WebConfig     `envconfig:"WEB"`
 	MonitorConfig MonitorConfig `envconfig:"MONITOR"`
 }
@@ -69,10 +68,6 @@ type FilterConfig struct {
 	PacketDropUDP         bool          `envconfig:"PACKET_DROP_UDP" default:"true"`
 	OutboundQueueNumber   uint16        `envconfig:"OUTBOUND_QUEUE_NUMBER" default:"100"`
 	InboundQueueNumber    uint16        `envconfig:"INBOUND_QUEUE_NUMBER" default:"101"`
-}
-
-type ProxyConfig struct {
-	ProxyEnabled bool `envconfig:"ENABLED" default:"false"`
 }
 
 type WebConfig struct {

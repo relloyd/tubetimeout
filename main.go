@@ -16,7 +16,6 @@ import (
 	"relloyd/tubetimeout/monitor"
 	"relloyd/tubetimeout/nfq"
 	"relloyd/tubetimeout/nft"
-	"relloyd/tubetimeout/proxy"
 	"relloyd/tubetimeout/usage"
 	"relloyd/tubetimeout/web"
 )
@@ -125,28 +124,6 @@ func main() {
 		}
 		return nil
 	})
-
-	// Proxy server start.
-	if config.AppCfg.ProxyConfig.ProxyEnabled {
-		s := proxy.NewServer(logger, mgr, t)
-		go func() {
-			if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				logger.Fatalln("Error starting proxy server:", err)
-			}
-			logger.Info("Proxy server quit")
-		}()
-		logger.Info("Proxy server started")
-
-		cleanupFuncs = append(cleanupFuncs, func() error {
-			// Shutdown the proxy server.
-			ctxSrv, cancelSrv := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancelSrv()
-			if err = s.Shutdown(ctxSrv); err != nil {
-				return fmt.Errorf("error shutting down proxy server: %w", err)
-			}
-			return nil
-		})
-	}
 
 	// Web server start.
 	if config.AppCfg.WebConfig.WebEnabled {
