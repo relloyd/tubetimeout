@@ -122,6 +122,8 @@ func scanNetworkAndNotify(nw *NetWatcher) {
 		for _, cb := range nw.callbacksForIpMACs { // for each callback...
 			cb.UpdateSourceIpMACs(duplicateMap(newMapIpMACs)) // send a copy of the new IP-MACs.
 		}
+	} else {
+		nw.logger.Errorf("no IP-MAC data found to send downstream (usage stats will not work)")
 	}
 }
 

@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,11 +16,11 @@ type TrafficCounter interface {
 }
 
 type TrafficMap struct {
-	mu                sync.Mutex
 	logger            *zap.SugaredLogger
 	rollingWindowSize int
 	trafficMap        *sync.Map
 	trafficMapLen     int
+	muTrafficMapLen   sync.Mutex
 	ipMACs            models.IpMACs
 }
 
@@ -35,18 +36,18 @@ func NewTrafficMap(logger *zap.SugaredLogger, rollingWindowSize int) *TrafficMap
 func (t *TrafficMap) CountTraffic(group models.Group, ip models.Ip, count int, packetLen int, direction models.Direction) bool {
 	t.ipMACs.Mu.RLock()
 	defer t.ipMACs.Mu.RUnlock()
-	m, ok := t.ipMACs.Data[ip]
+	mac, ok := t.ipMACs.Data[ip]
 	if !ok {
 		t.logger.Warnf("CountTraffic found no MAC found for IP %v in group %v. Returning active for now.", ip, group)
 		return true
 	}
 
-	key := getTrafficMapKey(group, m)
+	key := getTrafficMapKey(group, mac)
 	tm, loaded := t.trafficMap.LoadOrStore(key, newTrafficStats(t.logger, key, t.rollingWindowSize))
 	if !loaded { // if the trafficMap was stored as new...
-		t.mu.Lock()
+		t.muTrafficMapLen.Lock()
 		t.trafficMapLen++ // track of the number of trafficMap values.
-		t.mu.Unlock()
+		t.muTrafficMapLen.Unlock()
 	}
 	return tm.(*trafficStats).countTraffic(count, packetLen, direction)
 }
@@ -60,21 +61,22 @@ func (t *TrafficMap) UpdateSourceIpMACs(newData models.MapIpMACs) {
 
 	// Remove old data from the trafficMap.
 	minAllowedTime := time.Now().Add(-config.AppCfg.MonitorConfig.PurgeStatsAfterDuration) // remove trafficMaps older than this.
-	t.mu.Lock()
-	defer t.mu.Unlock()
+
+	t.muTrafficMapLen.Lock()
+	defer t.muTrafficMapLen.Unlock()
+
 	if len(newData) != t.trafficMapLen { // if there are trafficMaps to clean up...
 		t.trafficMap.Range(func(key any, value any) bool { // for each trafficMap key...
-			for ip, groups := range newData { // check all group-ip input newData...
-				foundKey := false
-				for _, g := range groups { // for each group...
-					k := getTrafficMapKey(g, ip) // generate the group-ip key (see also nfq code that creates this).
-					v := value.(*trafficStats)
-					// TODO: look up the MAC in config and remove it if it's not in the new data.
-					if key.(string) == k {
-						foundKey = true
-					}
+			keyMac := getTrafficMapMACFromKey(key.(string))
+			macExists := false
+			for _, mac := range newData { // check all ip-mac input newData...
+				if keyMac == mac { // if the mac is found in the ip-mac newData...
+					macExists = true
 				}
-				if !foundKey { // if the group-ip key was not found...
+			}
+			if !macExists { // if the MAC was not found...
+				v := value.(*trafficStats)
+				if v.lastActiveTimeUTC.Before(minAllowedTime) { // if the last active time for the MAC is old...
 					t.trafficMap.Delete(key) // remove the key.
 					t.trafficMapLen--        // decrement the trafficMap counter.
 				}
@@ -84,6 +86,11 @@ func (t *TrafficMap) UpdateSourceIpMACs(newData models.MapIpMACs) {
 	}
 }
 
-func getTrafficMapKey(group models.Group, ip models.MAC) string {
-	return fmt.Sprintf("%v-%v", group, ip)
+func getTrafficMapKey(group models.Group, mac models.MAC) string {
+	return fmt.Sprintf("%v-%v", group, mac)
+}
+
+func getTrafficMapMACFromKey(key string) models.MAC {
+	s := strings.Split(key, "-")
+	return models.MAC(s[1])
 }
