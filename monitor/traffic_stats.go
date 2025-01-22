@@ -57,16 +57,16 @@ func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection m
 	a.lastActiveTimeUTC = nowFunc().UTC()
 
 	// If we've moved to a new minute
-	if currentMinuteIdx != lastMinuteIndex {
-		// Determine if the rate for the previous minute is "active"
+	if currentMinuteIdx != lastMinuteIndex+1 {  // if we have moved to the next minute...
+		// Determine if the rate for the previous minute is "active".
 		a.isLastMinuteActive = a.isActive(lastMinuteIndex)
-		// Subtract the completed minute's count from the total count
+		// Subtract the completed minute's count from the total count.
 		a.totalCount[trafficDirection] -= a.rollingCounts[trafficDirection][currentMinuteIdx]
-		// Clear the counts for the new minute
+		// Clear the counts for the new minute.
 		a.rollingCounts[trafficDirection][currentMinuteIdx] = 0
 		a.rollingPacketLenTotal[trafficDirection][currentMinuteIdx] = 0
-		// Update the last minute index
-		a.lastMinuteIdx[trafficDirection] = currentMinuteIdx
+		// Update the last minute index.
+		a.lastMinuteIdx[trafficDirection] = getLastMinuteIdx(currentMinuteIdx, a.windowSize)
 	}
 
 	// Add the packet count to the current minute's count
@@ -98,17 +98,10 @@ func (a *trafficStats) isActive(lastMinuteIndex int) bool {
 	return false
 }
 
-// func nonZero(num float64) float64 {
-// 	if num == 0 {
-// 		return 1
-// 	}
-// 	return num
-// }
-
-// // getLastMinuteIdx returns the index of the last minute in the rolling window.
-// func getLastMinuteIdx(currentIndex int, moduloSize int) int {
-// 	if currentIndex == 0 {
-// 		return moduloSize - 1
-// 	}
-// 	return currentIndex - 1
-// }
+// getLastMinuteIdx returns the index of the last minute in the rolling window.
+func getLastMinuteIdx(currentIndex int, moduloSize int) int {
+	if currentIndex == 0 {
+		return moduloSize - 1
+	}
+	return currentIndex - 1
+}
