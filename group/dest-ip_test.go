@@ -43,7 +43,7 @@ func TestLoadGroupDomains(t *testing.T) {
 			Data: make(models.MapDomainGroups),
 			Mu:   sync.RWMutex{},
 		},
-		destDomainGroupsReceivers: []DestDomainGroupsReceiver{},
+		destDomainGroupsReceivers: []models.DestDomainGroupsReceiver{},
 	}
 
 	// Add a mock receiver to observe notifications

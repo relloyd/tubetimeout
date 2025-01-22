@@ -32,6 +32,7 @@ type AppConfig struct {
 	FilterConfig  FilterConfig  `envconfig:"FILTER"`
 	ProxyConfig   ProxyConfig   `envconfig:"PROXY"`
 	WebConfig     WebConfig     `envconfig:"WEB"`
+	MonitorConfig MonitorConfig `envconfig:"MONITOR"`
 }
 
 type DebugConfig struct {
@@ -77,4 +78,8 @@ type ProxyConfig struct {
 type WebConfig struct {
 	WebEnabled bool `envconfig:"ENABLED" default:"true"`
 	WebPort    int  `envconfig:"PORT" default:"80"`
+}
+
+type MonitorConfig struct {
+	PurgeStatsAfterDuration time.Duration `envconfig:"PURGE_DURATION" default:"7d"`
 }

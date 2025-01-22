@@ -46,20 +46,12 @@ var (
 
 type funcGroupMacsLoader func(logger *zap.SugaredLogger) (config.GroupMACsConfig, error)
 
-type SourceIpGroupsReceiver interface {
-	UpdateSourceIpGroups(newData models.MapIpGroups)
-}
-
-type SourceIpMACReceiver interface {
-	UpdateSourceIpMACs(newData models.MapIpMACs)
-}
-
 // NetWatcher manages ARP scanning and registered callbacks
 type NetWatcher struct {
 	logger               *zap.SugaredLogger
 	sourceIpGroups       models.MapIpGroups
-	callbacksForIpGroups []SourceIpGroupsReceiver
-	callbacksForIpMACs   []SourceIpMACReceiver
+	callbacksForIpGroups []models.SourceIpGroupsReceiver
+	callbacksForIpMACs   []models.SourceIpMACReceiver
 	mu                   sync.Mutex
 }
 
@@ -68,18 +60,18 @@ func NewNetWatcher(logger *zap.SugaredLogger) *NetWatcher {
 	return &NetWatcher{
 		logger:               logger,
 		sourceIpGroups:       make(map[models.Ip][]models.Group),
-		callbacksForIpGroups: []SourceIpGroupsReceiver{},
+		callbacksForIpGroups: []models.SourceIpGroupsReceiver{},
 	}
 }
 
 // RegisterSourceIpGroupsReceivers registers a callback to be called on updates
-func (nw *NetWatcher) RegisterSourceIpGroupsReceivers(receivers ...SourceIpGroupsReceiver) {
+func (nw *NetWatcher) RegisterSourceIpGroupsReceivers(receivers ...models.SourceIpGroupsReceiver) {
 	nw.mu.Lock()
 	defer nw.mu.Unlock()
 	nw.callbacksForIpGroups = append(nw.callbacksForIpGroups, receivers...)
 }
 
-func (nw *NetWatcher) RegisterSourceIpMACReceivers(receivers ...SourceIpMACReceiver) {
+func (nw *NetWatcher) RegisterSourceIpMACReceivers(receivers ...models.SourceIpMACReceiver) {
 	nw.mu.Lock()
 	defer nw.mu.Unlock()
 	nw.callbacksForIpMACs = append(nw.callbacksForIpMACs, receivers...)

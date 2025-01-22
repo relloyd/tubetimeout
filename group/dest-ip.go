@@ -17,18 +17,6 @@ type funcGroupDomainsLoader func(logger *zap.SugaredLogger) (models.MapGroupDoma
 
 var fnGroupDomainLoader = funcGroupDomainsLoader(config.FetchYouTubeDomains)
 
-type DestIpDomainReceiver interface {
-	UpdateDestIpDomains(newIps models.MapIpDomain)
-}
-
-type DestIpGroupsReceiver interface {
-	UpdateDestIpGroups(newGroups models.MapIpGroups)
-}
-
-type DestDomainGroupsReceiver interface {
-	UpdateDestDomainGroups(newGroups models.MapDomainGroups)
-}
-
 type DomainWatcher struct {
 	logger                    *zap.SugaredLogger
 	mu                        sync.RWMutex // TODO: tidy up use of locks on maps that don't need them; make locks consistent.
@@ -38,9 +26,9 @@ type DomainWatcher struct {
 	destIpDomains             models.IpDomains
 	destIpGroups              models.IpGroups
 	destDomainGroups          models.DomainGroups
-	destIpDomainReceivers     []DestIpDomainReceiver
-	destIpGroupReceivers      []DestIpGroupsReceiver
-	destDomainGroupsReceivers []DestDomainGroupsReceiver
+	destIpDomainReceivers     []models.DestIpDomainReceiver
+	destIpGroupReceivers      []models.DestIpGroupsReceiver
+	destDomainGroupsReceivers []models.DestDomainGroupsReceiver
 }
 
 type resolver func(logger *zap.SugaredLogger, d []models.Domain) models.MapIpDomain
@@ -54,19 +42,19 @@ var (
 	defaultInterval = time.Minute * 5
 )
 
-func (dw *DomainWatcher) RegisterDestIpDomainReceivers(receivers ...DestIpDomainReceiver) {
+func (dw *DomainWatcher) RegisterDestIpDomainReceivers(receivers ...models.DestIpDomainReceiver) {
 	dw.mu.Lock()
 	defer dw.mu.Unlock()
 	dw.destIpDomainReceivers = append(dw.destIpDomainReceivers, receivers...)
 }
 
-func (dw *DomainWatcher) RegisterDestIpGroupReceivers(receivers ...DestIpGroupsReceiver) {
+func (dw *DomainWatcher) RegisterDestIpGroupReceivers(receivers ...models.DestIpGroupsReceiver) {
 	dw.mu.Lock()
 	defer dw.mu.Unlock()
 	dw.destIpGroupReceivers = append(dw.destIpGroupReceivers, receivers...)
 }
 
-func (dw *DomainWatcher) RegisterDestDomainGroupReceivers(receivers ...DestDomainGroupsReceiver) {
+func (dw *DomainWatcher) RegisterDestDomainGroupReceivers(receivers ...models.DestDomainGroupsReceiver) {
 	dw.mu.Lock()
 	defer dw.mu.Unlock()
 	dw.destDomainGroupsReceivers = append(dw.destDomainGroupsReceivers, receivers...)

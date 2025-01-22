@@ -13,11 +13,7 @@ import (
 	"relloyd/tubetimeout/usage"
 )
 
-type ManagerI interface {
-	IsSrcIpDestDomainKnown(ip models.Ip, domain models.Domain) ([]models.Group, bool)
-}
-
-func NewServer(logger *zap.SugaredLogger, m ManagerI, t usage.TrackerI) *http.Server {
+func NewServer(logger *zap.SugaredLogger, m models.ManagerI, t usage.TrackerI) *http.Server {
 	proxy := goproxy.NewProxyHttpServer()
 	proxy.Verbose = true
 	proxy.OnRequest().DoFunc(GetHandler(logger, m, t))
@@ -37,7 +33,7 @@ func NewServer(logger *zap.SugaredLogger, m ManagerI, t usage.TrackerI) *http.Se
 
 // GetHandler returns a handle func that can allow/deny requests.
 // The returned func will return a req,nil if the request is allowed, or nil,res if the request should be denied.
-func GetHandler(logger *zap.SugaredLogger, m ManagerI, t usage.TrackerI) func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+func GetHandler(logger *zap.SugaredLogger, m models.ManagerI, t usage.TrackerI) func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 	return func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 		// Destination of the request.
 		destDomain := req.URL.Host

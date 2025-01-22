@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/models"
 )
 
@@ -58,7 +59,7 @@ func (t *TrafficMap) UpdateSourceIpMACs(newData models.MapIpMACs) {
 	t.ipMACs.Data = newData
 
 	// Remove old data from the trafficMap.
-	minAllowedTime := time.Now().Add(-5 * time.Minute) // remove trafficMaps older than this.
+	minAllowedTime := time.Now().Add(-config.AppCfg.MonitorConfig.PurgeStatsAfterDuration) // remove trafficMaps older than this.
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if len(newData) != t.trafficMapLen { // if there are trafficMaps to clean up...
