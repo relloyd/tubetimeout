@@ -16,7 +16,7 @@ func TestNewNFQueueFilter(t *testing.T) {
 	logger := config.MustGetLogger()
 	counter := monitor.NewTrafficMap(logger, 5)
 
-	tracker, err := usage.NewTracker(ctx, logger, &config.AppCfg.TrackerConfig, counter)
+	tracker, err := usage.NewTracker(ctx, logger, &config.AppCfg.TrackerConfig)
 	assert.NoError(t, err, "unexpected error getting NewTrafficMap")
 
 	manager := group.NewManager(logger)

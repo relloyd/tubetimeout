@@ -76,5 +76,5 @@ type WebConfig struct {
 }
 
 type MonitorConfig struct {
-	PurgeStatsAfterDuration time.Duration `envconfig:"PURGE_DURATION" default:"7d"`
+	PurgeStatsAfterDuration time.Duration `envconfig:"PURGE_DURATION" default:"168h"` // 168h = 7 * 24h = 7days
 }
