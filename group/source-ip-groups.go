@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -122,6 +123,7 @@ func scanNetworkAndNotify(nw *NetWatcher) {
 		for _, cb := range nw.callbacksForIpMACs { // for each callback...
 			cb.UpdateSourceIpMACs(duplicateMap(newMapIpMACs)) // send a copy of the new IP-MACs.
 		}
+		// TODO: add test for UpdateSourceIpMACs() being called after arp scan.
 	} else {
 		nw.logger.Errorf("no IP-MAC data found to send downstream (usage stats will not work)")
 	}
@@ -156,6 +158,8 @@ func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) (models.MapIpGrou
 		return nil, nil
 	}
 
+	var macRegex = regexp.MustCompile(`(?i)^(?:[0-9A-F]{2}[:-]){5}[0-9A-F]{2}$`)
+
 	// Parse ARP output
 	arpLines := strings.Split(output, "\n")
 	for _, line := range arpLines {
@@ -166,6 +170,12 @@ func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) (models.MapIpGrou
 
 		arpIp := strings.Trim(fields[1], "()") // field zero may be '?' as the hostnames haven't been looked up.
 		arpMAC := fields[3]
+
+		if !macRegex.Match([]byte(arpMAC)) { // if the MAC is no use...
+			// TODO: test for regexp checks in MAC scan
+			continue
+		}
+
 		mim[models.Ip(arpIp)] = models.MAC(arpMAC) // save the MAC address for the IP.
 
 		if managerModeMatchAllSourceIps && gm.Groups == nil { // if there are no groups of MACs found...

@@ -38,7 +38,7 @@ func (t *TrafficMap) CountTraffic(group models.Group, ip models.Ip, count int, p
 	defer t.ipMACs.Mu.RUnlock()
 	mac, ok := t.ipMACs.Data[ip]
 	if !ok {
-		t.logger.Warnf("CountTraffic found no MAC found for IP %v in group %v. Returning active for now.", ip, group)
+		t.logger.Warnf("CountTraffic: no MAC found for %v in group %v. Returning active for now.", ip, group)
 		return true
 	}
 
@@ -58,6 +58,8 @@ func (t *TrafficMap) UpdateSourceIpMACs(newData models.MapIpMACs) {
 	t.ipMACs.Mu.Lock()
 	defer t.ipMACs.Mu.Unlock()
 	t.ipMACs.Data = newData
+
+	t.logger.Debugf("TrafficMap received new IP MAC data: %v", newData)
 
 	// Remove old data from the trafficMap.
 	minAllowedTime := time.Now().Add(-config.AppCfg.MonitorConfig.PurgeStatsAfterDuration) // remove trafficMaps older than this.

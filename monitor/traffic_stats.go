@@ -85,17 +85,22 @@ func (a *trafficStats) isActive(lastMinuteIndex int) bool {
 		deltasPacketLen[i] = a.rollingPacketLenTotal[models.Ingress][i] - a.rollingPacketLenTotal[models.Egress][i]
 	}
 
+	var active bool
+	if (a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] == 0 && a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] == 0) ||
+		a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] > a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] {
+		active= true
+	} else {
+		active = false
+	}
+
 	a.logger.With(
 		"monitorName", a.monitorName,
 		"packetLenTotals", a.rollingPacketLenTotal,
 		"deltas", deltasPacketLen,
+		"active", active,
 	).Infof("monitor stats")
 
-	if (a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] == 0 && a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] == 0) ||
-		a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] > a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] {
-		return true
-	}
-	return false
+	return active
 }
 
 // getLastMinuteIdx returns the index of the last minute in the rolling window.
