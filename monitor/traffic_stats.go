@@ -97,6 +97,7 @@ func (a *trafficStats) isActive(lastMinuteIndex int) bool {
 		"monitorName", a.monitorName,
 		"packetLenTotals", a.rollingPacketLenTotal,
 		"deltas", deltasPacketLen,
+		"lastMinuteIndex", lastMinuteIndex,
 		"active", active,
 	).Infof("monitor stats")
 
