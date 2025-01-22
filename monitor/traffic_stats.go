@@ -57,7 +57,7 @@ func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection m
 	a.lastActiveTimeUTC = nowFunc().UTC()
 
 	// If we've moved to a new minute
-	if currentMinuteIdx != lastMinuteIndex+1 {  // if we have moved to the next minute...
+	if currentMinuteIdx != lastMinuteIndex+1 { // if we have moved to the next minute...
 		// Determine if the rate for the previous minute is "active".
 		a.isLastMinuteActive = a.isActive(lastMinuteIndex)
 		// Subtract the completed minute's count from the total count.
@@ -82,15 +82,12 @@ func (a *trafficStats) isActive(lastMinuteIndex int) bool {
 	deltasPacketLen := make([]int, a.windowSize)
 
 	for i := range a.rollingPacketLenTotal[models.Ingress] {
-		deltasPacketLen[i] = a.rollingPacketLenTotal[models.Ingress][i] - a.rollingPacketLenTotal[models.Egress][i]
+		deltasPacketLen[i] = a.rollingPacketLenTotal[models.Egress][i] - a.rollingPacketLenTotal[models.Ingress][i]
 	}
 
-	var active bool
-	if (a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] == 0 && a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] == 0) ||
-		a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] > a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] {
-		active= true
-	} else {
-		active = false
+	active := false                                                                                                         // assume inactive; give the benefit of doubt to start with.
+	if a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] > a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] { // if there is more data coming in than going out...
+		active = true
 	}
 
 	a.logger.With(
