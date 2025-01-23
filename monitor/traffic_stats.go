@@ -10,15 +10,18 @@ import (
 
 var (
 	nowFunc = time.Now
+	thresholdIngressEgressKB = 50 * 1024
 )
 
+// TODO: maybe remove rollingCounts of packets if packet len is good enough to determine activity.
+// TODO: remove arrays and looping windows once we know how to track active status reliably, as we should only need to track the last minute of data!
 type trafficStats struct {
 	mu                    *sync.Mutex
 	logger                *zap.SugaredLogger
 	monitorName           string // arbitrary monitorName for the monitor
 	windowSize            int
 	totalCount            map[models.Direction]int
-	rollingCounts         map[models.Direction][]int // TODO: maybe remove rollingCounts of packets if packet len is good enough to determine activity.
+	rollingCounts         map[models.Direction][]int
 	rollingPacketLenTotal map[models.Direction][]int
 	lastMinuteIdx         map[models.Direction]int
 	isLastMinuteActive    bool
@@ -27,9 +30,9 @@ type trafficStats struct {
 
 func newTrafficStats(logger *zap.SugaredLogger, name string, rollingWindowSize int) *trafficStats {
 	a := &trafficStats{
-		logger:                logger,
-		monitorName:           name,
-		windowSize:            rollingWindowSize,
+		logger:      logger,
+		monitorName: name,
+		windowSize:  rollingWindowSize,
 		rollingCounts:         make(map[models.Direction][]int),
 		rollingPacketLenTotal: make(map[models.Direction][]int),
 		totalCount:            make(map[models.Direction]int),
@@ -57,7 +60,7 @@ func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection m
 	a.lastActiveTimeUTC = nowFunc().UTC()
 
 	// If we've moved to a new minute
-	if currentMinuteIdx != lastMinuteIndex+1 { // if we have moved to the next minute...
+	if currentMinuteIdx != (lastMinuteIndex+1) % a.windowSize { // if we have moved to the next minute...
 		// Determine if the rate for the previous minute is "active".
 		a.isLastMinuteActive = a.isActive(lastMinuteIndex)
 		// Subtract the completed minute's count from the total count.
@@ -79,26 +82,25 @@ func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection m
 
 // isActive determines if the traffic rate is deemed "active" i.e. true, based on the current rate.
 func (a *trafficStats) isActive(lastMinuteIndex int) bool {
-	deltasPacketLen := make([]int, a.windowSize)
-
+	deltas := make([]int, a.windowSize)
 	for i := range a.rollingPacketLenTotal[models.Ingress] {
-		deltasPacketLen[i] = a.rollingPacketLenTotal[models.Egress][i] - a.rollingPacketLenTotal[models.Ingress][i]
+		deltas[i] = a.rollingPacketLenTotal[models.Egress][i] - a.rollingPacketLenTotal[models.Ingress][i]
 	}
 
-	active := false                                                                                                         // assume inactive; give the benefit of doubt to start with.
-	if a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] > a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] { // if there is more data coming in than going out...
-		active = true
+	activeStatus := false                                                                                                               // assume inactive; give the benefit of doubt to start with.
+	if a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex]-a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] >= thresholdIngressEgressKB { // // if ingress is xKB more than egress...
+		activeStatus = true
 	}
 
 	a.logger.With(
 		"monitorName", a.monitorName,
 		"packetLenTotals", a.rollingPacketLenTotal,
-		"deltas", deltasPacketLen,
+		"deltas", deltas,
 		"lastMinuteIndex", lastMinuteIndex,
-		"active", active,
+		"active", activeStatus,
 	).Infof("monitor stats")
 
-	return active
+	return activeStatus
 }
 
 // getLastMinuteIdx returns the index of the last minute in the rolling window.

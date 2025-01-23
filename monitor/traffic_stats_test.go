@@ -11,7 +11,7 @@ import (
 
 var monitorNameForTesting = "test-monitor"
 
-func TestAverageTrafficStats(t *testing.T) {
+func TestAverageTrafficStats_RollingCounts(t *testing.T) {
 	// Define a mock nowFunc to control time in tests
 	var mockTime time.Time
 	nowFunc = func() time.Time {
@@ -52,28 +52,12 @@ func TestAverageTrafficStats(t *testing.T) {
 			t.Errorf("Minute %d: expected egress count %d, got %d", i, expected, monitor.rollingCounts[models.Egress][i])
 		}
 	}
-
-	// Expected rolling averages after wrap-around
-	// expectedAverages := []float64{
-	// 	1, // 60  packets / 60 seconds (index 0)
-	// 	2, // 120 packets / 60 seconds (index 1)
-	// 	3, // 180 packets / 60 seconds (index 2)
-	// 	4, // 240 packets / 60 seconds (index 3)
-	// 	5, // 300 packets / 60 seconds (index 4) calculated on the 6th element.
-	// }
-
-	// Verify the rolling averages after wrap-around
-	// for i, expected := range expectedAverages {
-	// 	if monitor.rollingAverages[models.Ingress][i] != expected {
-	// 		t.Errorf("Minute %d: expected ingress average %f, got %f", i, expected, monitor.rollingAverages[models.Ingress][i])
-	// 	}
-	// 	if monitor.rollingAverages[models.Egress][i] != expected {
-	// 		t.Errorf("Minute %d: expected egress average %f, got %f", i, expected, monitor.rollingAverages[models.Egress][i])
-	// 	}
-	// }
 }
 
-func TestAverageTrafficStats_IsActive(t *testing.T) {
+// TestAverageTrafficStats_IsActive contains a bunch of junk because packet counts are not considered to
+// produce the active status in calls to isActive().
+// TODO: test for bad packet sizes
+func TestAverageTrafficStats(t *testing.T) {
 	// Define a mock nowFunc to control time in tests
 	var mockTime time.Time
 	nowFunc = func() time.Time {
@@ -83,101 +67,71 @@ func TestAverageTrafficStats_IsActive(t *testing.T) {
 	windowSize := 5
 
 	// Simulate traffic counting over a 6-minute period to test wrap-around.
-	monitor := newTrafficStats(config.MustGetLogger(), monitorNameForTesting, windowSize)
-	startTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	startTime := time.Date(2025, 1, 1, 12, 1, 0, 0, time.UTC)
 	mockTime = startTime
 	trafficCounts := []int{60, 120, 180, 240, 300, 360} // Traffic per minute
-	for i, count := range trafficCounts {
-		mockTime = startTime.Add(time.Duration(i) * time.Minute)
-		monitor.countTraffic(count, 0, models.Ingress) // TODO: fix packet lengths in tests
-		monitor.countTraffic(count, 0, models.Egress)
-	}
-	assert.True(t, monitor.isActive(0), "should be active when packet len is 0")
-
-	// Assert active status.
-	monitor = newTrafficStats(config.MustGetLogger(), monitorNameForTesting, windowSize)
-	startTime = time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
-	mockTime = startTime
-	trafficCounts = []int{60, 120, 180, 240, 300, 360} // Traffic per minute
-	for i, count := range trafficCounts {
-		mockTime = startTime.Add(time.Duration(i) * time.Minute)
-		monitor.countTraffic(count, 0, models.Ingress)
-		monitor.countTraffic(count, 1, models.Egress)
-	}
-	assert.False(t, monitor.isActive(0), "should be inactive when egress exceeds ingress")
-
-	// Assert active status.
-	monitor = newTrafficStats(config.MustGetLogger(), monitorNameForTesting, windowSize)
-	startTime = time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
-	mockTime = startTime
-	trafficCounts = []int{60, 120, 180, 240, 300, 360} // Traffic per minute
+	monitor := newTrafficStats(config.MustGetLogger(), monitorNameForTesting, windowSize)
 	for i, count := range trafficCounts {
 		mockTime = startTime.Add(time.Duration(i) * time.Minute)
 		monitor.countTraffic(count, 1, models.Ingress)
-		monitor.countTraffic(count, 0, models.Egress)
+		monitor.countTraffic(count, 2, models.Egress)
+		expectedLastMinuteIdx := getLastMinuteIdx(mockTime.Minute()%windowSize, windowSize)
+		assert.Equal(t, expectedLastMinuteIdx, monitor.lastMinuteIdx[models.Ingress], "lastMinuteIndex ingress should increment and wrap")
+		assert.Equal(t, expectedLastMinuteIdx, monitor.lastMinuteIdx[models.Egress], "lastMinuteIndex egress should increment and wrap")
 	}
-	assert.True(t, monitor.isActive(0), "should be active when ingress exceeds egress")
-
+	assert.False(t, monitor.isActive(0), "should be inactive when packet len is 0")
+	
 	// Assert packet lens are saved.
 	expectedRollingPacketLetTotal := map[models.Direction][]int{
-		models.Ingress: {1,1,1,1,1},
-		models.Egress:  {0,0,0,0,0},
+		models.Ingress: {1, 1, 1, 1, 1},
+		models.Egress:  {2, 2, 2, 2, 2},
 	}
 	assert.Equal(t, monitor.rollingPacketLenTotal, expectedRollingPacketLetTotal, "unexpected rollingPacketLenTotal")
-
+	
 	// Misc assertions.
 	assert.Equal(t, monitor.lastActiveTimeUTC, mockTime.UTC(), "unexpected last active time")
 	assert.Equal(t, monitor.monitorName, monitorNameForTesting, "bad monitor name")
 	assert.Equal(t, monitor.windowSize, windowSize, "bad window size")
-	assert.Equal(t, monitor.lastMinuteIdx[models.Ingress], mockTime.Add(-1*time.Minute).Minute() % windowSize, "unexpected last minute idx")
+	assert.Equal(t, mockTime.Add(-1*time.Minute).Minute()%windowSize, monitor.lastMinuteIdx[models.Ingress], "unexpected last minute idx for ingress")
+	assert.Equal(t, mockTime.Add(-1*time.Minute).Minute()%windowSize, monitor.lastMinuteIdx[models.Egress], "unexpected last minute idx for egress")
 
+	// Test wrap around of lastMinuteIdx when current index is 0 the lastMinuteIndex should be at the end of mod range i.e. 4.
+	startTime = time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC) // reset to the 0th minute minus 1
+	mockTime = startTime
+	monitor.lastMinuteIdx[models.Ingress] = startTime.Add(-1*time.Minute).Minute() % windowSize
+	monitor.countTraffic(1, 1, models.Ingress)
+	assert.Equal(t, 4, monitor.lastMinuteIdx[models.Ingress], "expected lastMinuteIdx to wrap back to the end of the slice based on window size")
 }
 
-// func TestAverageTrafficStats_CountTraffic_ActiveResults(t *testing.T) {
-// 	config.AppCfg.LogLevel = "debug"
-// 	logger := config.MustGetLogger()
-//
-// 	// Initialize the trafficStats with a rolling window size of 5.
-// 	rollingWindowSize := 5
-// 	monitor := newTrafficStats(logger, monitorNameForTesting, rollingWindowSize)
-//
-// 	// Define a mock nowFunc to control time in tests.
-// 	var mockTime time.Time
-// 	nowFunc = func() time.Time {
-// 		return mockTime
-// 	}
-//
-// 	// Simulate traffic counting over a 6-minute period to test wrap-around.
-// 	startTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
-// 	mockTime = startTime
-// 	var activeStatuses []bool
-//
-// 	trafficCounts := []int{60, 60, 60, 60, 60, 60} // Flat traffic levels
-// 	for i, count := range trafficCounts {
-// 		mockTime = startTime.Add(time.Duration(i) * time.Minute) // cause the avg for the last minute to be evaluated
-// 		activeStatuses = append(activeStatuses, monitor.countTraffic(count, 0, models.Ingress))
-// 		// TODO: update this test to include active status for egress traffic and decent packet length
-// 	}
-// 	assert.True(t, len(activeStatuses) > 0, "expected at least one active status value")
-//
-// 	// Validate the active statuses based on traffic values over time.
-// 	// TODO: complete & assert the active results for avg traffic monitor
-// 	trafficCounts = []int{120, 120, 120, 60, 60, 60} // Spike the traffic then go flat
-// 	for i, count := range trafficCounts {
-// 		mockTime = startTime.Add(time.Duration(i) * time.Minute)
-// 		activeStatuses = append(activeStatuses, monitor.countTraffic(count, 0, models.Ingress))
-// 	}
-//
-// 	trafficCounts = []int{20, 20, 20, 60, 60, 60} // Lower the traffic then go flat
-// 	for i, count := range trafficCounts {
-// 		mockTime = startTime.Add(time.Duration(i) * time.Minute)
-// 		activeStatuses = append(activeStatuses, monitor.countTraffic(count, 0, models.Ingress))
-// 	}
-//
-// 	// Assert the active status results.
-// 	// expectedActiveResults := []bool{false, true, false, false, false, true}
-// 	// for i, expected := range expectedActiveResults {
-// 	// 	got := activeStatuses[i]
-// 	// 	assert.Equal(t, expected, got, "Minute %d: expected active %t, got %t", i, expected, got)
-// 	// }
-// }
+func TestTrafficMap_IsActive(t *testing.T) {
+	var mockTime time.Time
+	nowFunc = func() time.Time {
+		return mockTime
+	}
+	windowSize := 5
+
+	// Assert active status.
+	monitor := newTrafficStats(config.MustGetLogger(), monitorNameForTesting, windowSize)
+	startTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	mockTime = startTime
+	data := []struct {
+		count            int
+		packetLenEgress  int
+		packetLenIngress int
+		wantActive       bool
+		test             string
+	}{
+		{1, 0, 0, false, "initial values should be inactive"},
+		{1, 1, 1, false, "equal ingress/egress is inactive"},
+		{1, 10, 1, false, "bigger egress is inactive"},
+		{1, 1, 2, false, "ingress must be xKB bigger than egress for active"},                      //
+		{1, 1, thresholdIngressEgressKB - 1, false, "ingress must be gte to threshold for active"}, //
+		{1, 2, thresholdIngressEgressKB, true, "ingress gte thresholdIngressEgressKB is active"},   //
+	}
+	for i, d := range data {
+		mockTime = startTime.Add(time.Duration(i) * time.Minute)
+		monitor.countTraffic(d.count, d.packetLenIngress, models.Ingress)
+		monitor.countTraffic(d.count, d.packetLenEgress, models.Egress)
+		assert.False(t, monitor.isActive(0), "should be inactive unless ingress exceeds egress by xKB")
+	}
+}
