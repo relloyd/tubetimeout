@@ -73,7 +73,7 @@ func TestAverageTrafficStats(t *testing.T) {
 	monitor := newTrafficStats(config.MustGetLogger(), monitorNameForTesting, windowSize)
 	for i, count := range trafficCounts {
 		mockTime = startTime.Add(time.Duration(i) * time.Minute)
-		monitor.countTraffic(count, 1, models.Ingress)
+		monitor.countTraffic(count, 1, models.Ingress) // setting ingress packet len higher than egress on the first iteration causes active status to be true in the first minute.
 		monitor.countTraffic(count, 2, models.Egress)
 		expectedLastMinuteIdx := getLastMinuteIdx(mockTime.Minute()%windowSize, windowSize)
 		assert.Equal(t, expectedLastMinuteIdx, monitor.lastMinuteIdx[models.Ingress], "lastMinuteIndex ingress should increment and wrap")
@@ -89,7 +89,7 @@ func TestAverageTrafficStats(t *testing.T) {
 	assert.Equal(t, monitor.rollingPacketLenTotal, expectedRollingPacketLetTotal, "unexpected rollingPacketLenTotal")
 	
 	// Misc assertions.
-	assert.Equal(t, monitor.lastActiveTimeUTC, mockTime.UTC(), "unexpected last active time")
+	assert.Equal(t, startTime.UTC().Truncate(time.Minute), monitor.lastActiveTimeUTC, "unexpected last active time")
 	assert.Equal(t, monitor.monitorName, monitorNameForTesting, "bad monitor name")
 	assert.Equal(t, monitor.windowSize, windowSize, "bad window size")
 	assert.Equal(t, mockTime.Add(-1*time.Minute).Minute()%windowSize, monitor.lastMinuteIdx[models.Ingress], "unexpected last minute idx for ingress")

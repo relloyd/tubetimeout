@@ -31,7 +31,7 @@ debug-test:
 run: build
 	LOG_LEVEL=debug $(APP_SHORT)
 
-install: build-release
+install: stop build-release
 	@echo "Installing $(APP) with timestamp $(INSTALL_TIMESTAMP)..."
 	install -m 0755 $(APP_SHORT) $(INSTALL_DEST)/$(APP)-$(INSTALL_TIMESTAMP)
 	ln -sf $(INSTALL_DEST)/$(APP)-$(INSTALL_TIMESTAMP) $(INSTALL_DEST)/tt

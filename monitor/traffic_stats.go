@@ -68,9 +68,6 @@ func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection m
 	currentMinuteIdx := nowFunc().Minute() % a.windowSize
 	lastMinuteIndex := a.lastMinuteIdx[trafficDirection]
 
-	// Remember activity status for each call.
-	a.lastActiveTimeUTC = nowFunc().UTC()
-
 	// If we've moved to a new minute
 	if currentMinuteIdx != (lastMinuteIndex+1)%a.windowSize { // if we have moved to the next minute...
 		// Calculate avg
@@ -81,6 +78,10 @@ func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection m
 			logStats = true
 		}
 		a.isLastMinuteActive = a.isActive(lastMinuteIndex, logStats)
+		// Update last active time
+		if a.isLastMinuteActive {
+			a.lastActiveTimeUTC = nowFunc().UTC().Truncate(time.Minute)
+		}
 		// Subtract the completed minute's count from the total count.
 		a.totalCount[trafficDirection] -= a.rollingCounts[trafficDirection][currentMinuteIdx]
 		// Reset Min/Max
