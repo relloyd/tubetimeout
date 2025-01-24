@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	nowFunc = time.Now
-	thresholdIngressEgressKB = 50 * 1024
+	nowFunc                  = time.Now
+	thresholdIngressEgressKB = 25 * 1024
 )
 
 // TODO: maybe remove rollingCounts of packets if packet len is good enough to determine activity.
@@ -30,9 +30,9 @@ type trafficStats struct {
 
 func newTrafficStats(logger *zap.SugaredLogger, name string, rollingWindowSize int) *trafficStats {
 	a := &trafficStats{
-		logger:      logger,
-		monitorName: name,
-		windowSize:  rollingWindowSize,
+		logger:                logger,
+		monitorName:           name,
+		windowSize:            rollingWindowSize,
 		rollingCounts:         make(map[models.Direction][]int),
 		rollingPacketLenTotal: make(map[models.Direction][]int),
 		totalCount:            make(map[models.Direction]int),
@@ -60,7 +60,7 @@ func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection m
 	a.lastActiveTimeUTC = nowFunc().UTC()
 
 	// If we've moved to a new minute
-	if currentMinuteIdx != (lastMinuteIndex+1) % a.windowSize { // if we have moved to the next minute...
+	if currentMinuteIdx != (lastMinuteIndex+1)%a.windowSize { // if we have moved to the next minute...
 		// Determine if the rate for the previous minute is "active".
 		a.isLastMinuteActive = a.isActive(lastMinuteIndex)
 		// Subtract the completed minute's count from the total count.
@@ -87,8 +87,9 @@ func (a *trafficStats) isActive(lastMinuteIndex int) bool {
 		deltas[i] = a.rollingPacketLenTotal[models.Egress][i] - a.rollingPacketLenTotal[models.Ingress][i]
 	}
 
-	activeStatus := false                                                                                                               // assume inactive; give the benefit of doubt to start with.
-	if a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex]-a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] >= thresholdIngressEgressKB { // // if ingress is xKB more than egress...
+	activeStatus := false // assume inactive; give the benefit of doubt to start with.
+	if a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] >= thresholdIngressEgressKB &&
+		a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] > a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] { // // if ingress is xKB more than egress...
 		activeStatus = true
 	}
 

@@ -132,6 +132,10 @@ func TestTrafficMap_IsActive(t *testing.T) {
 		mockTime = startTime.Add(time.Duration(i) * time.Minute)
 		monitor.countTraffic(d.count, d.packetLenIngress, models.Ingress)
 		monitor.countTraffic(d.count, d.packetLenEgress, models.Egress)
-		assert.False(t, monitor.isActive(0), "should be inactive unless ingress exceeds egress by xKB")
+		if d.wantActive {
+			assert.True(t, monitor.isActive(0), d.test)
+		} else {
+			assert.False(t, monitor.isActive(0), d.test)
+		}
 	}
 }
