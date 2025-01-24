@@ -23,6 +23,9 @@ type trafficStats struct {
 	totalCount            map[models.Direction]int
 	rollingCounts         map[models.Direction][]int
 	rollingPacketLenTotal map[models.Direction][]int
+	rollingMinPacketLen   map[models.Direction][]int
+	rollingMaxPacketLen   map[models.Direction][]int
+	rollingAvgPacketLen   map[models.Direction][]float64
 	lastMinuteIdx         map[models.Direction]int
 	isLastMinuteActive    bool
 	lastActiveTimeUTC     time.Time // the time at which stats were last counted
@@ -35,6 +38,9 @@ func newTrafficStats(logger *zap.SugaredLogger, name string, rollingWindowSize i
 		windowSize:            rollingWindowSize,
 		rollingCounts:         make(map[models.Direction][]int),
 		rollingPacketLenTotal: make(map[models.Direction][]int),
+		rollingMaxPacketLen:   make(map[models.Direction][]int),
+		rollingMinPacketLen:   make(map[models.Direction][]int),
+		rollingAvgPacketLen:   make(map[models.Direction][]float64),
 		totalCount:            make(map[models.Direction]int),
 		lastMinuteIdx:         make(map[models.Direction]int),
 		lastActiveTimeUTC:     nowFunc().UTC(),
@@ -45,6 +51,12 @@ func newTrafficStats(logger *zap.SugaredLogger, name string, rollingWindowSize i
 	a.rollingCounts[models.Egress] = make([]int, rollingWindowSize)
 	a.rollingPacketLenTotal[models.Ingress] = make([]int, rollingWindowSize)
 	a.rollingPacketLenTotal[models.Egress] = make([]int, rollingWindowSize)
+	a.rollingMinPacketLen[models.Ingress] = make([]int, rollingWindowSize)
+	a.rollingMinPacketLen[models.Egress] = make([]int, rollingWindowSize)
+	a.rollingMaxPacketLen[models.Ingress] = make([]int, rollingWindowSize)
+	a.rollingMaxPacketLen[models.Egress] = make([]int, rollingWindowSize)
+	a.rollingAvgPacketLen[models.Ingress] = make([]float64, rollingWindowSize)
+	a.rollingAvgPacketLen[models.Egress] = make([]float64, rollingWindowSize)
 	return a
 }
 
@@ -61,10 +73,19 @@ func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection m
 
 	// If we've moved to a new minute
 	if currentMinuteIdx != (lastMinuteIndex+1)%a.windowSize { // if we have moved to the next minute...
+		// Calculate avg
+		a.rollingAvgPacketLen[trafficDirection][lastMinuteIndex] = float64(a.rollingPacketLenTotal[trafficDirection][lastMinuteIndex]) / float64(a.rollingCounts[trafficDirection][lastMinuteIndex])
 		// Determine if the rate for the previous minute is "active".
-		a.isLastMinuteActive = a.isActive(lastMinuteIndex)
+		logStats := false
+		if trafficDirection == models.Ingress {
+			logStats = true
+		}
+		a.isLastMinuteActive = a.isActive(lastMinuteIndex, logStats)
 		// Subtract the completed minute's count from the total count.
 		a.totalCount[trafficDirection] -= a.rollingCounts[trafficDirection][currentMinuteIdx]
+		// Reset Min/Max
+		a.rollingMinPacketLen[trafficDirection][currentMinuteIdx] = packetLen
+		a.rollingMaxPacketLen[trafficDirection][currentMinuteIdx] = packetLen
 		// Clear the counts for the new minute.
 		a.rollingCounts[trafficDirection][currentMinuteIdx] = 0
 		a.rollingPacketLenTotal[trafficDirection][currentMinuteIdx] = 0
@@ -77,29 +98,45 @@ func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection m
 	a.rollingPacketLenTotal[trafficDirection][currentMinuteIdx] += packetLen
 	a.totalCount[trafficDirection] += count
 
+	if packetLen > a.rollingMaxPacketLen[trafficDirection][currentMinuteIdx] {
+		a.rollingMaxPacketLen[trafficDirection][currentMinuteIdx] = packetLen
+	}
+
+	if packetLen < a.rollingMinPacketLen[trafficDirection][currentMinuteIdx] {
+		a.rollingMinPacketLen[trafficDirection][currentMinuteIdx] = packetLen
+	}
+
 	return a.isLastMinuteActive
 }
 
 // isActive determines if the traffic rate is deemed "active" i.e. true, based on the current rate.
-func (a *trafficStats) isActive(lastMinuteIndex int) bool {
-	deltas := make([]int, a.windowSize)
-	for i := range a.rollingPacketLenTotal[models.Ingress] {
-		deltas[i] = a.rollingPacketLenTotal[models.Egress][i] - a.rollingPacketLenTotal[models.Ingress][i]
-	}
-
+func (a *trafficStats) isActive(lastMinuteIndex int, logStats bool) bool {
 	activeStatus := false // assume inactive; give the benefit of doubt to start with.
 	if a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] >= thresholdIngressEgressKB &&
 		a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] > a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] { // // if ingress is xKB more than egress...
 		activeStatus = true
 	}
 
-	a.logger.With(
-		"monitorName", a.monitorName,
-		"packetLenTotals", a.rollingPacketLenTotal,
-		"deltas", deltas,
-		"lastMinuteIndex", lastMinuteIndex,
-		"active", activeStatus,
-	).Infof("monitor stats")
+	if logStats {
+		deltas := make([]int, a.windowSize)
+		for i := range a.rollingPacketLenTotal[models.Ingress] {
+			deltas[i] = a.rollingPacketLenTotal[models.Egress][i] - a.rollingPacketLenTotal[models.Ingress][i]
+		}
+		a.logger.With(
+			"monitorName", a.monitorName,
+			"count-in", a.rollingCounts[models.Ingress][lastMinuteIndex],
+			"count-out", a.rollingCounts[models.Egress][lastMinuteIndex],
+			"size-in", a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex],
+			"size-out", a.rollingPacketLenTotal[models.Egress][lastMinuteIndex],
+			"maxSize-in", a.rollingMaxPacketLen[models.Ingress][lastMinuteIndex],
+			"maxSize-out", a.rollingMaxPacketLen[models.Egress][lastMinuteIndex],
+			"avgSize-in", a.rollingAvgPacketLen[models.Ingress][lastMinuteIndex],
+			"avgSize-out", a.rollingAvgPacketLen[models.Egress][lastMinuteIndex],
+			"delta", deltas[lastMinuteIndex],
+			"lastMinuteIndex", lastMinuteIndex,
+			"active", activeStatus,
+		).Infof("monitor stats")
+	}
 
 	return activeStatus
 }

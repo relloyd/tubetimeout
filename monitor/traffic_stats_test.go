@@ -79,7 +79,7 @@ func TestAverageTrafficStats(t *testing.T) {
 		assert.Equal(t, expectedLastMinuteIdx, monitor.lastMinuteIdx[models.Ingress], "lastMinuteIndex ingress should increment and wrap")
 		assert.Equal(t, expectedLastMinuteIdx, monitor.lastMinuteIdx[models.Egress], "lastMinuteIndex egress should increment and wrap")
 	}
-	assert.False(t, monitor.isActive(0), "should be inactive when packet len is 0")
+	assert.False(t, monitor.isActive(0, true), "should be inactive when packet len is 0")
 	
 	// Assert packet lens are saved.
 	expectedRollingPacketLetTotal := map[models.Direction][]int{
@@ -133,9 +133,9 @@ func TestTrafficMap_IsActive(t *testing.T) {
 		monitor.countTraffic(d.count, d.packetLenIngress, models.Ingress)
 		monitor.countTraffic(d.count, d.packetLenEgress, models.Egress)
 		if d.wantActive {
-			assert.True(t, monitor.isActive(0), d.test)
+			assert.True(t, monitor.isActive(0, true), d.test)
 		} else {
-			assert.False(t, monitor.isActive(0), d.test)
+			assert.False(t, monitor.isActive(0, true), d.test)
 		}
 	}
 }
