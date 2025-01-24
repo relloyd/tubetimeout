@@ -52,7 +52,8 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchUsageData() {
         try {
             const response = await fetch(usageApiUrl);
-            usageData = await response.json(); // Example: { "GroupA": { "used": 50, "total": 100, "percentage": 50 } }
+            usageData = await response.json(); // Example: { "GroupA": { "used": 50, "total": 100, "percentage": 50, "activity": { "macAddr": "lastActive" } } }
+            console.log("Fetched usage data:", usageData);
         } catch (error) {
             console.error('Error fetching usage data:', error);
             usageData = {}; // Default to empty data
@@ -170,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const groupsContainer = document.getElementById('groups-container');
         groupsContainer.innerHTML = '';
 
+        // Group devices by their assigned groups
         const grouped = flatGroupMACs.reduce((acc, { group, mac, name }) => {
             if (group) {
                 if (!acc[group]) acc[group] = [];
@@ -193,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Usage Info
             const usageInfo = document.createElement('span');
-            const usage = usageData[groupName.toLowerCase()] || { used: 0, percentage: 0 };
+            const usage = usageData[groupName.toLowerCase()] || { used: 0, percentage: 0, activity: {} };
             usageInfo.textContent = `${usage.used} mins (${usage.percentage}%) usage`;
 
             // Remove Group Button
@@ -202,22 +204,37 @@ document.addEventListener('DOMContentLoaded', () => {
             removeGroupBtn.classList.add('remove-group-btn');
             removeGroupBtn.onclick = () => removeGroup(groupName);
 
+            // Assemble group header
             groupHeader.appendChild(groupTitle);
             groupHeader.appendChild(usageInfo);
             groupHeader.appendChild(removeGroupBtn);
             groupDiv.appendChild(groupHeader);
 
+            // List of devices in the group
             const macList = document.createElement('ul');
             grouped[groupName].forEach(({ mac, name }) => {
                 const listItem = document.createElement('li');
+
+                // Device label
                 const label = document.createElement('span');
                 label.textContent = `${mac.replace(/^:/g, '')} - ${name}`;
 
+                // Last Active Time
+                const lastActive = document.createElement('span');
+                const lastActiveTimestamp = usageData[groupName.toLowerCase()].activity?.[mac];
+                if (lastActiveTimestamp) {
+                    lastActive.textContent = `last seen ${formatTimeSince(lastActiveTimestamp)}`;
+                } else {
+                    lastActive.textContent = ``;
+                }
+
+                // Remove Button
                 const removeBtn = document.createElement('button');
                 removeBtn.textContent = 'Remove';
                 removeBtn.onclick = () => removeMacFromGroup(mac);
 
                 listItem.appendChild(label);
+                listItem.appendChild(lastActive);
                 listItem.appendChild(removeBtn);
                 macList.appendChild(listItem);
             });
@@ -255,6 +272,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // Hide Save Button
     function hideSaveButton() {
         saveButton.style.display = 'none';
+    }
+
+    function formatTimeSince(timestampString) {
+        const timestamp = new Date(timestampString); // Parse the UTC Zulu string into a Date object
+        const now = new Date(); // Current time
+        const differenceInSeconds = Math.floor((now - timestamp) / 1000);
+        if (differenceInSeconds < 60) {
+            return `${differenceInSeconds} second${differenceInSeconds === 1 ? '' : 's'} ago`;
+        }
+        const differenceInMinutes = Math.floor(differenceInSeconds / 60);
+        if (differenceInMinutes < 60) {
+            return `${differenceInMinutes} minute${differenceInMinutes === 1 ? '' : 's'} ago`;
+        }
+        const differenceInHours = Math.floor(differenceInMinutes / 60);
+        if (differenceInHours < 24) {
+            return `${differenceInHours} hour${differenceInHours === 1 ? '' : 's'} ago`;
+        }
+        const differenceInDays = Math.floor(differenceInHours / 24);
+        return `${differenceInDays} day${differenceInDays === 1 ? '' : 's'} ago`;
     }
 
     saveButton.addEventListener('click', saveConfig); // Event listener for Save Button
