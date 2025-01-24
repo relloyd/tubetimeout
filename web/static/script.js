@@ -220,12 +220,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 label.textContent = `${mac.replace(/^:/g, '')} - ${name}`;
 
                 // Last Active Time
-                const lastActive = document.createElement('span');
                 const lastActiveTimestamp = usageData[groupName.toLowerCase()].activity?.[mac];
                 if (lastActiveTimestamp) {
-                    lastActive.textContent = `last seen ${formatTimeSince(lastActiveTimestamp)}`;
-                } else {
-                    lastActive.textContent = ``;
+                    label.textContent += ` active ${formatTimeSince(lastActiveTimestamp)}`;
                 }
 
                 // Remove Button
