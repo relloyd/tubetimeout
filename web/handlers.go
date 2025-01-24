@@ -87,6 +87,25 @@ func (h *Handler) groupMACHandler(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 }
 
+func (h *Handler) activityHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		lastActiveTimes := h.monitor.GetTrafficLastActiveTimes() //  map[models.Group]map[models.MAC]time.Time, where the string is the group
+
+		w.Header().Set("Content-Type", "application/json")
+		err := json.NewEncoder(w).Encode(lastActiveTimes)
+		if err != nil {
+			h.logger.Errorf("Error encoding monitor response: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+		return
+	}
+}
+
 func (h *Handler) usageHandler(w http.ResponseWriter, r *http.Request) {
 	// TODO: test the methods for usageHandler as we borked them before!
 
@@ -96,7 +115,18 @@ func (h *Handler) usageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodGet {
-		summary := h.usage.GetSampleSummary()
+		summary := h.usage.GetSampleSummary()                    // map[string]models.GroupSummary, where string is the device ID, which is a group
+		lastActiveTimes := h.monitor.GetTrafficLastActiveTimes() //  map[models.Group]map[models.MAC]time.Time, where the string is the group
+
+		for group, v := range lastActiveTimes {
+			s, ok := summary[string(group)]
+			if ok { // if the group exists in the usage data...
+				s.LastActiveTimes = v // save the MAC last active time map.
+			} else {
+				h.logger.Errorf("monitor: group %v not found with last active data: %v", group, v)
+			}
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		err := json.NewEncoder(w).Encode(summary)
 		if err != nil {

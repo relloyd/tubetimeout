@@ -26,12 +26,16 @@ type TemplateData struct {
 
 // UsageTracker returns info from the usage tracker.
 type UsageTracker interface {
-	GetSampleSummary() map[string]models.GroupSummary
+	GetSampleSummary() map[string]*models.GroupSummary
 	CalculateWindow(now time.Time) (time.Time, time.Time)
 	DeletePause()
 	SetPause(d time.Duration)
 	GetPauseEndTime() time.Time
 	ResetSamples(deviceID string)
+}
+
+type Monitor interface {
+	GetTrafficLastActiveTimes() map[models.Group]map[models.MAC]time.Time
 }
 
 type DeviceGroupGetterSetter interface {
@@ -43,10 +47,11 @@ type Handler struct {
 	logger       *zap.SugaredLogger
 	usage        UsageTracker
 	deviceGroups DeviceGroupGetterSetter
+	monitor      Monitor
 }
 
-func NewServer(logger *zap.SugaredLogger, s UsageTracker, d DeviceGroupGetterSetter) *http.Server {
-	h := Handler{logger: logger, usage: s, deviceGroups: d}
+func NewServer(logger *zap.SugaredLogger, s UsageTracker, d DeviceGroupGetterSetter, m Monitor) *http.Server {
+	h := Handler{logger: logger, usage: s, deviceGroups: d, monitor: m}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", h.rootHandler)
 	mux.HandleFunc("/static/", h.staticHandler)
@@ -54,6 +59,7 @@ func NewServer(logger *zap.SugaredLogger, s UsageTracker, d DeviceGroupGetterSet
 	mux.HandleFunc("/reset", h.pauseResetHandler)
 	mux.HandleFunc("/groupMACs", h.groupMACHandler)
 	mux.HandleFunc("/usage", h.usageHandler)
+	mux.HandleFunc("/activity", h.activityHandler)
 
 	return &http.Server{
 		Addr:                         fmt.Sprintf(":%d", config.AppCfg.WebConfig.WebPort),

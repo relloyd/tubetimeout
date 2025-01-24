@@ -127,7 +127,7 @@ func main() {
 
 	// Web server start.
 	if config.AppCfg.WebConfig.WebEnabled {
-		s := web.NewServer(logger, t, config.GroupMACs)
+		s := web.NewServer(logger, t, config.GroupMACs, trafficMap)
 		go func() {
 			if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				logger.Fatalln("Error starting web server:", err)

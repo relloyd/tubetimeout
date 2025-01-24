@@ -89,10 +89,30 @@ func (t *TrafficMap) UpdateSourceIpMACs(newData models.MapIpMACs) {
 }
 
 func getTrafficMapKey(group models.Group, mac models.MAC) string {
-	return fmt.Sprintf("%v-%v", group, mac)
+	return strings.ToLower(fmt.Sprintf("%v-%v", group, mac))
 }
 
 func getTrafficMapMACFromKey(key string) models.MAC {
 	s := strings.Split(key, "-")
 	return models.MAC(s[1])
+}
+
+// GetTrafficLastActiveTimes gets the traffic last active times (UTC) in a map where the key is the group
+// and the value is a map[models.MAC]<last active time>
+// See also getTrafficMapKey().
+func (t *TrafficMap) GetTrafficLastActiveTimes() map[models.Group]map[models.MAC]time.Time {
+	retval := make(map[models.Group]map[models.MAC]time.Time)
+	t.trafficMap.Range(func(key any, value any) bool{
+		k := key.(string) // key is group-mac
+		v := value.(*trafficStats)
+		gm := strings.Split(k, "-")
+		group := models.Group(gm[0])
+		mac := models.MAC(gm[1])
+		if retval[group] == nil {
+			retval[group] = make(map[models.MAC]time.Time)
+		}
+		retval[group][mac] = v.lastActiveTimeUTC
+		return true
+	})
+	return retval
 }

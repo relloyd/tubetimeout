@@ -317,8 +317,8 @@ func (t *Tracker) CalculateWindow(now time.Time) (time.Time, time.Time) {
 
 // GetSampleSummary returns a map of device IDs to the number of samples seen.
 // Used by package web for reporting.
-func (t *Tracker) GetSampleSummary() map[string]models.GroupSummary {
-	samples := make(map[string]models.GroupSummary)
+func (t *Tracker) GetSampleSummary() map[string]*models.GroupSummary {
+	samples := make(map[string]*models.GroupSummary)
 
 	t.devices.Range(func(k, v interface{}) bool {
 		data := v.(*deviceData)
@@ -338,7 +338,7 @@ func (t *Tracker) GetSampleSummary() map[string]models.GroupSummary {
 			usagePercent = 100
 		}
 
-		samples[k.(string)] = models.GroupSummary{
+		samples[k.(string)] = &models.GroupSummary{
 			Used:       count,
 			Total:      total,
 			Percentage: usagePercent,
