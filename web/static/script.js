@@ -231,7 +231,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 removeBtn.onclick = () => removeMacFromGroup(mac);
 
                 listItem.appendChild(label);
-                listItem.appendChild(lastActive);
                 listItem.appendChild(removeBtn);
                 macList.appendChild(listItem);
             });
