@@ -27,8 +27,9 @@ var ARPCmd = func() (string, error) {
 
 // GroupMACsConfig represents the YAML structure saved to disk.
 type GroupMACsConfig struct {
-	Groups     map[models.Group][]models.NamedMAC `yaml:"groups"`     // group: [mac1, mac2, ...]
-	UnusedMACs []models.NamedMAC                  `yaml:"unusedMACs"` // MACs that are not in a group
+	Groups                  map[models.Group][]models.NamedMAC         `yaml:"groups"`            // group: [mac1, mac2, ...]
+	GroupUsageTrackerConfig map[models.Group]models.UsageTrackerConfig `yaml:"groupUsageTracker"` // groupUsageTracker: group: {<struct fields>}
+	UnusedMACs              []models.NamedMAC                          `yaml:"unusedMACs"`        // MACs that are not in a group
 }
 
 // FlatGroupMAC represents the JSON structure used to get/set the group-macs from the web API.

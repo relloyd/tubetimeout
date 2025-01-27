@@ -144,10 +144,9 @@ func loadSamples(path string) (*sync.Map, error) {
 	m := &sync.Map{}
 	for k, v := range loadedData {
 		m.Store(k, &deviceData{
-			// mu:      &sync.Mutex{}, // Reinitialize the mutex
 			samples: v.Samples,
 			start:   v.Start,
-			mu:      &sync.Mutex{},
+			mu:      &sync.Mutex{}, // Reinitialize the mutex
 		})
 	}
 

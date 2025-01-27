@@ -41,6 +41,17 @@ type NamedMAC struct {
 	Name string `yaml:"name"`
 }
 
+type UsageTrackerConfig struct {
+	// Retention is the period for samples to be kept and evaluated.
+	Retention time.Duration `yaml:"retention"`
+	// Threshold is duration for exceeding conditions.
+	Threshold time.Duration `yaml:"threshold"`
+	// StartDay is the day of the week to start the window.
+	StartDay int `yaml:"startDay"`
+	// StartTime is the duration past midnight to start the window.
+	StartTime time.Duration `yaml:"startTime"`
+}
+
 // GroupSummary contains the used and total count of a group used by the usage tracker and web for reporting.
 type GroupSummary struct {
 	Used            int               `json:"used"`
