@@ -31,11 +31,14 @@ debug-test:
 run: build
 	LOG_LEVEL=debug $(APP_SHORT)
 
-install: stop build-release
+install: build-release
 	@echo "Installing $(APP) with timestamp $(INSTALL_TIMESTAMP)..."
 	install -m 0755 $(APP_SHORT) $(INSTALL_DEST)/$(APP)-$(INSTALL_TIMESTAMP)
 	ln -sf $(INSTALL_DEST)/$(APP)-$(INSTALL_TIMESTAMP) $(INSTALL_DEST)/tt
 	@echo "Installation complete!"
+
+install-and-restart: stop install start
+	@echo Done.
 
 sync:
 	rsync -auv --delete-after --exclude=.git ./ root@tubetimeout:tubetimeout/
