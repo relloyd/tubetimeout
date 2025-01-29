@@ -15,7 +15,6 @@ import (
 	"relloyd/tubetimeout/group"
 	"relloyd/tubetimeout/models"
 	"relloyd/tubetimeout/monitor"
-	"relloyd/tubetimeout/usage"
 )
 
 type packetIPs struct {
@@ -25,7 +24,7 @@ type packetIPs struct {
 
 type NFQueueFilter struct {
 	Nfq    []*nfqueue.Nfqueue
-	ut     usage.TrackerI
+	ut     models.TrackerI
 	gm     group.ManagerI
 	tc     monitor.TrafficCounter
 	logger *zap.Logger
@@ -37,7 +36,7 @@ type NFQueueFilter struct {
 // If the packets are destined for any of the injected Ips then filtering happens based on
 // <LOGIC-TBC>
 // TODO: unit test captuing two NFQs to ensure they are both created and running.
-func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *config.FilterConfig, ut usage.TrackerI, gm group.ManagerI, tc monitor.TrafficCounter) (*NFQueueFilter, error) {
+func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *config.FilterConfig, ut models.TrackerI, gm group.ManagerI, tc monitor.TrafficCounter) (*NFQueueFilter, error) {
 	var err error
 
 	if cfg.PacketDropPercentage < 0 || cfg.PacketDropPercentage > 1 {
@@ -153,7 +152,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 		groups, ok = f.gm.IsSrcDestIpKnown(srcIp, dstIp) // check if the source and destination Ip addresses are known.
 		if ok {                                          // if the packet IPs are known...
 			for _, grp := range groups { // for each group...
-				decision = "accept"                                 // assume success
+				decision = "accept" // assume success
 				active := f.tc.CountTraffic(grp, srcIp, direction, 1, l)
 				if active { // if the group-ip key is considered active...
 					f.ut.AddSample(string(grp), l, direction) // remember that we saw it

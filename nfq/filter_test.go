@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/group"
+	"relloyd/tubetimeout/models"
 	"relloyd/tubetimeout/monitor"
 	"relloyd/tubetimeout/usage"
 )
@@ -23,7 +24,7 @@ func TestNewNFQueueFilter(t *testing.T) {
 
 	type args struct {
 		cfg *config.FilterConfig
-		t   usage.TrackerI
+		t   models.TrackerI
 		m   group.ManagerI
 		c   monitor.TrafficCounter
 	}
