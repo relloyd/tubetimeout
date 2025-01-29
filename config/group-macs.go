@@ -27,9 +27,8 @@ var ARPCmd = func() (string, error) {
 
 // GroupMACsConfig represents the YAML structure saved to disk.
 type GroupMACsConfig struct {
-	Groups                  map[models.Group][]models.NamedMAC         `yaml:"groups"`            // group: [mac1, mac2, ...]
-	GroupUsageTrackerConfig map[models.Group]models.UsageTrackerConfig `yaml:"groupUsageTracker"` // groupUsageTracker: group: {<struct fields>}
-	UnusedMACs              []models.NamedMAC                          `yaml:"unusedMACs"`        // MACs that are not in a group
+	Groups     map[models.Group][]models.NamedMAC `yaml:"groups"`     // group: [mac1, mac2, ...]
+	UnusedMACs []models.NamedMAC                  `yaml:"unusedMACs"` // MACs that are not in a group
 }
 
 // FlatGroupMAC represents the JSON structure used to get/set the group-macs from the web API.
@@ -153,6 +152,7 @@ func (g *groupMACs) SaveGroupMACs(logger *zap.SugaredLogger, flatGroupMACs []Fla
 	// Convert the JSON structure to the group-macs YAML structure.
 	groups := make(map[models.Group][]models.NamedMAC)
 	unusedMACs := make([]models.NamedMAC, 0)
+
 	for _, flatGroupMAC := range flatGroupMACs {
 		if flatGroupMAC.Group != "" && flatGroupMAC.MAC != "" { // if the group is worth saving...
 			// Create the group if it doesn't already exist.

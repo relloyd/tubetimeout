@@ -42,6 +42,7 @@ type NamedMAC struct {
 }
 
 type UsageTrackerConfig struct {
+	Granularity time.Duration // The time granularity for sampling
 	// Retention is the period for samples to be kept and evaluated.
 	Retention time.Duration `yaml:"retention"`
 	// Threshold is duration for exceeding conditions.
@@ -50,7 +51,15 @@ type UsageTrackerConfig struct {
 	StartDay int `yaml:"startDay"`
 	// StartTime is the duration past midnight to start the window.
 	StartTime time.Duration `yaml:"startTime"`
+	// SampleSize is the number of slots in the circular buffer.
+	SampleSize int `yaml:"sampleSize"`
+	// PauseEndTime is the time until which tracking is paused.
+	PauseEndTime time.Time
+	// Enabled is true when tracking is enabled for the group.
+	Enabled bool
 }
+
+type MapGroupUsageTracker map[Group]UsageTrackerConfig
 
 // GroupSummary contains the used and total count of a group used by the usage tracker and web for reporting.
 type GroupSummary struct {

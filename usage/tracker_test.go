@@ -14,8 +14,8 @@ import (
 	"relloyd/tubetimeout/models"
 )
 
-type mockTrafficCounter struct{
-	count int
+type mockTrafficCounter struct {
+	count     int
 	packetLen int
 	direction models.Direction
 }
@@ -212,8 +212,8 @@ func TestAddSample(t *testing.T) {
 	}
 
 	// Case 3: Add a sample after the retention period has passed.
-	now = now.Add(cfg.Retention) // Advance time by 1 hour.
-	tracker.AddSample(deviceID, 1, models.Ingress)  // This should reset the whole buffer and record a new one.
+	now = now.Add(cfg.Retention)                   // Advance time by 1 hour.
+	tracker.AddSample(deviceID, 1, models.Ingress) // This should reset the whole buffer and record a new one.
 	// Case 3a: Verify that the device data was reinitialized.
 	data, ok = tracker.devices.Load(deviceID)
 	if !ok {
