@@ -27,3 +27,8 @@ type DestDomainGroupsReceiver interface {
 type ManagerI interface {
 	IsSrcIpDestDomainKnown(ip Ip, domain Domain) ([]Group, bool)
 }
+
+type TrackerI interface {
+	AddSample(id string, packetLen int, direction Direction)
+	HasExceededThreshold(deviceID string) bool
+}
