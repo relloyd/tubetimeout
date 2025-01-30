@@ -41,6 +41,16 @@ type NamedMAC struct {
 	Name string `yaml:"name"`
 }
 
+type UsageTrackerMode string // The mode of the usage tracker
+
+var (
+	ModeBlock   UsageTrackerMode = "block"
+	ModeMonitor UsageTrackerMode = "monitor"
+	ModeAllow   UsageTrackerMode = "allow"
+)
+
+// UsageTrackerConfig contains the configuration for the usage tracker of a specific group.
+// TODO: deduplicate with config.TrackerConfig
 type UsageTrackerConfig struct {
 	Granularity time.Duration // The time granularity for sampling
 	// Retention is the period for samples to be kept and evaluated.
@@ -55,11 +65,11 @@ type UsageTrackerConfig struct {
 	SampleSize int `yaml:"sampleSize"`
 	// PauseEndTime is the time until which tracking is paused.
 	PauseEndTime time.Time
-	// Enabled is true when tracking is enabled for the group.
-	Enabled bool
+	// Mode is the mode of the tracker.
+	Mode UsageTrackerMode
 }
 
-type MapGroupUsageTracker map[Group]UsageTrackerConfig
+type MapGroupUsageTrackerConfig map[Group]UsageTrackerConfig
 
 // GroupSummary contains the used and total count of a group used by the usage tracker and web for reporting.
 type GroupSummary struct {

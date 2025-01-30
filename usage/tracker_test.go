@@ -50,7 +50,7 @@ func TestNewTracker(t *testing.T) {
 	}
 
 	// Mock the file path getter func.
-	fnGetTrackerConfigFile = func(path string) (string, error) {
+	fnGetTrackerSamplesFile = func(path string) (string, error) {
 		return path, nil
 	}
 

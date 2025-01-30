@@ -18,57 +18,65 @@ import (
 type saveSamplesFunc func(*zap.SugaredLogger, string, *sync.Map) error
 
 var (
-	fnSaveSamples          = saveSamplesFunc(saveSamples)
-	fnGetTrackerConfigFile = config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc
-	gtc                    = &trackerConfig{
-		cfg: make(models.MapGroupUsageTracker),
-		mu:  sync.Mutex{},
-	}
+	fnSaveSamples                       = saveSamplesFunc(saveSamples)
+	fnGetTrackerSamplesFile             = config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc
 	defaultGroupTrackerConfigFilePath   = "usage-tracker-config.yaml"
 	groupTrackerConfigFileUpdated       = false
 	ErrorGroupTrackerConfigFileNotFound = fmt.Errorf("usage-tracker config file not found")
 )
 
 type Tracker struct {
-	logger            *zap.SugaredLogger
-	cfgTrackerDefault *config.TrackerConfig
-	cfgGroups         models.MapGroupUsageTracker
-	mu                *sync.Mutex
-	devices           *sync.Map        // Map of device IDs (string) to *deviceData
-	nowFunc           func() time.Time // Function to get the current time (defaults to time.Now)
+	logger             *zap.SugaredLogger
+	cfgTrackerDefaults *config.TrackerConfig
+	cfgGroups          models.MapGroupUsageTrackerConfig
+	mu                 *sync.Mutex
+	devices            *sync.Map        // Map of device IDs (string) to *deviceData
+	nowFunc            func() time.Time // Function to get the current time (defaults to time.Now)
 }
 
 // NewTracker initializes a Tracker with pre-allocated slices for each device.
 func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.TrackerConfig) (*Tracker, error) {
+	if logger == nil || cfg == nil {
+		return nil, fmt.Errorf("logger and config must be provided")
+	}
+
 	t := &Tracker{
-		logger:  logger,
-		mu:      &sync.Mutex{},
-		devices: &sync.Map{},
-		nowFunc: time.Now, // Default to time.Now
+		logger:             logger,
+		mu:                 &sync.Mutex{},
+		devices:            &sync.Map{},
+		nowFunc:            time.Now, // Default to time.Now
+		cfgTrackerDefaults: cfg,
+	}
+
+	// Load groups config from file.
+	var err error
+	t.cfgGroups, err = t.GetGroupConfig()
+	if err != nil {
+		return nil, err
 	}
 
 	// Load & save existing sample data.
 	if cfg.SampleFilePath != "" { // TODO: test when SampleFilePath is empty that no files are saved
-		configFile, err := fnGetTrackerConfigFile(cfg.SampleFilePath)
+		samplesFile, err := fnGetTrackerSamplesFile(cfg.SampleFilePath)
 		if err != nil {
 			return nil, err
 		}
-		s, err := loadSamples(configFile)
+		s, err := loadSamples(samplesFile)
 		if err != nil {
 			logger.Errorf("Failed to load samples from file: %v", err)
 		} else {
 			// Load the samples into the devices map.
-			logger.Infof("Samples loaded from file: %q", configFile)
+			logger.Infof("Samples loaded from file: %q", samplesFile)
 			t.devices = s
 		}
 		// Save samples to the file on context cancellation.
-		go saveSamplesPeriodically(ctx, t.logger, t.devices, configFile, cfg.SampleFileSaveInterval)
+		go saveSamplesPeriodically(ctx, t.logger, t.devices, samplesFile, cfg.SampleFileSaveInterval)
 	}
 
 	return t, nil
 }
 
-func (t *Tracker) GetTrackerConfig(logger *zap.SugaredLogger) (models.MapGroupUsageTracker, error) {
+func (t *Tracker) GetGroupConfig() (models.MapGroupUsageTrackerConfig, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -85,7 +93,7 @@ func (t *Tracker) GetTrackerConfig(logger *zap.SugaredLogger) (models.MapGroupUs
 	yamlFile, err := os.ReadFile(defaultGroupTrackerConfigFilePath)
 	if err != nil && os.IsNotExist(err) { // if the file needs creating...
 		// Create the file with zero data.
-		err = config.SafeWriteViaTemp(logger, defaultGroupTrackerConfigFilePath, "")
+		err = config.SafeWriteViaTemp(t.logger, defaultGroupTrackerConfigFilePath, "")
 		if err != nil {
 			return nil, fmt.Errorf("failed to create usager tracker config file: %w", err)
 		}
@@ -94,7 +102,7 @@ func (t *Tracker) GetTrackerConfig(logger *zap.SugaredLogger) (models.MapGroupUs
 		return nil, fmt.Errorf("%w: %v: %v", ErrorGroupTrackerConfigFileNotFound, err, defaultGroupTrackerConfigFilePath)
 	}
 
-	cfg := make(models.MapGroupUsageTracker)
+	cfg := make(models.MapGroupUsageTrackerConfig)
 	err = yaml.Unmarshal(yamlFile, &cfg)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshalling YAML: %w", err)
@@ -103,7 +111,7 @@ func (t *Tracker) GetTrackerConfig(logger *zap.SugaredLogger) (models.MapGroupUs
 	return cfg, nil
 }
 
-func (t *Tracker) SetTrackerConfig(m models.MapGroupUsageTracker) error {
+func (t *Tracker) SetGroupConfig(m models.MapGroupUsageTrackerConfig) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -122,7 +130,7 @@ func (t *Tracker) SetTrackerConfig(m models.MapGroupUsageTracker) error {
 		return fmt.Errorf("error marshalling YAML: %w", err)
 	}
 	t.cfgGroups = m
-	err = config.SafeWriteViaTemp(g.logger, defaultGroupTrackerConfigFilePath, string(b))
+	err = config.SafeWriteViaTemp(t.logger, defaultGroupTrackerConfigFilePath, string(b))
 	if err != nil {
 		return fmt.Errorf("failed to write group-macs to file: %w", err)
 	}
@@ -133,7 +141,6 @@ func (t *Tracker) SetTrackerConfig(m models.MapGroupUsageTracker) error {
 func saveSamplesPeriodically(ctx context.Context, logger *zap.SugaredLogger, devicesToSave *sync.Map, filePath string, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	fn := func() {
-		// TODO: save samples safely by using a temporary file and renaming it.
 		if err := fnSaveSamples(logger, filePath, devicesToSave); err != nil {
 			logger.Errorf("Failed to save samples to file: %v", err)
 		} else {
@@ -142,11 +149,28 @@ func saveSamplesPeriodically(ctx context.Context, logger *zap.SugaredLogger, dev
 	}
 	for {
 		select {
-		case <-ctx.Done(): // TODO: implement a "done" chan to save usage samples on exit safely.
+		case <-ctx.Done(): // Exit if the context is cancelled.
+			ticker.Stop()
+			return
 		case <-ticker.C:
 			fn()
 		}
 	}
+}
+
+type deviceData struct {
+	mu              *sync.Mutex
+	config          models.UsageTrackerConfig
+	samples         []bool    // Slice of fixed size to represent the rotating window
+	windowStartTime time.Time // Start time of the slice window
+}
+
+// deviceDataDTO is used to save/load deviceData{}. It is a DTO to avoid saving the mutex.
+type deviceDataDTO struct {
+	Config          models.UsageTrackerConfig `json:"config"`
+	Samples         []bool                    `json:"samples"`
+	SampleSize      int                       `json:"sampleSize"`
+	WindowStartTime time.Time                 `json:"windowStartTime"`
 }
 
 func loadSamples(path string) (*sync.Map, error) {
@@ -171,9 +195,10 @@ func loadSamples(path string) (*sync.Map, error) {
 	m := &sync.Map{}
 	for k, v := range loadedData {
 		m.Store(k, &deviceData{
-			samples:         v.Samples,
-			windowStartTime: v.StartTime,
 			mu:              &sync.Mutex{}, // Reinitialize the mutex
+			config:          v.Config,
+			samples:         v.Samples,
+			windowStartTime: v.WindowStartTime,
 		})
 	}
 
@@ -187,8 +212,10 @@ func saveSamples(logger *zap.SugaredLogger, path string, devices *sync.Map) erro
 	devices.Range(func(k, v interface{}) bool {
 		data := v.(*deviceData)
 		samples[k.(string)] = deviceDataDTO{
-			Samples:   data.samples,
-			StartTime: data.windowStartTime,
+			Config:          data.config,
+			Samples:         data.samples,
+			SampleSize:      len(data.samples),
+			WindowStartTime: data.windowStartTime,
 		}
 		return true
 	})
@@ -201,22 +228,6 @@ func saveSamples(logger *zap.SugaredLogger, path string, devices *sync.Map) erro
 
 	// Write the samples to the file.
 	return config.SafeWriteViaTemp(logger, path, string(b))
-}
-
-type deviceData struct {
-	mu              *sync.Mutex
-	samples         []bool    // Slice of fixed size to represent the rotating window
-	windowStartTime time.Time // Start time of the slice window
-	cfg             models.UsageTrackerConfig
-}
-
-// deviceDataDTO is used to save/load deviceData{}. It is a DTO to avoid saving the mutex.
-type deviceDataDTO struct {
-	Samples      []bool    `json:"samples"`
-	SampleSize   int       `json:"sampleSize"`
-	StartTime    time.Time `json:"start"`
-	Enabled      bool      `json:"enabled"`
-	PauseEndTime time.Time `json:"pauseEndTime"`
 }
 
 func newDeviceData(now time.Time, cfg models.UsageTrackerConfig) *deviceData {
@@ -234,46 +245,49 @@ func newDeviceData(now time.Time, cfg models.UsageTrackerConfig) *deviceData {
 	}
 
 	dd := &deviceData{
-		cfg:     cfg,
+		config:  cfg,
 		mu:      &sync.Mutex{},
 		samples: make([]bool, cfg.SampleSize),
+		// windowStartTime is set below
 	}
 
-	lastWindowStart, _ := dd.calculateWindow(now)
-	dd.windowStartTime = lastWindowStart
+	start, _ := dd.calculateWindow(now)
+	dd.windowStartTime = start
 
 	return dd
 }
 
 // AddSample records a sample for a given identifier at the current time.
-func (t *Tracker) AddSample(id string, packetLen int, direction models.Direction) {
-	now := t.nowFunc() // Use nowFunc instead of time.Now
+func (t *Tracker) AddSample(id string) {
 	id = strings.ToLower(id)
+
+	now := t.nowFunc() // Use nowFunc instead of time.Now
 
 	// Load the config for the group/id or use defaults.
 	cfg, ok := t.cfgGroups[models.Group(id)]
 	if !ok {
 		t.logger.Errorf("unable to load config for group %v", id)
 		cfg = models.UsageTrackerConfig{
-			Granularity: t.cfgTrackerDefault.Granularity,
-			Retention:   t.cfgTrackerDefault.Retention,
-			Threshold:   t.cfgTrackerDefault.Threshold,
-			StartDay:    t.cfgTrackerDefault.StartDay,
-			StartTime:   t.cfgTrackerDefault.StartTime,
-			SampleSize:  int(t.cfgTrackerDefault.Retention / t.cfgTrackerDefault.Granularity),
-			Enabled:     true,
+			Granularity:  t.cfgTrackerDefaults.Granularity,
+			Retention:    t.cfgTrackerDefaults.Retention,
+			Threshold:    t.cfgTrackerDefaults.Threshold,
+			StartDay:     t.cfgTrackerDefaults.StartDay,
+			StartTime:    t.cfgTrackerDefaults.StartTime,
+			SampleSize:   int(t.cfgTrackerDefaults.Retention / t.cfgTrackerDefaults.Granularity),
+			PauseEndTime: time.Time{},
+			Mode:         models.ModeMonitor,
 		}
 	}
 
 	// Get or initialize the device data.
-	data, _ := t.devices.LoadOrStore(id, newDeviceData(t.nowFunc(), cfg))
+	data, _ := t.devices.LoadOrStore(id, newDeviceData(now, cfg))
 	dd := data.(*deviceData)
 
 	// Update the sample at the calculated index.
 	dd.mu.Lock()
 	defer dd.mu.Unlock()
 
-	if dd.cfg.PauseEndTime.After(now) { // if the tracker is paused...
+	if dd.config.PauseEndTime.After(now) { // if the tracker is paused...
 		// 	TODO: add test for AddSample() when tracker is paused
 		return
 	}
@@ -287,28 +301,25 @@ func (t *Tracker) AddSample(id string, packetLen int, direction models.Direction
 }
 
 // HasExceededThreshold checks if a device has exceeded the threshold duration.
-func (t *Tracker) HasExceededThreshold(deviceID string) bool {
-	if t.pauseEndTime.After(time.Now()) { // if the tracker is paused...
-		// TODO: add test for HasExceededThreshold() when tracker is paused
-		return false
-	}
+func (t *Tracker) HasExceededThreshold(id string) bool {
+	id = strings.ToLower(id) // force lower case for deviceID
 
-	deviceID = strings.ToLower(deviceID) // force lower case for deviceID
-
-	data, ok := t.devices.Load(deviceID)
+	data, ok := t.devices.Load(id)
 	if !ok {
 		return false
 	}
 
 	dd := data.(*deviceData)
-
 	dd.mu.Lock()
 	defer dd.mu.Unlock()
 
-	now := time.Now()
+	if dd.config.PauseEndTime.After(time.Now()) { // if the tracker is paused...
+		// TODO: add test for HasExceededThreshold() when tracker is paused
+		return false
+	}
 
 	// Ensure the time window is synchronized.
-	t.syncWindow(dd, now)
+	dd.syncWindow(t.logger, dd, time.Now())
 
 	// Count the number of true samples in the window.
 	count := 0
@@ -318,30 +329,30 @@ func (t *Tracker) HasExceededThreshold(deviceID string) bool {
 		}
 	}
 
-	t.logger.Debugf("Usage tracker has seen %v %vx", deviceID, count)
+	t.logger.Debugf("Usage tracker has seen %v %vx", id, count)
 
-	return time.Duration(count)*t.granularity >= t.threshold
+	return time.Duration(count)*dd.config.Granularity >= dd.config.Threshold
 }
 
 // getIndex calculates the index in the slice for the current time.
 func (d *deviceData) getIndex(now time.Time, bufferStart time.Time) int {
-	elapsed := int(now.Sub(bufferStart) / d.cfg.Granularity)
-	return (elapsed%d.cfg.SampleSize + d.cfg.SampleSize) % d.cfg.SampleSize // Ensure positive modulo.
+	elapsed := int(now.Sub(bufferStart) / d.config.Granularity)
+	return (elapsed%d.config.SampleSize + d.config.SampleSize) % d.config.SampleSize // Ensure positive modulo.
 }
 
 // syncWindow ensures the slice is synchronized with the current time.
 // If 0 < elapsed < t.sampleSize, do nothing. The circular buffer handles overwriting naturally.
 func (d *deviceData) syncWindow(logger *zap.SugaredLogger, dd *deviceData, now time.Time) {
 	// Calculate number of time slices that have elapsed since the start of the window.
-	elapsed := int(now.Sub(dd.windowStartTime) / d.cfg.Granularity)
-	if elapsed >= d.cfg.SampleSize || elapsed < 0 {
+	elapsed := int(now.Sub(dd.windowStartTime) / d.config.Granularity)
+	if elapsed >= d.config.SampleSize || elapsed < 0 {
 		// If elapsed time exceeds the buffer size, reset the entire window.
 		for i := range dd.samples {
 			dd.samples[i] = false
 		}
 		lastWindowStart, _ := d.calculateWindow(now)
 		dd.windowStartTime = lastWindowStart // Reset the start as we roll into a new window.
-		logger.Infof("Renew retention window (%v) for device %s", now, d.cfg.Retention)
+		logger.Infof("Renew retention window (%v) for device %s", now, d.config.Retention)
 	}
 }
 
@@ -359,31 +370,31 @@ func (d *deviceData) syncWindow(logger *zap.SugaredLogger, dd *deviceData, now t
 func (d *deviceData) calculateWindow(now time.Time) (time.Time, time.Time) {
 	var lastWindowStart, nextWindowStart time.Time
 
-	if d.cfg.Retention >= 7*24*time.Hour {
+	if d.config.Retention >= 7*24*time.Hour {
 		// Weekly retention logic
-		startOfWeek := now.Truncate(7*24*time.Hour).AddDate(0, 0, d.cfg.StartDay-int(now.Weekday()))
-		lastWindowStart = startOfWeek.Add(d.cfg.StartTime).Truncate(d.cfg.Granularity)
+		startOfWeek := now.Truncate(7*24*time.Hour).AddDate(0, 0, d.config.StartDay-int(now.Weekday()))
+		lastWindowStart = startOfWeek.Add(d.config.StartTime).Truncate(d.config.Granularity)
 		if now.Before(lastWindowStart) {
-			lastWindowStart = lastWindowStart.Add(-7 * 24 * time.Hour).Truncate(d.cfg.Granularity)
+			lastWindowStart = lastWindowStart.Add(-7 * 24 * time.Hour).Truncate(d.config.Granularity)
 		}
-		nextWindowStart = lastWindowStart.Add(7 * 24 * time.Hour).Truncate(d.cfg.Granularity)
-	} else if d.cfg.Retention >= 24*time.Hour {
+		nextWindowStart = lastWindowStart.Add(7 * 24 * time.Hour).Truncate(d.config.Granularity)
+	} else if d.config.Retention >= 24*time.Hour {
 		// Daily retention logic
 		startOfDay := now.Truncate(24 * time.Hour)
-		lastWindowStart = startOfDay.Add(d.cfg.StartTime)
+		lastWindowStart = startOfDay.Add(d.config.StartTime)
 		if now.Before(lastWindowStart) {
-			lastWindowStart = lastWindowStart.Add(-24 * time.Hour).Truncate(d.cfg.Granularity)
+			lastWindowStart = lastWindowStart.Add(-24 * time.Hour).Truncate(d.config.Granularity)
 		}
-		nextWindowStart = lastWindowStart.Add(24 * time.Hour).Truncate(d.cfg.Granularity)
+		nextWindowStart = lastWindowStart.Add(24 * time.Hour).Truncate(d.config.Granularity)
 	} else {
 		// Sub-daily retention logic
-		baseWindowStart := now.Truncate(d.cfg.Retention)
-		lastWindowStart = baseWindowStart.Add(d.cfg.StartTime).Truncate(d.cfg.Granularity)
+		baseWindowStart := now.Truncate(d.config.Retention)
+		lastWindowStart = baseWindowStart.Add(d.config.StartTime).Truncate(d.config.Granularity)
 		if now.Before(lastWindowStart) {
-			baseWindowStart = baseWindowStart.Add(-d.cfg.Retention)
-			lastWindowStart = baseWindowStart.Add(d.cfg.StartTime).Truncate(d.cfg.Granularity)
+			baseWindowStart = baseWindowStart.Add(-d.config.Retention)
+			lastWindowStart = baseWindowStart.Add(d.config.StartTime).Truncate(d.config.Granularity)
 		}
-		nextWindowStart = lastWindowStart.Add(d.cfg.Retention).Truncate(d.cfg.Granularity)
+		nextWindowStart = lastWindowStart.Add(d.config.Retention).Truncate(d.config.Granularity)
 	}
 
 	return lastWindowStart, nextWindowStart
@@ -425,29 +436,59 @@ func (t *Tracker) GetSampleSummary() map[string]*models.GroupSummary {
 	return samples
 }
 
-func (t *Tracker) SetPause(d time.Duration) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.pauseEndTime.IsZero() {
-		t.pauseEndTime = time.Now().Add(d)
-		return
+func (t *Tracker) SetPause(id string, d time.Duration) error {
+	id = strings.ToLower(id)
+
+	data, ok := t.devices.Load(id)
+	if !ok {
+		return fmt.Errorf("device %v not found", id)
 	}
-	t.pauseEndTime = t.pauseEndTime.Add(d)
+	dd := data.(*deviceData)
+
+	dd.mu.Lock()
+	defer dd.mu.Unlock()
+
+	if dd.config.PauseEndTime.IsZero() {
+		dd.config.PauseEndTime = time.Now().Add(d)
+		return nil
+	}
+
+	dd.config.PauseEndTime = dd.config.PauseEndTime.Add(d)
+	return nil
 }
 
-func (t *Tracker) GetPauseEndTime() time.Time {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.pauseEndTime
+func (t *Tracker) GetPauseEndTime(id string) (time.Time, error) {
+	id = strings.ToLower(id)
+
+	data, ok := t.devices.Load(id)
+	if !ok {
+		return time.Time{}, fmt.Errorf("device %v not found", id)
+	}
+	dd := data.(*deviceData)
+
+	dd.mu.Lock()
+	defer dd.mu.Unlock()
+
+	return dd.config.PauseEndTime, nil
 }
 
-func (t *Tracker) DeletePause() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.pauseEndTime = time.Time{}
+func (t *Tracker) DeletePause(id string) error {
+	id = strings.ToLower(id)
+
+	data, ok := t.devices.Load(id)
+	if !ok {
+		return fmt.Errorf("device %v not found", id)
+	}
+	dd := data.(*deviceData)
+
+	dd.mu.Lock()
+	defer dd.mu.Unlock()
+
+	dd.config.PauseEndTime = time.Time{}
+	return nil
 }
 
-func (t *Tracker) ResetSamples(deviceID string) {
-	deviceID = strings.ToLower(deviceID)
-	t.devices.Delete(deviceID)
+func (t *Tracker) ResetSamples(id string) {
+	id = strings.ToLower(id)
+	t.devices.Delete(id)
 }

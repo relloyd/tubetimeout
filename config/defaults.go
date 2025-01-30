@@ -42,10 +42,10 @@ type DebugConfig struct {
 }
 
 type TrackerConfig struct {
-	// Retention is the period for samples to be kept and evaluated.
-	Retention time.Duration `envconfig:"RETENTION" default:"168h"` // 168h == 1 week
 	// Granularity is the sampling resolution.
 	Granularity time.Duration `envconfig:"GRANULARITY" default:"1m"`
+	// Retention is the period for samples to be kept and evaluated.
+	Retention time.Duration `envconfig:"RETENTION" default:"168h"` // 168h == 1 week
 	// Threshold is duration for exceeding conditions.
 	Threshold time.Duration `envconfig:"THRESHOLD" default:"180m"`
 	// StartDay is the day of the week to start the window.
