@@ -183,32 +183,60 @@ func TestHasExceededThreshold(t *testing.T) {
 func TestAddSample_GroupDefaults(t *testing.T) {
 	ctx := context.Background()
 	logger := config.MustGetLogger()
-	cfg := &models.TrackerConfig{
-		Retention:    1 * time.Hour,
-		Granularity:  1 * time.Minute,
-		Threshold:    10 * time.Minute,
-	}
+
 	mockDeviceID := "test-device"
+	mockDeviceID2 := "test-device2"
+
+	// Setup defaults.
+	cfg := &models.TrackerConfig{
+		Retention:   2 * time.Minute, // use a different Retention value to cfgGroups so we can check that defaults are used.
+		Granularity: 1 * time.Minute,
+		Threshold:   1 * time.Minute,
+		Mode:        models.ModeMonitor,
+	}
+
 	tracker, err := NewTracker(ctx, logger, cfg)
 	assert.NoError(t, err, "NewTracker failed")
-
+	// Setup groups so we can test the mode handling.
+	tracker.cfgGroups = models.MapGroupTrackerConfig{
+		models.Group(mockDeviceID): &models.TrackerConfig{
+			Retention:   1 * time.Minute, // use a different Retention value to cfg defaults so we can check that this is used.
+			Granularity: 1 * time.Minute,
+			Threshold:   1 * time.Minute,
+			Mode:        models.ModeMonitor,
+		},
+	}
 	tracker.AddSample(mockDeviceID)
 
+	// Get the deviceData
 	d, ok := tracker.devices.Load(mockDeviceID)
-	assert.True(t, ok, "AddSample did not load samples from file")
-
+	assert.True(t, ok, "AddSample found the deviceData")
 	dd := d.(*deviceData)
-	assert.Equal(t, getSampleSize(cfg), len(dd.samples), "AddSample did not create any samples")
+	assert.Equal(t, getSampleSize(tracker.cfgGroups[models.Group(mockDeviceID)]), len(dd.samples), "AddSample did not create any samples")
+	assert.Equal(t, true, dd.samples[0], "AddSample did not mark the first sample in monitor mode")
 
+	// Try mode allow.
 	dd.config.Mode = models.ModeAllow
 	dd.config.ModeEndTime = time.Now().Add(-1 * time.Hour)
+	dd.samples[0] = false
 	tracker.AddSample(mockDeviceID)
 	assert.Equal(t, models.ModeMonitor, dd.config.Mode, "AddSample did not set the mode correctly")
+	assert.Equal(t, false, dd.samples[0], "AddSample should not mark the first sample in allow mode")
 
+	// Try mode block.
 	dd.config.Mode = models.ModeBlock
 	dd.config.ModeEndTime = time.Now().Add(-1 * time.Hour)
 	tracker.AddSample(mockDeviceID)
-	assert.Equal(t, models.ModeMonitor, dd.config.Mode, "AddSample did not set the mode correctly")
+	assert.Equal(t, models.ModeMonitor, dd.config.Mode, "AddSample did not reset the mode correctly")
+	assert.Equal(t, false, dd.samples[0], "AddSample should not mark the first sample in block mode")
+
+	// Check that defaults are used, well one of them anyway.
+	tracker.AddSample(mockDeviceID2)
+	assert.True(t, ok, "AddSample found the deviceData")
+	d, ok = tracker.devices.Load(mockDeviceID2)
+	assert.True(t, ok, "AddSample found the deviceData")
+	dd = d.(*deviceData)
+	assert.Equal(t, cfg.Retention, dd.config.Retention, "AddSample did not use the default retention")
 }
 
 func TestAddSample_SamplesAreSaved(t *testing.T) {
@@ -590,7 +618,6 @@ func TestNewTracker_GetGroupConfig(t *testing.T) {
 	assert.Equal(t, d, tracker.devices)
 }
 
-
 func TestNewTracker_SampleFilePathInvalid(t *testing.T) {
 	ctx := context.Background()
 	logger := config.MustGetLogger()
@@ -663,4 +690,3 @@ func TestNewTracker_HandlesEmptySampleFilePath(t *testing.T) {
 	assert.NoError(t, err, "expected no error, but got: %v", err)
 	assert.NotNil(t, tracker, "expected tracker to be non-nil, but got nil")
 }
-

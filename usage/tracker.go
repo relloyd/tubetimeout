@@ -181,7 +181,8 @@ func (t *Tracker) AddSample(id string) {
 
 	if loaded {
 		// Ensure the config is up to date.
-		dd.config = cfg
+		dd.config = cfg // TODO: find the latest config and set it
+		// TODO test that latest config is set
 	}
 
 	if dd.config.Mode == models.ModeMonitor { // if the tracker is not paused...
@@ -194,7 +195,7 @@ func (t *Tracker) AddSample(id string) {
 
 	// Reset the mode.
 	if (dd.config.Mode == models.ModeAllow || dd.config.Mode == models.ModeBlock) &&
-		dd.config.ModeEndTime.After(now) { // if the tracker block/allow time has expired...
+		dd.config.ModeEndTime.Before(now) { // if the tracker block/allow time has expired...
 		dd.config.Mode = models.ModeMonitor
 	}
 }
