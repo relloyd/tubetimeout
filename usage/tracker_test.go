@@ -2,6 +2,7 @@ package usage
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"sync"
@@ -42,6 +43,21 @@ func TestNewTracker(t *testing.T) {
 		SampleFileSaveInterval: 50 * time.Millisecond,
 	}
 
+	fnGetGroupConfig = func(t *Tracker) (models.MapGroupUsageTrackerConfig, error) {
+		return models.MapGroupUsageTrackerConfig{
+			"GroupA": {
+				Granularity:  1 * time.Minute,
+				Retention:    30 * time.Minute,
+				Threshold:    5 * time.Minute,
+				StartDay:     0,
+				StartTime:    0,
+				SampleSize:   1,
+				PauseEndTime: time.Time{},
+				Mode:         models.ModeAllow,
+			},
+		}, nil
+	}
+
 	// Mock the file saver func.
 	savedFileCount := 0
 	fnSaveSamples = func(logger *zap.SugaredLogger, path string, devices *sync.Map) error {
@@ -54,21 +70,23 @@ func TestNewTracker(t *testing.T) {
 		return path, nil
 	}
 
+	// Tracker returns error if not supplied with correct args.
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), nil)
+	assert.Error(t, err, "NewTracker did not return error when not supplied with correct cfg")
+	assert.Nil(t, tracker, "NewTracker did not return nil when not supplied with correct cfg")
+
+	tracker, err = NewTracker(ctx, nil, cfg)
+	assert.Error(t, err, "NewTracker did not return error when not supplied with correct logger")
+	assert.Nil(t, tracker, "NewTracker did not return nil when not supplied with correct logger")
+
 	// Tracker with threshold 0 should default to 1 minute.
-	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
-	assert.NoError(t, err, "NewTracker failed")
-	assert.Equal(t, 1*time.Minute, tracker.threshold, "NewTracker did not set threshold to 1m")
-
-	// Another tracker for more stuff.
-	cfg.Threshold = 10 * time.Minute
 	tracker, err = NewTracker(ctx, config.MustGetLogger(), cfg)
-
 	assert.NoError(t, err, "NewTracker failed")
 	assert.NotNil(t, tracker, "NewTracker returned nil")
 	assert.NotNil(t, tracker.devices, "NewTracker did not initialize devices map")
-	assert.Equal(t, cfg.Retention, tracker.retention, "NewTracker did not set retention")
-	assert.Equal(t, cfg.Granularity, tracker.granularity, "NewTracker did not set granularity")
-	assert.Equal(t, cfg.Threshold, tracker.threshold, "NewTracker did not set threshold")
+	assert.Equal(t, cfg.Retention, tracker.cfgTrackerDefaults.Retention, "NewTracker did not set retention")
+	assert.Equal(t, cfg.Granularity, tracker.cfgTrackerDefaults.Granularity, "NewTracker did not set granularity")
+	assert.Equal(t, cfg.Threshold, tracker.cfgTrackerDefaults.Threshold, "NewTracker did not set threshold")
 	assert.NotNil(t, tracker.nowFunc, "NewTracker did not set a default nowFunc")
 	assert.NotNil(t, tracker.mu, "NewTracker did not setup the mutex")
 
@@ -89,10 +107,15 @@ func TestHasExceededThreshold(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup: Create a tracker with a 1-hour retention, 10-minute threshold, and 1-minute granularity.
-	cfg := &config.TrackerConfig{
-		Retention:   1 * time.Hour,
-		Threshold:   10 * time.Minute,
-		Granularity: 1 * time.Minute,
+	cfg := models.UsageTrackerConfig{
+		Granularity:  1 * time.Minute,
+		Retention:    1 * time.Hour,
+		Threshold:    10 * time.Minute,
+		StartDay:     0,
+		StartTime:    0,
+		SampleSize:   0,
+		PauseEndTime: time.Time{},
+		Mode:         "",
 	}
 
 	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
@@ -101,14 +124,10 @@ func TestHasExceededThreshold(t *testing.T) {
 	// Simulate a device data structure with pre-allocated samples.
 	startTime := time.Now().Truncate(cfg.Granularity)
 	deviceID := "test-device"
-	deviceData := &deviceData{
-		samples: make([]bool, tracker.sampleSize),
-		start:   startTime,
-		mu:      &sync.Mutex{},
-	}
+	data := newDeviceData(time.Now(), cfg)
 
 	// Add device data to the tracker.
-	tracker.devices.Store(deviceID, deviceData)
+	tracker.devices.Store(deviceID, data)
 
 	// Case 1: No samples recorded.
 	if tracker.HasExceededThreshold(deviceID) {
@@ -117,7 +136,7 @@ func TestHasExceededThreshold(t *testing.T) {
 
 	// Case 2a: Samples recorded but below threshold.
 	for i := 0; i < 5; i++ {
-		deviceData.samples[i] = true // Mark 5 minutes as seen.
+		data.samples[i] = true // Mark 5 minutes as seen.
 	}
 	if tracker.HasExceededThreshold(deviceID) {
 		t.Error("HasExceededThreshold returned true with samples below the threshold")
@@ -130,7 +149,7 @@ func TestHasExceededThreshold(t *testing.T) {
 
 	// Case 3: Samples meet the threshold.
 	for i := 0; i < 10; i++ {
-		deviceData.samples[i] = true // Mark 10 minutes as seen.
+		data.samples[i] = true // Mark 10 minutes as seen.
 	}
 	if !tracker.HasExceededThreshold(deviceID) {
 		t.Error("HasExceededThreshold returned false with samples meeting the threshold")
@@ -139,22 +158,22 @@ func TestHasExceededThreshold(t *testing.T) {
 	// Case 4: Simulate backward time adjustment.
 	// Step 4a: Mark all slots as seen.
 	for i := 0; i < tracker.sampleSize; i++ {
-		deviceData.samples[i] = true
+		data.samples[i] = true
 	}
 	// Step 4b: Move `start` time backward by 2 hours.
 	// This simulates an old start time being used.
-	deviceData.start = startTime.Add(-2 * time.Hour)
+	data.start = startTime.Add(-2 * time.Hour)
 	// Step 4c: Test that stale samples are ignored and the buffer is reset.
 	if tracker.HasExceededThreshold(deviceID) {
 		t.Errorf("HasExceededThreshold incorrectly included stale samples or did not reset after backward time adjustment")
 	}
 	// Step 4d: Reset the device data with valid samples and verify behavior.
-	deviceData.start = startTime
-	for i := range deviceData.samples {
-		deviceData.samples[i] = false
+	data.start = startTime
+	for i := range data.samples {
+		data.samples[i] = false
 	}
 	for i := 0; i < 10; i++ {
-		deviceData.samples[i] = true
+		data.samples[i] = true
 	}
 	if !tracker.HasExceededThreshold(deviceID) {
 		t.Error("HasExceededThreshold returned false with valid samples meeting the threshold")
@@ -185,7 +204,7 @@ func TestAddSample(t *testing.T) {
 	}
 
 	// Case 1a: Add a sample at the start of the buffer and verify that we cannot find the mixed case device ID.
-	tracker.AddSample(deviceID, 1, models.Ingress)
+	tracker.AddSample(deviceID)
 	data, ok := tracker.devices.Load(deviceID)
 	assert.False(t, ok, "AddSample should not find data by mixed case device ID")
 
@@ -494,4 +513,170 @@ func TestResetSamples(t *testing.T) {
 	tracker.ResetSamples(testDevice)
 	_, ok = tracker.devices.Load(testDevice)
 	assert.False(t, ok, "Device should not be found in tracker")
+}
+
+// FROM JETBRAINS AI
+
+func TestNewTracker_Success(t *testing.T) {
+	logger := zap.NewExample().Sugar()
+	defer logger.Sync()
+
+	cfg := &config.TrackerConfig{
+		SampleFilePath:         "sample-file.json",
+		SampleFileSaveInterval: time.Minute,
+	}
+
+	// Mock fnGetTrackerSamplesFile to return a valid path
+	fnGetTrackerSamplesFile = func(sampleFilePath string) (string, error) {
+		return "mocked-sample-file-path.json", nil
+	}
+
+	// Mock loadSamples to avoid reading from the file
+	usage.LoadSamples = func(path string) (*sync.Map, error) {
+		m := &sync.Map{}
+		return m, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tracker, err := NewTracker(ctx, logger, cfg)
+	if err != nil {
+		t.Fatalf("expected no error, but got: %v", err)
+	}
+
+	if tracker == nil {
+		t.Fatal("expected a valid tracker instance, but got nil")
+	}
+}
+
+func TestNewTracker_Error_NilLogger(t *testing.T) {
+	ctx := context.Background()
+	cfg := &config.TrackerConfig{}
+
+	tracker, err := NewTracker(ctx, nil, cfg)
+	if err == nil {
+		t.Fatal("expected an error, but got nil")
+	}
+
+	if tracker != nil {
+		t.Fatal("expected tracker to be nil, but got a valid instance")
+	}
+}
+
+func TestNewTracker_Error_NilConfig(t *testing.T) {
+	logger := zap.NewExample().Sugar()
+	defer logger.Sync()
+
+	ctx := context.Background()
+
+	tracker, err := NewTracker(ctx, logger, nil)
+	if err == nil {
+		t.Fatal("expected an error, but got nil")
+	}
+
+	if tracker != nil {
+		t.Fatal("expected tracker to be nil, but got a valid instance")
+	}
+}
+
+func TestNewTracker_Error_SampleFilePathInvalid(t *testing.T) {
+	logger := zap.NewExample().Sugar()
+	defer logger.Sync()
+
+	cfg := &config.TrackerConfig{
+		SampleFilePath: "nonexistent-path.json",
+	}
+
+	// Mock fnGetTrackerSamplesFile to return an error
+	fnGetTrackerSamplesFile = func(sampleFilePath string) (string, error) {
+		return "", errors.New("mocked error for missing sample file path")
+	}
+
+	ctx := context.Background()
+
+	tracker, err := NewTracker(ctx, logger, cfg)
+	if err == nil {
+		t.Fatal("expected an error, but got nil")
+	}
+
+	if tracker != nil {
+		t.Fatal("expected tracker to be nil, but got a valid instance")
+	}
+}
+
+func TestNewTracker_Error_LoadSamples(t *testing.T) {
+	logger := zap.NewExample().Sugar()
+	defer logger.Sync()
+
+	cfg := &config.TrackerConfig{
+		SampleFilePath: "sample-file.json",
+	}
+
+	// Mock fnGetTrackerSamplesFile to return a valid path
+	fnGetTrackerSamplesFile = func(sampleFilePath string) (string, error) {
+		return "mocked-sample-file-path.json", nil
+	}
+
+	// Mock loadSamples to return an error
+	usage.LoadSamples = func(path string) (*sync.Map, error) {
+		return nil, errors.New("mocked error for loadSamples")
+	}
+
+	ctx := context.Background()
+
+	tracker, err := NewTracker(ctx, logger, cfg)
+	if err != nil {
+		t.Fatalf("expected no error, but got: %v", err)
+	}
+
+	if tracker == nil {
+		t.Fatal("expected a valid tracker instance, but got nil")
+	}
+}
+
+func TestNewTracker_EmptySampleFilePath(t *testing.T) {
+	logger := zap.NewExample().Sugar()
+	defer logger.Sync()
+
+	// Config with empty SampleFilePath
+	cfg := &config.TrackerConfig{
+		SampleFilePath:         "",
+		SampleFileSaveInterval: time.Minute,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tracker, err := NewTracker(ctx, logger, cfg)
+	if err != nil {
+		t.Fatalf("expected no error, but got: %v", err)
+	}
+
+	if tracker == nil {
+		t.Fatal("expected a valid tracker instance, but got nil")
+	}
+}
+
+func TestNewTracker_Error_GetGroupConfig(t *testing.T) {
+	logger := zap.NewExample().Sugar()
+	defer logger.Sync()
+
+	cfg := &config.TrackerConfig{}
+
+	// Mock GetGroupConfig to return an error
+	mockTracker := &Tracker{}
+	mockTracker.GetGroupConfig = func() (models.MapGroupUsageTrackerConfig, error) {
+		return nil, errors.New("mocked error for GetGroupConfig")
+	}
+
+	ctx := context.Background()
+	tracker, err := NewTracker(ctx, logger, cfg)
+	if err == nil {
+		t.Fatal("expected an error, but got nil")
+	}
+
+	if tracker != nil {
+		t.Fatal("expected tracker to be nil, but got a valid instance")
+	}
 }

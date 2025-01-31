@@ -28,10 +28,10 @@ type TemplateData struct {
 type UsageTracker interface {
 	GetSampleSummary() map[string]*models.GroupSummary
 	CalculateWindow(now time.Time) (time.Time, time.Time)
-	DeletePause()
-	SetPause(d time.Duration)
-	GetPauseEndTime() time.Time
-	ResetSamples(deviceID string)
+	DeletePause(id string) error
+	SetPause(id string, d time.Duration) error
+	GetPauseEndTime(id string) (time.Time, error)
+	ResetSamples(id string)
 }
 
 type Monitor interface {

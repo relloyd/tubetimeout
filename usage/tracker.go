@@ -15,10 +15,12 @@ import (
 	"relloyd/tubetimeout/models"
 )
 
-type saveSamplesFunc func(*zap.SugaredLogger, string, *sync.Map) error
+// type saveSamplesFunc func(*zap.SugaredLogger, string, *sync.Map) error
 
 var (
-	fnSaveSamples                       = saveSamplesFunc(saveSamples)
+	fnSaveSamples                       = saveSamples
+	fnGetGroupConfig                    = GetGroupConfig
+	fnSetGroupConfig                    = SetGroupConfig
 	fnGetTrackerSamplesFile             = config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc
 	defaultGroupTrackerConfigFilePath   = "usage-tracker-config.yaml"
 	groupTrackerConfigFileUpdated       = false
@@ -50,7 +52,7 @@ func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.Trac
 
 	// Load groups config from file.
 	var err error
-	t.cfgGroups, err = t.GetGroupConfig()
+	t.cfgGroups, err = fnGetGroupConfig(t)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +78,7 @@ func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *config.Trac
 	return t, nil
 }
 
-func (t *Tracker) GetGroupConfig() (models.MapGroupUsageTrackerConfig, error) {
+func GetGroupConfig(t *Tracker) (models.MapGroupUsageTrackerConfig, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -111,7 +113,7 @@ func (t *Tracker) GetGroupConfig() (models.MapGroupUsageTrackerConfig, error) {
 	return cfg, nil
 }
 
-func (t *Tracker) SetGroupConfig(m models.MapGroupUsageTrackerConfig) error {
+func SetGroupConfig(t *Tracker, m models.MapGroupUsageTrackerConfig) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -211,6 +213,8 @@ func saveSamples(logger *zap.SugaredLogger, path string, devices *sync.Map) erro
 
 	devices.Range(func(k, v interface{}) bool {
 		data := v.(*deviceData)
+		data.mu.Lock()
+		defer data.mu.Unlock()
 		samples[k.(string)] = deviceDataDTO{
 			Config:          data.config,
 			Samples:         data.samples,
@@ -266,7 +270,7 @@ func (t *Tracker) AddSample(id string) {
 	// Load the config for the group/id or use defaults.
 	cfg, ok := t.cfgGroups[models.Group(id)]
 	if !ok {
-		t.logger.Errorf("unable to load config for group %v", id)
+		t.logger.Errorf("unable to load config for group %v, using defaults", id)
 		cfg = models.UsageTrackerConfig{
 			Granularity:  t.cfgTrackerDefaults.Granularity,
 			Retention:    t.cfgTrackerDefaults.Retention,
