@@ -125,6 +125,10 @@ func newDeviceData(now time.Time, cfg *models.TrackerConfig) *deviceData {
 		cfg.Threshold = 1 * time.Minute
 	}
 
+	if cfg.Granularity == 0 {
+		cfg.Granularity = 1 * time.Minute
+	}
+
 	cfg.SampleSize = getSampleSize(cfg)
 
 	dd := &deviceData{
