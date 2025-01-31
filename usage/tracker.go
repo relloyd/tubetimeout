@@ -125,6 +125,8 @@ func newDeviceData(now time.Time, cfg *models.TrackerConfig) *deviceData {
 		cfg.Threshold = 1 * time.Minute
 	}
 
+	cfg.SampleSize = getSampleSize(cfg)
+
 	dd := &deviceData{
 		config:  cfg,
 		mu:      &sync.Mutex{},
@@ -161,6 +163,7 @@ func (t *Tracker) AddSample(id string) {
 			Threshold:   t.cfgTrackerDefaults.Threshold,
 			StartDay:    t.cfgTrackerDefaults.StartDay,
 			StartTime:   t.cfgTrackerDefaults.StartTime,
+			SampleSize:  getSampleSize(t.cfgTrackerDefaults),
 			Mode:        models.ModeMonitor,
 			ModeEndTime: time.Time{},
 		}

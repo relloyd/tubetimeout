@@ -29,6 +29,6 @@ type ManagerI interface {
 }
 
 type TrackerI interface {
-	AddSample(id string, packetLen int, direction Direction)
-	HasExceededThreshold(deviceID string) bool
+	AddSample(id string)
+	HasExceededThreshold(id string) bool
 }
