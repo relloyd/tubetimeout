@@ -35,7 +35,7 @@ func TestNewTracker(t *testing.T) {
 	assert.NoError(t, err, "Failed to save samples")
 
 	// Case 1: Create a tracker with a 1-hour retention, 10-minute threshold, and 1-minute granularity.
-	cfg := &config.TrackerConfig{
+	cfg := &models.TrackerConfig{
 		Retention:              1 * time.Hour,
 		Threshold:              0 * time.Minute, // expect tracker to use at least 1 min.
 		Granularity:            1 * time.Minute,
@@ -43,17 +43,17 @@ func TestNewTracker(t *testing.T) {
 		SampleFileSaveInterval: 50 * time.Millisecond,
 	}
 
-	fnGetGroupConfig = func(t *Tracker) (models.MapGroupUsageTrackerConfig, error) {
-		return models.MapGroupUsageTrackerConfig{
+	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+		return models.MapGroupTrackerConfig{
 			"GroupA": {
-				Granularity:  1 * time.Minute,
-				Retention:    30 * time.Minute,
-				Threshold:    5 * time.Minute,
-				StartDay:     0,
-				StartTime:    0,
-				SampleSize:   1,
-				PauseEndTime: time.Time{},
-				Mode:         models.ModeAllow,
+				Granularity: 1 * time.Minute,
+				Retention:   30 * time.Minute,
+				Threshold:   5 * time.Minute,
+				StartDay:    0,
+				StartTime:   0,
+				SampleSize:  1,
+				ModeEndTime: time.Time{},
+				Mode:        models.ModeAllow,
 			},
 		}, nil
 	}
@@ -107,15 +107,15 @@ func TestHasExceededThreshold(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup: Create a tracker with a 1-hour retention, 10-minute threshold, and 1-minute granularity.
-	cfg := models.UsageTrackerConfig{
-		Granularity:  1 * time.Minute,
-		Retention:    1 * time.Hour,
-		Threshold:    10 * time.Minute,
-		StartDay:     0,
-		StartTime:    0,
-		SampleSize:   0,
-		PauseEndTime: time.Time{},
-		Mode:         "",
+	cfg := &models.TrackerConfig{
+		Granularity: 1 * time.Minute,
+		Retention:   1 * time.Hour,
+		Threshold:   10 * time.Minute,
+		StartDay:    0,
+		StartTime:   0,
+		SampleSize:  0,
+		ModeEndTime: time.Time{},
+		Mode:        models.ModeMonitor,
 	}
 
 	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
@@ -157,18 +157,18 @@ func TestHasExceededThreshold(t *testing.T) {
 
 	// Case 4: Simulate backward time adjustment.
 	// Step 4a: Mark all slots as seen.
-	for i := 0; i < tracker.sampleSize; i++ {
+	for i, _ := range data.samples {
 		data.samples[i] = true
 	}
 	// Step 4b: Move `start` time backward by 2 hours.
 	// This simulates an old start time being used.
-	data.start = startTime.Add(-2 * time.Hour)
+	data.windowStartTime = startTime.Add(-2 * time.Hour)
 	// Step 4c: Test that stale samples are ignored and the buffer is reset.
 	if tracker.HasExceededThreshold(deviceID) {
 		t.Errorf("HasExceededThreshold incorrectly included stale samples or did not reset after backward time adjustment")
 	}
 	// Step 4d: Reset the device data with valid samples and verify behavior.
-	data.start = startTime
+	data.windowStartTime = startTime
 	for i := range data.samples {
 		data.samples[i] = false
 	}
@@ -184,7 +184,7 @@ func TestAddSample(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup: Create a tracker with 1-hour retention and 1-minute granularity.
-	cfg := &config.TrackerConfig{
+	cfg := &models.TrackerConfig{
 		Retention:   1 * time.Hour,
 		Granularity: 1 * time.Minute,
 		Threshold:   10 * time.Minute,
@@ -216,23 +216,23 @@ func TestAddSample(t *testing.T) {
 	}
 
 	dd := data.(*deviceData)
-	index := tracker.getIndex(now, dd.start)
+	index := dd.getIndex(now, dd.windowStartTime)
 	if !dd.samples[index] {
 		t.Errorf("AddSample failed to mark the sample at index %d", index)
 	}
 
 	// Case 2: Add a sample at a later time within the same hour.
 	now = now.Add(5 * cfg.Granularity) // Advance time by 5 minutes.
-	tracker.AddSample(deviceID, 1, models.Ingress)
+	tracker.AddSample(deviceID)
 
-	index = tracker.getIndex(now, dd.start)
+	index = dd.getIndex(now, dd.windowStartTime)
 	if !dd.samples[index] {
 		t.Errorf("AddSample failed to mark the sample at index %d for time %v", index, now)
 	}
 
 	// Case 3: Add a sample after the retention period has passed.
-	now = now.Add(cfg.Retention)                   // Advance time by 1 hour.
-	tracker.AddSample(deviceID, 1, models.Ingress) // This should reset the whole buffer and record a new one.
+	now = now.Add(cfg.Retention) // Advance time by 1 hour.
+	tracker.AddSample(deviceID)  // This should reset the whole buffer and record a new one.
 	// Case 3a: Verify that the device data was reinitialized.
 	data, ok = tracker.devices.Load(deviceID)
 	if !ok {
@@ -240,7 +240,7 @@ func TestAddSample(t *testing.T) {
 	}
 	// Case 3b: Verify that the sample was recorded.
 	dd = data.(*deviceData)
-	index = tracker.getIndex(now, dd.start)
+	index = dd.getIndex(now, dd.windowStartTime)
 	if !dd.samples[index] {
 		t.Errorf("AddSample failed to mark the sample at index %d after retention period", index)
 	}
@@ -248,8 +248,8 @@ func TestAddSample(t *testing.T) {
 	// Case 4: Add multiple samples in rapid succession.
 	now = now.Add(2 * cfg.Granularity) // Advance time by 2 minutes.
 	for i := 0; i < 3; i++ {
-		tracker.AddSample(deviceID, 1, models.Ingress)
-		index = tracker.getIndex(now, dd.start)
+		tracker.AddSample(deviceID)
+		index = dd.getIndex(now, dd.windowStartTime)
 		if !dd.samples[index] {
 			t.Errorf("AddSample failed to mark the sample at index %d on iteration %d", index, i)
 		}
@@ -258,7 +258,7 @@ func TestAddSample(t *testing.T) {
 
 	// Case 5: Add a sample with a large time jump forward.
 	now = now.Add(2 * cfg.Retention) // Advance time by 2 hours.
-	tracker.AddSample(deviceID, 1, models.Ingress)
+	tracker.AddSample(deviceID)
 	// Case 5a: Verify that the device data was reinitialized.
 	data, ok = tracker.devices.Load(deviceID)
 	if !ok {
@@ -266,24 +266,22 @@ func TestAddSample(t *testing.T) {
 	}
 	// Case 5b: Verify that the sample was recorded.
 	dd = data.(*deviceData)
-	index = tracker.getIndex(now, dd.start)
+	index = dd.getIndex(now, dd.windowStartTime)
 	if !dd.samples[index] {
 		t.Errorf("AddSample failed to mark the sample at index %d after large time jump", index)
 	}
 }
 
 func TestGetIndex(t *testing.T) {
-	ctx := context.Background()
-
 	// Setup: Create a tracker with a 1-hour retention and 1-minute granularity.
-	cfg := &config.TrackerConfig{
+	cfg := &models.TrackerConfig{
 		Retention:   1 * time.Hour,
 		Granularity: 1 * time.Minute,
 	}
-	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
-	assert.NoError(t, err, "NewTracker failed")
 
 	startTime := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC)
+
+	data := newDeviceData(startTime, cfg)
 
 	tests := []struct {
 		now      time.Time
@@ -297,7 +295,7 @@ func TestGetIndex(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		index := tracker.getIndex(test.now, startTime)
+		index := data.getIndex(test.now, startTime)
 		if index != test.expected {
 			t.Errorf("getIndex(%v, %v) = %d; want %d", test.now, startTime, index, test.expected)
 		}
@@ -305,64 +303,59 @@ func TestGetIndex(t *testing.T) {
 }
 
 func TestSyncWindow(t *testing.T) {
-	ctx := context.Background()
+	logger := config.MustGetLogger()
 
 	// Setup - Create a tracker with a 1-hour retention and 1-minute granularity.
-	cfg := &config.TrackerConfig{
+	cfg := &models.TrackerConfig{
 		Granularity: 1 * time.Minute,
 		Retention:   1 * time.Hour,
 	}
 
-	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg) // No threshold needed for this test.
-	assert.NoError(t, err, "NewTracker failed")
+	data := newDeviceData(time.Now(), cfg) // No threshold needed for this test.
 
 	// Simulate a device data structure.
 	// startTime := time.Now().Truncate(granularity)
-	startTime, _ := tracker.CalculateWindow(time.Now())
-	deviceData := &deviceData{
-		samples: make([]bool, tracker.sampleSize),
-		start:   startTime,
-	}
+	startTime, _ := data.calculateWindow(time.Now())
 
 	// Mark a few initial samples as true.
-	deviceData.samples[0] = true
-	deviceData.samples[1] = true
-	deviceData.samples[2] = true
+	data.samples[0] = true
+	data.samples[1] = true
+	data.samples[2] = true
 
 	// Case 1: No elapsed time.
-	tracker.syncWindow(deviceData, startTime)
-	if !deviceData.samples[0] || !deviceData.samples[1] || !deviceData.samples[2] {
+	data.syncWindow(logger, startTime)
+	if !data.samples[0] || !data.samples[1] || !data.samples[2] {
 		t.Error("syncWindow cleared samples when no time had elapsed")
 	}
 
 	// Case 2: Elapsed time exceeds retention (expect the buffer to be reset).
 	exceedTime := startTime.Add(2 * cfg.Retention)
-	tracker.syncWindow(deviceData, exceedTime)
-	expectedNewTime, _ := tracker.CalculateWindow(exceedTime)
-	for i, v := range deviceData.samples {
+	data.syncWindow(logger, exceedTime)
+	expectedNewTime, _ := data.calculateWindow(exceedTime)
+	for i, v := range data.samples {
 		if v {
 			t.Errorf("syncWindow failed to reset the buffer at index %d", i)
 		}
 	}
-	if !deviceData.start.Equal(exceedTime.Truncate(cfg.Granularity)) {
-		t.Errorf("syncWindow did not update the start time correctly. Got %v, want %v", deviceData.start, expectedNewTime)
+	if !data.windowStartTime.Equal(exceedTime.Truncate(cfg.Granularity)) {
+		t.Errorf("syncWindow did not update the start time correctly. Got %v, want %v", data.windowStartTime, expectedNewTime)
 	}
 }
 
 func TestCalculateWindow(t *testing.T) {
 	tests := []struct {
 		name         string
-		tracker      Tracker
+		config       *models.TrackerConfig
 		now          time.Time
 		expectedLast time.Time
 		expectedNext time.Time
 	}{
 		{
 			name: "Weekly Retention - Current Week",
-			tracker: Tracker{
-				retention:       7 * 24 * time.Hour,
-				windowStartDay:  int(time.Monday),
-				windowStartTime: 10 * time.Hour,
+			config: &models.TrackerConfig{
+				Retention: 7 * 24 * time.Hour,
+				StartDay:  int(time.Monday),
+				StartTime: 10 * time.Hour,
 			},
 			now:          time.Date(2024, 12, 2, 15, 0, 0, 0, time.UTC), // Monday
 			expectedLast: time.Date(2024, 12, 2, 10, 0, 0, 0, time.UTC),
@@ -370,10 +363,10 @@ func TestCalculateWindow(t *testing.T) {
 		},
 		{
 			name: "Daily Retention - Current Day",
-			tracker: Tracker{
-				retention:       24 * time.Hour,
-				windowStartDay:  int(time.Sunday), // Ignored for daily retention
-				windowStartTime: 6 * time.Hour,
+			config: &models.TrackerConfig{
+				Retention: 24 * time.Hour,
+				StartDay:  int(time.Sunday), // Ignored for daily retention
+				StartTime: 6 * time.Hour,
 			},
 			now:          time.Date(2024, 12, 2, 15, 0, 0, 0, time.UTC), // Monday
 			expectedLast: time.Date(2024, 12, 2, 6, 0, 0, 0, time.UTC),
@@ -381,10 +374,10 @@ func TestCalculateWindow(t *testing.T) {
 		},
 		{
 			name: "Sub-Daily Retention",
-			tracker: Tracker{
-				retention:       12 * time.Hour,
-				windowStartDay:  0, // Ignored for sub-daily retention
-				windowStartTime: 3 * time.Hour,
+			config: &models.TrackerConfig{
+				Retention: 12 * time.Hour,
+				StartDay:  0, // Ignored for sub-daily retention
+				StartTime: 3 * time.Hour,
 			},
 			now:          time.Date(2024, 12, 2, 15, 0, 0, 0, time.UTC), // Monday
 			expectedLast: time.Date(2024, 12, 2, 15, 0, 0, 0, time.UTC),
@@ -392,10 +385,10 @@ func TestCalculateWindow(t *testing.T) {
 		},
 		{
 			name: "Sub-Daily Retention 2",
-			tracker: Tracker{
-				retention:       10 * time.Minute,
-				windowStartDay:  0, // Ignored for sub-daily retention
-				windowStartTime: 3 * time.Minute,
+			config: &models.TrackerConfig{
+				Retention: 10 * time.Minute,
+				StartDay:  0, // Ignored for sub-daily retention
+				StartTime: 3 * time.Minute,
 			},
 			now:          time.Date(2024, 12, 2, 13, 50, 0, 0, time.UTC), // Monday
 			expectedLast: time.Date(2024, 12, 2, 13, 43, 0, 0, time.UTC),
@@ -405,7 +398,8 @@ func TestCalculateWindow(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lastWindowStart, nextWindowStart := tt.tracker.CalculateWindow(tt.now)
+			data := newDeviceData(tt.now, tt.config)
+			lastWindowStart, nextWindowStart := data.calculateWindow(tt.now)
 
 			if !lastWindowStart.Equal(tt.expectedLast) {
 				t.Errorf("%v: lastWindowStart: got %v, want %v", tt.name, lastWindowStart, tt.expectedLast)
@@ -425,14 +419,14 @@ func saveSomeSamples(t *testing.T) (*sync.Map, *os.File, error) {
 	// Create sample data.
 	devices := &sync.Map{}
 	devices.Store("device1", &deviceData{
-		samples: []bool{true, false, true, false},
-		start:   time.Now().UTC(),
-		mu:      &sync.Mutex{},
+		samples:         []bool{true, false, true, false},
+		windowStartTime: time.Now().UTC(),
+		mu:              &sync.Mutex{},
 	})
 	devices.Store("device2", &deviceData{
-		samples: []bool{false, true, false, true},
-		start:   time.Now().Add(-time.Hour).UTC(),
-		mu:      &sync.Mutex{},
+		samples:         []bool{false, true, false, true},
+		windowStartTime: time.Now().Add(-time.Hour).UTC(),
+		mu:              &sync.Mutex{},
 	})
 
 	err = saveSamples(config.MustGetLogger(), tmpFile.Name(), devices)
@@ -460,11 +454,11 @@ func TestSaveAndLoadSamples(t *testing.T) {
 
 	// Validate device1
 	assert.Equal(t, []bool{true, false, true, false}, ld1.samples, "Device1 samples mismatch")
-	assert.WithinDuration(t, ld1.start, time.Now(), time.Minute, "Device1 start time mismatch")
+	assert.WithinDuration(t, ld1.windowStartTime, time.Now(), time.Minute, "Device1 start time mismatch")
 
 	// Validate device2
 	assert.Equal(t, []bool{false, true, false, true}, ld2.samples, "Device2 samples mismatch")
-	assert.WithinDuration(t, ld2.start, time.Now().Add(-time.Hour), time.Minute, "Device2 start time mismatch")
+	assert.WithinDuration(t, ld2.windowStartTime, time.Now().Add(-time.Hour), time.Minute, "Device2 start time mismatch")
 }
 
 // TestLoadNonExistentFile tests loading from a non-existent file.
@@ -495,7 +489,7 @@ func TestCorruptFile(t *testing.T) {
 // TestResetSamples tests resetting samples for a device.
 func TestResetSamples(t *testing.T) {
 	// Setup: Create a tracker with 1-hour retention and 1-minute granularity.
-	cfg := &config.TrackerConfig{
+	cfg := &models.TrackerConfig{
 		Retention:   1 * time.Hour,
 		Granularity: 1 * time.Minute,
 		Threshold:   10 * time.Minute,
@@ -506,7 +500,7 @@ func TestResetSamples(t *testing.T) {
 	tracker, err := NewTracker(context.Background(), config.MustGetLogger(), cfg)
 	assert.NoError(t, err, "NewTracker failed")
 
-	tracker.AddSample(testDevice, 1, models.Ingress)
+	tracker.AddSample(testDevice)
 	_, ok := tracker.devices.Load(testDevice)
 	assert.True(t, ok, "Device should exist in tracker")
 
@@ -517,74 +511,11 @@ func TestResetSamples(t *testing.T) {
 
 // FROM JETBRAINS AI
 
-func TestNewTracker_Success(t *testing.T) {
-	logger := zap.NewExample().Sugar()
-	defer logger.Sync()
-
-	cfg := &config.TrackerConfig{
-		SampleFilePath:         "sample-file.json",
-		SampleFileSaveInterval: time.Minute,
-	}
-
-	// Mock fnGetTrackerSamplesFile to return a valid path
-	fnGetTrackerSamplesFile = func(sampleFilePath string) (string, error) {
-		return "mocked-sample-file-path.json", nil
-	}
-
-	// Mock loadSamples to avoid reading from the file
-	usage.LoadSamples = func(path string) (*sync.Map, error) {
-		m := &sync.Map{}
-		return m, nil
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	tracker, err := NewTracker(ctx, logger, cfg)
-	if err != nil {
-		t.Fatalf("expected no error, but got: %v", err)
-	}
-
-	if tracker == nil {
-		t.Fatal("expected a valid tracker instance, but got nil")
-	}
-}
-
-func TestNewTracker_Error_NilLogger(t *testing.T) {
-	ctx := context.Background()
-	cfg := &config.TrackerConfig{}
-
-	tracker, err := NewTracker(ctx, nil, cfg)
-	if err == nil {
-		t.Fatal("expected an error, but got nil")
-	}
-
-	if tracker != nil {
-		t.Fatal("expected tracker to be nil, but got a valid instance")
-	}
-}
-
-func TestNewTracker_Error_NilConfig(t *testing.T) {
-	logger := zap.NewExample().Sugar()
-	defer logger.Sync()
-
-	ctx := context.Background()
-
-	tracker, err := NewTracker(ctx, logger, nil)
-	if err == nil {
-		t.Fatal("expected an error, but got nil")
-	}
-
-	if tracker != nil {
-		t.Fatal("expected tracker to be nil, but got a valid instance")
-	}
-}
-
 func TestNewTracker_Error_SampleFilePathInvalid(t *testing.T) {
 	logger := zap.NewExample().Sugar()
 	defer logger.Sync()
 
-	cfg := &config.TrackerConfig{
+	cfg := &models.TrackerConfig{
 		SampleFilePath: "nonexistent-path.json",
 	}
 
@@ -609,7 +540,7 @@ func TestNewTracker_Error_LoadSamples(t *testing.T) {
 	logger := zap.NewExample().Sugar()
 	defer logger.Sync()
 
-	cfg := &config.TrackerConfig{
+	cfg := &models.TrackerConfig{
 		SampleFilePath: "sample-file.json",
 	}
 
@@ -619,7 +550,7 @@ func TestNewTracker_Error_LoadSamples(t *testing.T) {
 	}
 
 	// Mock loadSamples to return an error
-	usage.LoadSamples = func(path string) (*sync.Map, error) {
+	fnLoadSamples = func(path string) (*sync.Map, error) {
 		return nil, errors.New("mocked error for loadSamples")
 	}
 
@@ -640,7 +571,7 @@ func TestNewTracker_EmptySampleFilePath(t *testing.T) {
 	defer logger.Sync()
 
 	// Config with empty SampleFilePath
-	cfg := &config.TrackerConfig{
+	cfg := &models.TrackerConfig{
 		SampleFilePath:         "",
 		SampleFileSaveInterval: time.Minute,
 	}
@@ -662,12 +593,11 @@ func TestNewTracker_Error_GetGroupConfig(t *testing.T) {
 	logger := zap.NewExample().Sugar()
 	defer logger.Sync()
 
-	cfg := &config.TrackerConfig{}
+	cfg := &models.TrackerConfig{}
 
-	// Mock GetGroupConfig to return an error
-	mockTracker := &Tracker{}
-	mockTracker.GetGroupConfig = func() (models.MapGroupUsageTrackerConfig, error) {
-		return nil, errors.New("mocked error for GetGroupConfig")
+	// Mock GetGroupTrackerConfig to return an error
+	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+		return nil, errors.New("mocked error for GetGroupTrackerConfig")
 	}
 
 	ctx := context.Background()

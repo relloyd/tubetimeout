@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
+	"relloyd/tubetimeout/models"
 )
 
 var (
@@ -26,12 +27,12 @@ func init() {
 }
 
 type AppConfig struct {
-	LogLevel      string        `envconfig:"LOG_LEVEL" default:"info"`
-	DebugConfig   DebugConfig   `envconfig:"DEBUG"`
-	TrackerConfig TrackerConfig `envconfig:"TRACKER"`
-	FilterConfig  FilterConfig  `envconfig:"FILTER"`
-	WebConfig     WebConfig     `envconfig:"WEB"`
-	MonitorConfig MonitorConfig `envconfig:"MONITOR"`
+	LogLevel      string               `envconfig:"LOG_LEVEL" default:"info"`
+	DebugConfig   DebugConfig          `envconfig:"DEBUG"`
+	FilterConfig  FilterConfig         `envconfig:"FILTER"`
+	WebConfig     WebConfig            `envconfig:"WEB"`
+	MonitorConfig MonitorConfig        `envconfig:"MONITOR"`
+	TrackerConfig models.TrackerConfig `envconfig:"TRACKER"`
 }
 
 type DebugConfig struct {
@@ -39,23 +40,6 @@ type DebugConfig struct {
 	DebugEnabled bool `envconfig:"ENABLED" default:"false"`
 	// DebugTime is the delay before starting main in which time you should connect a dlv debugging session.
 	DebugTime time.Duration `envconfig:"TIME_SECONDS" default:"30s"`
-}
-
-type TrackerConfig struct {
-	// Granularity is the sampling resolution.
-	Granularity time.Duration `envconfig:"GRANULARITY" default:"1m"`
-	// Retention is the period for samples to be kept and evaluated.
-	Retention time.Duration `envconfig:"RETENTION" default:"168h"` // 168h == 1 week
-	// Threshold is duration for exceeding conditions.
-	Threshold time.Duration `envconfig:"THRESHOLD" default:"180m"`
-	// StartDay is the day of the week to start the window.
-	StartDay int `envconfig:"START_DAY" default:"5"` // Friday
-	// StartTime is the duration past midnight to start the window.
-	StartTime time.Duration `envconfig:"START_TIME" default:"12h"` // 12 PM
-	// SampleFilePath is the path to the file to save/read the device ID samples from.
-	SampleFilePath string `envconfig:"FILE_PATH" default:"samples.json"`
-	// SampleFileSaveInterval
-	SampleFileSaveInterval time.Duration `envconfig:"SAVE_INTERVAL" default:"1m"`
 }
 
 type FilterConfig struct {
