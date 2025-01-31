@@ -20,6 +20,7 @@ var (
 	fnGetGroupTrackerConfig             = GetGroupTrackerConfig
 	fnSetGroupTrackerConfig             = SetGroupTrackerConfig
 	fnGetTrackerSamplesFile             = config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc
+	fnSaveSamplesPeriodically           = saveSamplesPeriodically
 	defaultGroupTrackerConfigFilePath   = "usage-tracker-config.yaml"
 	groupTrackerConfigFileUpdated       = false
 	ErrorGroupTrackerConfigFileNotFound = fmt.Errorf("usage-tracker config file not found")
@@ -70,7 +71,7 @@ func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *models.Trac
 			t.devices = s
 		}
 		// Save samples to the file on context cancellation.
-		go saveSamplesPeriodically(ctx, t.logger, t.devices, samplesFile, cfg.SampleFileSaveInterval)
+		go fnSaveSamplesPeriodically(ctx, t.logger, t.devices, samplesFile, cfg.SampleFileSaveInterval)
 	}
 
 	return t, nil
@@ -116,9 +117,8 @@ func newDeviceData(now time.Time, cfg *models.TrackerConfig) *deviceData {
 		cfg.Retention = 7 * 24 * time.Hour
 	}
 
-	if cfg.Retention < 24*time.Hour || cfg.StartTime > cfg.Retention {
+	if cfg.Retention < 24*time.Hour {
 		cfg.StartDay = 0
-		cfg.StartTime = 0
 	}
 
 	if cfg.Threshold == 0 {
@@ -134,7 +134,7 @@ func newDeviceData(now time.Time, cfg *models.TrackerConfig) *deviceData {
 	dd := &deviceData{
 		config:  cfg,
 		mu:      &sync.Mutex{},
-		samples: make([]bool, getSampleSize(cfg)),
+		samples: make([]bool, cfg.SampleSize),
 		// windowStartTime is set below
 	}
 

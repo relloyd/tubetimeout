@@ -180,7 +180,38 @@ func TestHasExceededThreshold(t *testing.T) {
 	}
 }
 
-func TestAddSample(t *testing.T) {
+func TestAddSample_GroupDefaults(t *testing.T) {
+	ctx := context.Background()
+	logger := config.MustGetLogger()
+	cfg := &models.TrackerConfig{
+		Retention:    1 * time.Hour,
+		Granularity:  1 * time.Minute,
+		Threshold:    10 * time.Minute,
+	}
+	mockDeviceID := "test-device"
+	tracker, err := NewTracker(ctx, logger, cfg)
+	assert.NoError(t, err, "NewTracker failed")
+
+	tracker.AddSample(mockDeviceID)
+
+	d, ok := tracker.devices.Load(mockDeviceID)
+	assert.True(t, ok, "AddSample did not load samples from file")
+
+	dd := d.(*deviceData)
+	assert.Equal(t, getSampleSize(cfg), len(dd.samples), "AddSample did not create any samples")
+
+	dd.config.Mode = models.ModeAllow
+	dd.config.ModeEndTime = time.Now().Add(-1 * time.Hour)
+	tracker.AddSample(mockDeviceID)
+	assert.Equal(t, models.ModeMonitor, dd.config.Mode, "AddSample did not set the mode correctly")
+
+	dd.config.Mode = models.ModeBlock
+	dd.config.ModeEndTime = time.Now().Add(-1 * time.Hour)
+	tracker.AddSample(mockDeviceID)
+	assert.Equal(t, models.ModeMonitor, dd.config.Mode, "AddSample did not set the mode correctly")
+}
+
+func TestAddSample_SamplesAreSaved(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup: Create a tracker with 1-hour retention and 1-minute granularity.
@@ -256,7 +287,7 @@ func TestAddSample(t *testing.T) {
 		now = now.Add(cfg.Granularity) // Advance time by 1 minute for next iteration.
 	}
 
-	// Case 5: Add a sample with a large time jump forward.
+	// Case 5a: Add a sample with a large time jump forward.
 	now = now.Add(2 * cfg.Retention) // Advance time by 2 hours.
 	tracker.AddSample(deviceID)
 	// Case 5a: Verify that the device data was reinitialized.
@@ -511,64 +542,108 @@ func TestResetSamples(t *testing.T) {
 
 // FROM JETBRAINS AI
 
-func TestNewTracker_Error_SampleFilePathInvalid(t *testing.T) {
-	logger := zap.NewExample().Sugar()
-	defer logger.Sync()
+func TestNewTracker_GetGroupConfig(t *testing.T) {
+	ctx := context.Background()
+	logger := config.MustGetLogger()
+
+	cfg := &config.AppCfg.TrackerConfig
+	if cfg.SampleFileSaveInterval == 0 {
+		t.Fatal("SampleFileSaveInterval must be set by default to a positive value")
+	}
+
+	d := &sync.Map{}
+	fnLoadSamples = func(path string) (*sync.Map, error) {
+		return d, nil
+	}
+
+	saveSamplesPeriodicallyWasCalled := false
+	done := make(chan struct{})
+	fnSaveSamplesPeriodically = func(ctx context.Context, logger *zap.SugaredLogger, devicesToSave *sync.Map, filePath string, interval time.Duration) {
+		saveSamplesPeriodicallyWasCalled = true
+		done <- struct{}{}
+	}
+
+	// Mock GetGroupTrackerConfig so it returns an error.
+	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+		return nil, errors.New("mocked error for GetGroupTrackerConfig")
+	}
+	tracker, err := NewTracker(ctx, logger, cfg)
+	assert.Error(t, err, "NewTracker should fail")
+	assert.Nil(t, tracker, "Tracker should be nil")
+
+	// Mock the fnGetGroupTrackerConfig so it does not error.
+	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+		return models.MapGroupTrackerConfig{}, nil
+	}
+	tracker, err = NewTracker(ctx, logger, cfg)
+	assert.NoError(t, err, "NewTracker failed")
+	assert.NotNil(t, tracker, "Tracker should not be nil")
+	assert.False(t, saveSamplesPeriodicallyWasCalled, "saveSamples should not be called when SampleFilePath is empty")
+
+	// Test that samples are loaded and periodically.
+	cfg.SampleFilePath = "dummy-file.json"
+	tracker, err = NewTracker(ctx, logger, cfg)
+	assert.NoError(t, err, "NewTracker failed")
+	assert.NotNil(t, tracker, "Tracker should not be nil")
+	<-done
+	assert.True(t, saveSamplesPeriodicallyWasCalled, "saveSamples should be called when SampleFilePath is not empty")
+	assert.Equal(t, d, tracker.devices)
+}
+
+
+func TestNewTracker_SampleFilePathInvalid(t *testing.T) {
+	ctx := context.Background()
+	logger := config.MustGetLogger()
 
 	cfg := &models.TrackerConfig{
 		SampleFilePath: "nonexistent-path.json",
 	}
 
-	// Mock fnGetTrackerSamplesFile to return an error
+	// Mock the fnGetGroupTrackerConfig to be a noop.
+	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+		return nil, nil
+	}
+
+	// Mock fnGetTrackerSamplesFile to return an error.
 	fnGetTrackerSamplesFile = func(sampleFilePath string) (string, error) {
 		return "", errors.New("mocked error for missing sample file path")
 	}
 
-	ctx := context.Background()
-
 	tracker, err := NewTracker(ctx, logger, cfg)
-	if err == nil {
-		t.Fatal("expected an error, but got nil")
-	}
-
-	if tracker != nil {
-		t.Fatal("expected tracker to be nil, but got a valid instance")
-	}
+	assert.Error(t, err, "expected error for missing sample file path")
+	assert.Nil(t, tracker, "expected tracker to be nil, but got a valid instance")
 }
 
-func TestNewTracker_Error_LoadSamples(t *testing.T) {
-	logger := zap.NewExample().Sugar()
-	defer logger.Sync()
+func TestNewTracker_LoadSamples(t *testing.T) {
+	ctx := context.Background()
+	logger := config.MustGetLogger()
 
 	cfg := &models.TrackerConfig{
-		SampleFilePath: "sample-file.json",
+		SampleFilePath: "dummy-sample-file.json",
 	}
 
-	// Mock fnGetTrackerSamplesFile to return a valid path
+	// Mock the fnGetGroupTrackerConfig to be a noop.
+	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+		return nil, nil
+	}
+
+	// Mock fnGetTrackerSamplesFile to return a valid path.
 	fnGetTrackerSamplesFile = func(sampleFilePath string) (string, error) {
 		return "mocked-sample-file-path.json", nil
 	}
 
-	// Mock loadSamples to return an error
+	// Mock loadSamples to return an error.
 	fnLoadSamples = func(path string) (*sync.Map, error) {
 		return nil, errors.New("mocked error for loadSamples")
 	}
 
-	ctx := context.Background()
-
 	tracker, err := NewTracker(ctx, logger, cfg)
-	if err != nil {
-		t.Fatalf("expected no error, but got: %v", err)
-	}
-
-	if tracker == nil {
-		t.Fatal("expected a valid tracker instance, but got nil")
-	}
+	assert.NoError(t, err, "expected no error from unable to load samples, but got: %v", err)
+	assert.NotNil(t, tracker, "expected tracker to be non-nil, but got nil")
 }
 
-func TestNewTracker_EmptySampleFilePath(t *testing.T) {
-	logger := zap.NewExample().Sugar()
-	defer logger.Sync()
+func TestNewTracker_HandlesEmptySampleFilePath(t *testing.T) {
+	logger := config.MustGetLogger()
 
 	// Config with empty SampleFilePath
 	cfg := &models.TrackerConfig{
@@ -576,37 +651,16 @@ func TestNewTracker_EmptySampleFilePath(t *testing.T) {
 		SampleFileSaveInterval: time.Minute,
 	}
 
+	// Mock the fnGetGroupTrackerConfig to be a noop.
+	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+		return nil, nil
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	tracker, err := NewTracker(ctx, logger, cfg)
-	if err != nil {
-		t.Fatalf("expected no error, but got: %v", err)
-	}
-
-	if tracker == nil {
-		t.Fatal("expected a valid tracker instance, but got nil")
-	}
+	assert.NoError(t, err, "expected no error, but got: %v", err)
+	assert.NotNil(t, tracker, "expected tracker to be non-nil, but got nil")
 }
 
-func TestNewTracker_Error_GetGroupConfig(t *testing.T) {
-	logger := zap.NewExample().Sugar()
-	defer logger.Sync()
-
-	cfg := &models.TrackerConfig{}
-
-	// Mock GetGroupTrackerConfig to return an error
-	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
-		return nil, errors.New("mocked error for GetGroupTrackerConfig")
-	}
-
-	ctx := context.Background()
-	tracker, err := NewTracker(ctx, logger, cfg)
-	if err == nil {
-		t.Fatal("expected an error, but got nil")
-	}
-
-	if tracker != nil {
-		t.Fatal("expected tracker to be nil, but got a valid instance")
-	}
-}
