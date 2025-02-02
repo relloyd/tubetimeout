@@ -26,7 +26,7 @@ func GetGroupTrackerConfig(t *Tracker) (models.MapGroupTrackerConfig, error) {
 	yamlFile, err := os.ReadFile(defaultGroupTrackerConfigFilePath)
 	if err != nil && os.IsNotExist(err) { // if the file needs creating...
 		// Create the file with zero data.
-		err = config.SafeWriteViaTemp(t.logger, defaultGroupTrackerConfigFilePath, "")
+		err = config.SafeWriteViaTemp(defaultGroupTrackerConfigFilePath, "")
 		if err != nil {
 			return nil, fmt.Errorf("failed to create usager tracker config file: %w", err)
 		}
@@ -58,12 +58,21 @@ func SetGroupTrackerConfig(t *Tracker, m models.MapGroupTrackerConfig) error {
 		}
 	}
 
+	for k, v := range m { // filter out bad records: empty key or nil values
+		if k == "" || v == nil {
+			delete(m, k)
+		}
+	}
+	if len(m) == 0 {
+		return fmt.Errorf("group tracker config not set: no valid groups or tracker config was found")
+	}
+
 	b, err := yaml.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("error marshalling YAML: %w", err)
 	}
 	t.cfgGroups = m
-	err = config.SafeWriteViaTemp(t.logger, defaultGroupTrackerConfigFilePath, string(b))
+	err = config.SafeWriteViaTemp(defaultGroupTrackerConfigFilePath, string(b))
 	if err != nil {
 		return fmt.Errorf("failed to write group-macs to file: %w", err)
 	}

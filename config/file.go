@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"go.uber.org/zap"
 )
 
 var (
 	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = getConfigFileFunc(createAppHomeDirAndGetConfigFile)
+	SafeWriteViaTemp                                = safeWriteViaTemp
 	homeDirExists                                   = false
 )
 
@@ -40,7 +39,7 @@ func createAppHomeDirAndGetConfigFile(fileName string) (string, error) {
 	return filePath, nil
 }
 
-func SafeWriteViaTemp(logger *zap.SugaredLogger, filePath string, data string) error {
+func safeWriteViaTemp(filePath string, data string) error {
 	tempPath := filePath + ".tmp"
 
 	// Create a temporary file.
