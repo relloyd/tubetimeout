@@ -15,6 +15,8 @@ var (
 	AppCfg AppConfig
 	// BuildTime is set by the go build command - probably see the Makefile.
 	BuildTime string
+	// BuildVersion is set by the go build command - probably see the Makefile.
+	BuildVersion string
 )
 
 func init() {

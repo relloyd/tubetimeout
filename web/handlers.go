@@ -20,21 +20,10 @@ func (h *Handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Gather data to use in the template.
-	_, nextResetTime := h.usage.CalculateWindow(time.Now())
-	pe := h.usage.GetPauseEndTime()
-	pausedUntil := pe.Format(time.RFC1123) // RFC1123 = "Mon, 02 Jan 2006 15:04:05 MST"
-	if pe.IsZero() {
-		pausedUntil = "-"
-	}
-
 	// Execute the template with config data.
 	td := TemplateData{
-		BuildTime:      config.BuildTime,
-		UsagePeriod:    formatDuration(config.AppCfg.TrackerConfig.Retention),
-		UsageNextReset: nextResetTime,
-		UsageThreshold: formatDuration(config.AppCfg.TrackerConfig.Threshold),
-		PausedUntil:    pausedUntil,
+		BuildTime:    config.BuildTime,
+		BuildVersion: config.BuildVersion,
 	}
 
 	tmpl.Option("missingkey=default") // TODO: fix the error when keys are missing.

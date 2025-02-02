@@ -16,12 +16,7 @@ var embeddedFiles embed.FS
 
 type TemplateData struct {
 	BuildTime      string
-	UsagePeriod    string
-	UsageThreshold string
-	UsageMinutes   int
-	UsageNextReset time.Time
-	UsagePercent   int
-	PausedUntil    string
+	BuildVersion      string
 }
 
 // UsageTracker returns info from the usage tracker.
