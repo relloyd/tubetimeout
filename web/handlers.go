@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
 )
 
 func (h *Handler) rootHandler(w http.ResponseWriter, r *http.Request) {
@@ -31,6 +32,20 @@ func (h *Handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Error rendering template", http.StatusInternalServerError)
 	}
+}
+
+// File server rootHandler for static files
+func (h *Handler) staticHandler(w http.ResponseWriter, r *http.Request) {
+	// Extract the requested file path
+	path := strings.TrimPrefix(r.URL.Path, "/static/")
+	data, err := embeddedFiles.ReadFile("static/" + path)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Serve the content with proper headers
+	http.ServeContent(w, r, path, fileModTime(), strings.NewReader(string(data)))
 }
 
 // groupMACHandler
@@ -95,16 +110,10 @@ func (h *Handler) activityHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) usageHandler(w http.ResponseWriter, r *http.Request) {
-	// TODO: test the methods for usageHandler as we borked them before!
-
-	if r.Method == http.MethodPost {
-		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-		return
-	}
-
+func (h *Handler) groupUsageHandler(w http.ResponseWriter, r *http.Request) {
+	// TODO: test the methods for groupUsageHandler as we borked them before!
 	if r.Method == http.MethodGet {
-		summary := h.usage.GetSampleSummary()                    // map[string]models.GroupSummary, where string is the device ID, which is a group
+		summary := h.usage.GetGroupSummary()                    // map[string]models.GroupSummary, where string is the device ID, which is a group
 		lastActiveTimes := h.monitor.GetTrafficLastActiveTimes() //  map[models.Group]map[models.MAC]time.Time, where the string is the group
 
 		for group, v := range lastActiveTimes {
@@ -123,66 +132,117 @@ func (h *Handler) usageHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
 		return
-	}
-
-	if r.Method == http.MethodDelete {
+	} else if r.Method == http.MethodDelete {
 		deviceID := r.URL.Query().Get("deviceID")
 		if deviceID != "" {
-			h.usage.ResetSamples(deviceID)
+			h.usage.ResetGroup(deviceID)
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(map[string]string{"message": "samples reset for deviceID"})
 		}
 		return
-	}
-}
-
-// File server rootHandler for static files
-func (h *Handler) staticHandler(w http.ResponseWriter, r *http.Request) {
-	// Extract the requested file path
-	path := strings.TrimPrefix(r.URL.Path, "/static/")
-	data, err := embeddedFiles.ReadFile("static/" + path)
-	if err != nil {
-		http.NotFound(w, r)
+	} else {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
-
-	// Serve the content with proper headers
-	http.ServeContent(w, r, path, fileModTime(), strings.NewReader(string(data)))
 }
 
-// pauseHandler is an API endpoint for /pause
-func (h *Handler) pauseHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) groupTrackerConfigHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+
+	} else if r.Method == http.MethodPost {
+		var cfg models.MapGroupTrackerConfig
+		err := json.NewDecoder(r.Body).Decode(&cfg)
+		if err != nil {
+			http.Error(w, "Invalid request payload", http.StatusBadRequest)
+			return
+		}
+
+	} else {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+}
+
+// pauseGroupHandler is an API endpoint for /pause
+func (h *Handler) pauseGroupHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Parse duration parameter
+	// Parse duration parameter.
 	minutes := r.FormValue("minutes")
 	duration, err := strconv.Atoi(minutes)
 	if err != nil || duration <= 0 {
+		h.logger.Errorf("Error pausing group: invalid duration: %v", err)
 		http.Error(w, "Invalid duration", http.StatusBadRequest)
 		return
 	}
 
-	// Add a pause to the usage tracker.
-	h.logger.Infof("Usage tracker paused for %d minutes\n", duration)
-	h.usage.SetPause(time.Duration(duration) * time.Minute)
+	// Parse the group ID.
+	group := r.FormValue("group")
+	if group == "" {
+		h.logger.Errorf("Error pausing group: empty group supplied")
+		http.Error(w, "Invalid group", http.StatusBadRequest)
+		return
+	}
 
+	// Parse the mode.
+	strMode := r.FormValue("mode")
+	intMode, err := strconv.Atoi(strMode)
+	if err != nil || intMode < 0 || intMode > 2 {
+		h.logger.Errorf("Error pausing group: invalid mode: %v", err)
+		http.Error(w, "Invalid mode", http.StatusBadRequest)
+		return
+	}
+	mode := models.UsageTrackerMode(intMode)
+
+	// Logging.
+	if mode == models.ModeAllow {
+		strMode = fmt.Sprintf("paused for %d minutes", duration)
+	} else if mode == models.ModeBlock {
+		strMode = fmt.Sprintf("blocked for %d minutes", duration)
+	} else {
+		strMode = "resumed"
+	}
+
+	logMsg := fmt.Sprintf("Usage tracker for group %v", strMode)
+	h.logger.Infof(logMsg)
+
+	// Set the pause/allow/block.
+	err = h.usage.SetGroupPause(group, time.Duration(duration) * time.Minute, models.UsageTrackerMode(intMode))
+	if err != nil {
+		h.logger.Errorf("Error setting block/allow timer: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(fmt.Sprintf("Paused for %d minutes", duration)))
+	_, _ = w.Write([]byte(logMsg))
 }
 
-// pauseResetHandler is an API endpoint for /reset
-func (h *Handler) pauseResetHandler(w http.ResponseWriter, r *http.Request) {
+// resetGroupHandler is an API endpoint for /reset
+func (h *Handler) resetGroupHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse the group ID.
+	group := r.FormValue("group")
+	if group == "" {
+		h.logger.Errorf("Error resetting group block/allow: no group supplied")
+		http.Error(w, "Invalid group", http.StatusBadRequest)
 		return
 	}
 
 	// Reset the usage tracker pause timer.
 	h.logger.Info("Pause timer reset triggered")
-	h.usage.DeletePause()
+	err := h.usage.DeleteGroupPause(group)
+	if err != nil {
+		h.logger.Errorf("Error resetting group block/allow timer: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("Reset successful"))

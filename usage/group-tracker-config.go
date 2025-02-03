@@ -78,3 +78,12 @@ func SetGroupTrackerConfig(t *Tracker, m models.MapGroupTrackerConfig) error {
 	}
 	return nil
 }
+
+func SaveGroupTrackerConfig(t *Tracker, m string) error {
+	mgt := make(models.MapGroupTrackerConfig)
+	err := yaml.Unmarshal([]byte(m), &mgt)
+	if err != nil {
+		return fmt.Errorf("error unmarshalling YAML: %w", err)
+	}
+	return SetGroupTrackerConfig(t, mgt)
+}
