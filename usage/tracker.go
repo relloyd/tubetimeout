@@ -17,8 +17,7 @@ import (
 var (
 	fnLoadSamples                       = loadSamples
 	fnSaveSamples                       = saveSamples
-	fnGetGroupTrackerConfig             = GetGroupTrackerConfig
-	fnSetGroupTrackerConfig             = SetGroupTrackerConfig
+	fnGetGroupTrackerConfig             = getGroupTrackerConfig
 	fnGetTrackerSamplesFile             = config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc
 	fnSaveSamplesPeriodically           = saveSamplesPeriodically
 	defaultGroupTrackerConfigFilePath   = "usage-tracker-config.yaml"
@@ -303,9 +302,9 @@ func (d *deviceData) calculateWindow(now time.Time) (time.Time, time.Time) {
 
 }
 
-// GetSampleSummary returns a map of device IDs to the number of samples seen.
+// GetSummary returns a map of device IDs to the number of samples seen.
 // Used by package web for reporting.
-func (t *Tracker) GetSampleSummary() map[string]*models.GroupSummary {
+func (t *Tracker) GetSummary() map[string]*models.GroupSummary {
 	samples := make(map[string]*models.GroupSummary)
 
 	t.devices.Range(func(k, v interface{}) bool {
@@ -338,12 +337,14 @@ func (t *Tracker) GetSampleSummary() map[string]*models.GroupSummary {
 	return samples
 }
 
-func (t *Tracker) ResetGroup(id string) {
+// ResetGroup resets the tracker sample data for the given device.
+func (t *Tracker) Reset(id string) {
 	id = strings.ToLower(id)
 	t.devices.Delete(id)
 }
 
-func (t *Tracker) SetPause(id string, d time.Duration) error {
+// SetMode pauses the tracker for the given device for the specified duration.
+func (t *Tracker) SetMode(id string, d time.Duration, mode models.UsageTrackerMode) error {
 	id = strings.ToLower(id)
 
 	data, ok := t.devices.Load(id)
@@ -355,16 +356,22 @@ func (t *Tracker) SetPause(id string, d time.Duration) error {
 	dd.mu.Lock()
 	defer dd.mu.Unlock()
 
+	// Save the mode requested.
+	dd.config.Mode = mode
+
+	// Set an end time based on now.
 	if dd.config.ModeEndTime.IsZero() {
-		dd.config.ModeEndTime = time.Now().Add(d)
+		dd.config.ModeEndTime = t.nowFunc().Add(d)
 		return nil
 	}
 
+	// Add time to an existing end-time.
 	dd.config.ModeEndTime = dd.config.ModeEndTime.Add(d)
 	return nil
 }
 
-func (t *Tracker) GetPauseEndTime(id string) (time.Time, error) {
+// GetModeEndTime returns the end time of the pause for the given device.
+func (t *Tracker) GetModeEndTime(id string) (time.Time, error) {
 	id = strings.ToLower(id)
 
 	data, ok := t.devices.Load(id)
@@ -379,7 +386,8 @@ func (t *Tracker) GetPauseEndTime(id string) (time.Time, error) {
 	return dd.config.ModeEndTime, nil
 }
 
-func (t *Tracker) DeletePause(id string) error {
+// Resume resumes the tracker for the given device.
+func (t *Tracker) Resume(id string) error {
 	id = strings.ToLower(id)
 
 	data, ok := t.devices.Load(id)
@@ -395,4 +403,12 @@ func (t *Tracker) DeletePause(id string) error {
 	return nil
 }
 
-func (t *Tracker)
+// GetConfig returns the group tracker config for all groups.
+func (t *Tracker) GetConfig() (models.MapGroupTrackerConfig, error) {
+	return getGroupTrackerConfig(t)
+}
+
+// SetConfig saves the supplied map of group tracker config data to disk and in the struct.
+func (t *Tracker) SetConfig(m models.MapGroupTrackerConfig) error {
+	return setGroupTrackerConfig(t, m)
+}

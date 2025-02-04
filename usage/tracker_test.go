@@ -563,7 +563,7 @@ func TestResetSamples(t *testing.T) {
 	_, ok := tracker.devices.Load(testDevice)
 	assert.True(t, ok, "Device should exist in tracker")
 
-	tracker.ResetGroup(testDevice)
+	tracker.Reset(testDevice)
 	_, ok = tracker.devices.Load(testDevice)
 	assert.False(t, ok, "Device should not be found in tracker")
 }
@@ -591,9 +591,9 @@ func TestNewTracker_GetGroupConfig(t *testing.T) {
 		done <- struct{}{}
 	}
 
-	// Mock GetGroupTrackerConfig so it returns an error.
+	// Mock getGroupTrackerConfig so it returns an error.
 	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
-		return nil, errors.New("mocked error for GetGroupTrackerConfig")
+		return nil, errors.New("mocked error for getGroupTrackerConfig")
 	}
 	tracker, err := NewTracker(ctx, logger, cfg)
 	assert.Error(t, err, "NewTracker should fail")

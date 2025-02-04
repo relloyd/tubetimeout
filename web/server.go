@@ -9,7 +9,6 @@ import (
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/models"
-	"relloyd/tubetimeout/usage"
 )
 
 //go:embed static/* templates/*
@@ -20,44 +19,44 @@ type TemplateData struct {
 	BuildVersion string
 }
 
+type GroupMACsGroupGetterSetter interface {
+	GetAllGroupMACs(logger *zap.SugaredLogger) ([]config.FlatGroupMAC, error)
+	SaveGroupMACs(logger *zap.SugaredLogger, flatGroupMACs []config.FlatGroupMAC) error
+}
+
 // UsageTracker returns info from the usage tracker.
 type UsageTracker interface {
-	GetGroupSummary() map[string]*models.GroupSummary
-	SetGroupPause(id string, d time.Duration, mode models.UsageTrackerMode) error
-	GetGroupPauseEndTime(id string) (time.Time, error)
-	ResumeGroup(id string) error
-	ResetGroup(id string)
-	GetGroupTrackerConfig(t *usage.Tracker) (models.MapGroupTrackerConfig, error)
-	SetGroupTrackerConfig(t *usage.Tracker, m models.MapGroupTrackerConfig) error
+	GetSummary() map[string]*models.GroupSummary
+	SetMode(id string, d time.Duration, mode models.UsageTrackerMode) error
+	GetModeEndTime(id string) (time.Time, error)
+	Resume(id string) error
+	Reset(id string)
+	GetConfig() (models.MapGroupTrackerConfig, error)
+	SetConfig(m models.MapGroupTrackerConfig) error
 }
 
 type Monitor interface {
 	GetTrafficLastActiveTimes() map[models.Group]map[models.MAC]time.Time
 }
 
-type DeviceGroupGetterSetter interface {
-	GetAllGroupMACs(logger *zap.SugaredLogger) ([]config.FlatGroupMAC, error)
-	SaveGroupMACs(logger *zap.SugaredLogger, flatGroupMACs []config.FlatGroupMAC) error
-}
-
 type Handler struct {
-	logger       *zap.SugaredLogger
-	usage        UsageTracker
-	deviceGroups DeviceGroupGetterSetter
-	monitor      Monitor
+	logger                *zap.SugaredLogger
+	groupMACsGetterSetter GroupMACsGroupGetterSetter
+	usageTracker          UsageTracker
+	monitor               Monitor
 }
 
-func NewServer(logger *zap.SugaredLogger, usageTracker UsageTracker, d DeviceGroupGetterSetter, m Monitor) *http.Server {
-	h := Handler{logger: logger, usage: usageTracker, deviceGroups: d, monitor: m}
+func NewServer(logger *zap.SugaredLogger, ut UsageTracker, gm GroupMACsGroupGetterSetter, m Monitor) *http.Server {
+	h := Handler{logger: logger, usageTracker: ut, groupMACsGetterSetter: gm, monitor: m}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", h.rootHandler)
 	mux.HandleFunc("/static/", h.staticHandler)
 	mux.HandleFunc("/groups", h.groupMACHandler)
-	mux.HandleFunc("/trackers", h.trackerConfigHandler)
+	mux.HandleFunc("/trackerConfig", h.trackerConfigHandler)
 	mux.HandleFunc("/usage", h.usageHandler)       // TODO: probably convert this to /tracker/<group-id>/usage
 	mux.HandleFunc("/activity", h.activityHandler) // TODO: rename either monitor or activity to be consistent
-	mux.HandleFunc("/pause", h.pauseGroupHandler)
-	mux.HandleFunc("/resume", h.resumeGroupHandler)
+	mux.HandleFunc("/mode", h.modeHandler)         // TODO: move /pause to a sub context under group
+	mux.HandleFunc("/reset", h.resetGroupHandler)
 
 	return &http.Server{
 		Addr:                         fmt.Sprintf(":%d", config.AppCfg.WebConfig.WebPort),

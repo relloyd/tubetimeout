@@ -33,7 +33,7 @@ func TestGetGroupTrackerConfig_FileNotExist_CreatesFile(t *testing.T) {
 		return nil
 	}
 
-	cfg, err := GetGroupTrackerConfig(tkr)
+	cfg, err := getGroupTrackerConfig(tkr)
 	assert.NoError(t, err)
 	assert.True(t, configFileWritten, "expected file to be written")
 	assert.Nil(t, cfg)
@@ -54,7 +54,7 @@ func TestGetGroupTrackerConfig_FileExists_ParsesYAML(t *testing.T) {
 	b, _ := yaml.Marshal(data)
 	os.WriteFile(testFilePath, b, 0644)
 
-	cfg, err := GetGroupTrackerConfig(tkr)
+	cfg, err := getGroupTrackerConfig(tkr)
 
 	assert.NoError(t, err)
 	assert.Equal(t, data, cfg)
@@ -69,7 +69,7 @@ func TestGetGroupTrackerConfig_YAMLError_ReturnsError(t *testing.T) {
 	}
 
 	os.WriteFile(testFilePath, []byte("invalid_yaml"), 0644)
-	cfg, err := GetGroupTrackerConfig(tkr)
+	cfg, err := getGroupTrackerConfig(tkr)
 
 	assert.Nil(t, cfg)
 	assert.Error(t, err)
@@ -94,7 +94,7 @@ func TestSetGroupTrackerConfig_SuccessfulWrite(t *testing.T) {
 		return nil
 	}
 
-	err := SetGroupTrackerConfig(tkr, data)
+	err := setGroupTrackerConfig(tkr, data)
 
 	assert.NoError(t, err)
 	assert.True(t, configFileWritten, "expected file to be written")
@@ -121,12 +121,12 @@ func TestSetGroupTrackerConfig_EntriesAreFiltered(t *testing.T) {
 	}
 
 	dataThatWillBeFiltered := models.MapGroupTrackerConfig{"": nil, "group": nil}
-	err := SetGroupTrackerConfig(tkr, dataThatWillBeFiltered)
+	err := setGroupTrackerConfig(tkr, dataThatWillBeFiltered)
 	assert.Error(t, err, "expected error due to empty data supplied")
 	assert.Equal(t, existingGroupTrackerConfig, tkr.cfgGroups, "expected empty data NOT to be saved")
 
 	expectedGoodData := models.MapGroupTrackerConfig{"abc": &models.TrackerConfig{Granularity: 1 * time.Minute}}
-	err = SetGroupTrackerConfig(tkr, expectedGoodData)
+	err = setGroupTrackerConfig(tkr, expectedGoodData)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedGoodData, tkr.cfgGroups, "expected group tracker config to be saved")
 }

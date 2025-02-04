@@ -9,7 +9,7 @@ import (
 	"relloyd/tubetimeout/models"
 )
 
-func GetGroupTrackerConfig(t *Tracker) (models.MapGroupTrackerConfig, error) {
+func getGroupTrackerConfig(t *Tracker) (models.MapGroupTrackerConfig, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -44,7 +44,7 @@ func GetGroupTrackerConfig(t *Tracker) (models.MapGroupTrackerConfig, error) {
 	return cfg, nil
 }
 
-func SetGroupTrackerConfig(t *Tracker, m models.MapGroupTrackerConfig) error {
+func setGroupTrackerConfig(t *Tracker, m models.MapGroupTrackerConfig) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -77,13 +77,4 @@ func SetGroupTrackerConfig(t *Tracker, m models.MapGroupTrackerConfig) error {
 		return fmt.Errorf("failed to write group-macs to file: %w", err)
 	}
 	return nil
-}
-
-func SaveGroupTrackerConfig(t *Tracker, m string) error {
-	mgt := make(models.MapGroupTrackerConfig)
-	err := yaml.Unmarshal([]byte(m), &mgt)
-	if err != nil {
-		return fmt.Errorf("error unmarshalling YAML: %w", err)
-	}
-	return SetGroupTrackerConfig(t, mgt)
 }
