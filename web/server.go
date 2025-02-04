@@ -9,23 +9,26 @@ import (
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/models"
+	"relloyd/tubetimeout/usage"
 )
 
 //go:embed static/* templates/*
 var embeddedFiles embed.FS
 
 type TemplateData struct {
-	BuildTime      string
-	BuildVersion      string
+	BuildTime    string
+	BuildVersion string
 }
 
 // UsageTracker returns info from the usage tracker.
 type UsageTracker interface {
 	GetGroupSummary() map[string]*models.GroupSummary
 	SetGroupPause(id string, d time.Duration, mode models.UsageTrackerMode) error
-	DeleteGroupPause(id string) error
 	GetGroupPauseEndTime(id string) (time.Time, error)
+	ResumeGroup(id string) error
 	ResetGroup(id string)
+	GetGroupTrackerConfig(t *usage.Tracker) (models.MapGroupTrackerConfig, error)
+	SetGroupTrackerConfig(t *usage.Tracker, m models.MapGroupTrackerConfig) error
 }
 
 type Monitor interface {
@@ -44,19 +47,17 @@ type Handler struct {
 	monitor      Monitor
 }
 
-func NewServer(logger *zap.SugaredLogger, s UsageTracker, d DeviceGroupGetterSetter, m Monitor) *http.Server {
-	h := Handler{logger: logger, usage: s, deviceGroups: d, monitor: m}
+func NewServer(logger *zap.SugaredLogger, usageTracker UsageTracker, d DeviceGroupGetterSetter, m Monitor) *http.Server {
+	h := Handler{logger: logger, usage: usageTracker, deviceGroups: d, monitor: m}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", h.rootHandler)
 	mux.HandleFunc("/static/", h.staticHandler)
 	mux.HandleFunc("/groups", h.groupMACHandler)
-	mux.HandleFunc("/configure", h.groupUsage)
-	mux.HandleFunc("/usage", h.groupUsageHandler)
-	mux.HandleFunc("/activity", h.activityHandler)
-	mux.HandleFunc("/block", h.pauseGroupHandler)
-	mux.HandleFunc("/allow", h.pauseGroupHandler)
+	mux.HandleFunc("/trackers", h.trackerConfigHandler)
+	mux.HandleFunc("/usage", h.usageHandler)       // TODO: probably convert this to /tracker/<group-id>/usage
+	mux.HandleFunc("/activity", h.activityHandler) // TODO: rename either monitor or activity to be consistent
+	mux.HandleFunc("/pause", h.pauseGroupHandler)
 	mux.HandleFunc("/resume", h.resumeGroupHandler)
-	mux.HandleFunc("/reset", h.resetGroupHandler)
 
 	return &http.Server{
 		Addr:                         fmt.Sprintf(":%d", config.AppCfg.WebConfig.WebPort),

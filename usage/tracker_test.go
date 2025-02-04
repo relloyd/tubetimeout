@@ -563,7 +563,7 @@ func TestResetSamples(t *testing.T) {
 	_, ok := tracker.devices.Load(testDevice)
 	assert.True(t, ok, "Device should exist in tracker")
 
-	tracker.ResetSamples(testDevice)
+	tracker.ResetGroup(testDevice)
 	_, ok = tracker.devices.Load(testDevice)
 	assert.False(t, ok, "Device should not be found in tracker")
 }

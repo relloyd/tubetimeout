@@ -338,6 +338,11 @@ func (t *Tracker) GetSampleSummary() map[string]*models.GroupSummary {
 	return samples
 }
 
+func (t *Tracker) ResetGroup(id string) {
+	id = strings.ToLower(id)
+	t.devices.Delete(id)
+}
+
 func (t *Tracker) SetPause(id string, d time.Duration) error {
 	id = strings.ToLower(id)
 
@@ -390,7 +395,4 @@ func (t *Tracker) DeletePause(id string) error {
 	return nil
 }
 
-func (t *Tracker) ResetSamples(id string) {
-	id = strings.ToLower(id)
-	t.devices.Delete(id)
-}
+func (t *Tracker)
