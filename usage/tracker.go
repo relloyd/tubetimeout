@@ -70,7 +70,9 @@ func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *models.Trac
 			t.devices = s
 		}
 		// Save samples to the file on context cancellation.
-		go fnSaveSamplesPeriodically(ctx, t.logger, t.devices, samplesFile, cfg.SampleFileSaveInterval)
+		if cfg.SampleFileSaveInterval > 0 {
+			go fnSaveSamplesPeriodically(ctx, t.logger, t.devices, samplesFile, cfg.SampleFileSaveInterval)
+		}
 	}
 
 	return t, nil

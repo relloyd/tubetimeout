@@ -16,21 +16,12 @@ import (
 )
 
 var (
-	mtc                               = &mockTrafficCounter{}
 	originalFnLoadSamples             = fnLoadSamples
 	originalFnSaveSamples             = fnSaveSamples
 	originalFnGetTrackerSamplesFile   = fnGetTrackerSamplesFile
 	originalFnGetGroupTrackerConfig   = fnGetGroupTrackerConfig
 	originalFnSaveSamplesPeriodically = fnSaveSamplesPeriodically
 )
-
-func init() {
-	originalFnLoadSamples = fnLoadSamples
-	originalFnSaveSamples = fnSaveSamples
-	originalFnGetTrackerSamplesFile = fnGetTrackerSamplesFile
-	originalFnGetGroupTrackerConfig = fnGetGroupTrackerConfig
-	originalFnSaveSamplesPeriodically = fnSaveSamplesPeriodically
-}
 
 func restoreFunctions() {
 	fnLoadSamples = originalFnLoadSamples
@@ -139,14 +130,15 @@ func TestHasExceededThreshold(t *testing.T) {
 
 	// Setup: Create a tracker with a 1-hour retention, 10-minute threshold, and 1-minute granularity.
 	cfg := &models.TrackerConfig{
-		Granularity: 1 * time.Minute,
-		Retention:   1 * time.Hour,
-		Threshold:   10 * time.Minute,
-		StartDay:    0,
-		StartTime:   0,
-		SampleSize:  0,
-		ModeEndTime: time.Time{},
-		Mode:        models.ModeMonitor,
+		Granularity:            1 * time.Minute,
+		Retention:              1 * time.Hour,
+		Threshold:              10 * time.Minute,
+		StartDay:               0,
+		StartTime:              0,
+		SampleSize:             0,
+		ModeEndTime:            time.Time{},
+		Mode:                   models.ModeMonitor,
+		SampleFileSaveInterval: 50 * time.Millisecond,
 	}
 
 	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
