@@ -297,7 +297,9 @@ func (h *Handler) resetGroupHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Reset the group sample data.
 	h.usageTracker.Reset(group)
+	h.logger.Infof("Reset usage for group: %v", group)
+
 	// Respond.
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("Reset successful"))
+	_, _ = w.Write([]byte(fmt.Sprintf("Reset group %v successfully", group)))
 }
