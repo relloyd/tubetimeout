@@ -14,19 +14,22 @@ import (
 	"relloyd/tubetimeout/models"
 )
 
-var testFilePath = "/tmp/group_tracker_config.yaml"
+// var testFilePath = "/tmp/group_tracker_config.yaml"
 
 func TestGetGroupTrackerConfig_FileNotExist_CreatesFile(t *testing.T) {
 	tkr := &Tracker{logger: config.MustGetLogger(), mu: &sync.Mutex{}}
 
-	defaultGroupTrackerConfigFilePath = testFilePath
+	testFile, _ := os.CreateTemp("", "group-tracker-config-*.yaml")
+	_ = os.Remove(testFile.Name()) // remove the file immediately so we have the file name only.
+
+	defaultGroupTrackerConfigFilePath = testFile.Name()
 	config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(path string) (string, error) {
-		return testFilePath, nil
+		return testFile.Name(), nil
 	}
 
 	configFileWritten := false
 	config.SafeWriteViaTemp = func(filePath string, data string) error {
-		if filePath != testFilePath {
+		if filePath != testFile.Name() {
 			return errors.New("unexpected file path")
 		}
 		configFileWritten = true
@@ -42,9 +45,14 @@ func TestGetGroupTrackerConfig_FileNotExist_CreatesFile(t *testing.T) {
 func TestGetGroupTrackerConfig_FileExists_ParsesYAML(t *testing.T) {
 	tkr := &Tracker{logger: config.MustGetLogger(), mu: &sync.Mutex{}}
 
-	defaultGroupTrackerConfigFilePath = testFilePath
+	testFile, _ := os.CreateTemp("", "group-tracker-config-*.yaml")
+	t.Cleanup(func() {
+		_ = os.Remove(testFile.Name())
+	})
+
+	defaultGroupTrackerConfigFilePath = testFile.Name()
 	config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(path string) (string, error) {
-		return testFilePath, nil
+		return testFile.Name(), nil
 	}
 
 	data := models.MapGroupTrackerConfig{
@@ -52,7 +60,8 @@ func TestGetGroupTrackerConfig_FileExists_ParsesYAML(t *testing.T) {
 	}
 
 	b, _ := yaml.Marshal(data)
-	os.WriteFile(testFilePath, b, 0644)
+	err := os.WriteFile(testFile.Name(), b, 0644)
+	assert.NoError(t, err)
 
 	cfg, err := getGroupTrackerConfig(tkr)
 
@@ -63,12 +72,19 @@ func TestGetGroupTrackerConfig_FileExists_ParsesYAML(t *testing.T) {
 func TestGetGroupTrackerConfig_YAMLError_ReturnsError(t *testing.T) {
 	tkr := &Tracker{logger: config.MustGetLogger(), mu: &sync.Mutex{}}
 
-	defaultGroupTrackerConfigFilePath = testFilePath
+	testFile, _ := os.CreateTemp("", "group-tracker-config-*.yaml")
+	t.Cleanup(func() {
+		_ = os.Remove(testFile.Name())
+	})
+
+	defaultGroupTrackerConfigFilePath = testFile.Name()
 	config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(path string) (string, error) {
-		return testFilePath, nil
+		return testFile.Name(), nil
 	}
 
-	os.WriteFile(testFilePath, []byte("invalid_yaml"), 0644)
+	err := os.WriteFile(testFile.Name(), []byte("invalid_yaml"), 0644)
+	assert.NoError(t, err)
+
 	cfg, err := getGroupTrackerConfig(tkr)
 
 	assert.Nil(t, cfg)
@@ -79,9 +95,14 @@ func TestGetGroupTrackerConfig_YAMLError_ReturnsError(t *testing.T) {
 func TestSetGroupTrackerConfig_SuccessfulWrite(t *testing.T) {
 	tkr := &Tracker{logger: config.MustGetLogger(), mu: &sync.Mutex{}}
 
-	defaultGroupTrackerConfigFilePath = testFilePath
+	testFile, _ := os.CreateTemp("", "group-tracker-config-*.yaml")
+	t.Cleanup(func() {
+		_ = os.Remove(testFile.Name())
+	})
+
+	defaultGroupTrackerConfigFilePath = testFile.Name()
 	config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(path string) (string, error) {
-		return testFilePath, nil
+		return testFile.Name(), nil
 	}
 
 	data := models.MapGroupTrackerConfig{
@@ -105,15 +126,20 @@ func TestSetGroupTrackerConfig_EntriesAreFiltered(t *testing.T) {
 		"existingGroup": &models.TrackerConfig{Granularity: time.Minute},
 	}
 
+	testFile, _ := os.CreateTemp("", "group-tracker-config-*.yaml")
+	t.Cleanup(func() {
+		_ = os.Remove(testFile.Name())
+	})
+
 	tkr := &Tracker{
 		logger:    config.MustGetLogger(),
 		mu:        &sync.Mutex{},
 		cfgGroups: existingGroupTrackerConfig,
 	}
 
-	defaultGroupTrackerConfigFilePath = testFilePath
+	defaultGroupTrackerConfigFilePath = testFile.Name()
 	config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(path string) (string, error) {
-		return testFilePath, nil
+		return testFile.Name(), nil
 	}
 
 	config.SafeWriteViaTemp = func(filePath string, content string) error {

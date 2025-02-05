@@ -15,6 +15,31 @@ import (
 	"relloyd/tubetimeout/models"
 )
 
+var (
+	mtc                               = &mockTrafficCounter{}
+	originalFnLoadSamples             = fnLoadSamples
+	originalFnSaveSamples             = fnSaveSamples
+	originalFnGetTrackerSamplesFile   = fnGetTrackerSamplesFile
+	originalFnGetGroupTrackerConfig   = fnGetGroupTrackerConfig
+	originalFnSaveSamplesPeriodically = fnSaveSamplesPeriodically
+)
+
+func init() {
+	originalFnLoadSamples             = fnLoadSamples
+	originalFnSaveSamples             = fnSaveSamples
+	originalFnGetTrackerSamplesFile   = fnGetTrackerSamplesFile
+	originalFnGetGroupTrackerConfig   = fnGetGroupTrackerConfig
+	originalFnSaveSamplesPeriodically = fnSaveSamplesPeriodically
+}
+
+func restoreFunctions() {
+	fnLoadSamples = originalFnLoadSamples
+	fnSaveSamples = originalFnSaveSamples
+	fnGetTrackerSamplesFile = originalFnGetTrackerSamplesFile
+	fnGetGroupTrackerConfig = originalFnGetGroupTrackerConfig
+	fnSaveSamplesPeriodically = originalFnSaveSamplesPeriodically
+}
+
 type mockTrafficCounter struct {
 	count     int
 	packetLen int
@@ -25,10 +50,12 @@ func (m *mockTrafficCounter) CountTraffic(count int, packetLen int, trafficDirec
 	return true
 }
 
-var mtc = &mockTrafficCounter{}
-
 func TestNewTracker(t *testing.T) {
 	ctx := context.Background()
+
+	t.Cleanup(func() {
+		restoreFunctions()
+	})
 
 	// Generate some sample data to load into the tracker.
 	devices, tmpFile, err := saveSomeSamples(t)
@@ -78,6 +105,9 @@ func TestNewTracker(t *testing.T) {
 	tracker, err = NewTracker(ctx, nil, cfg)
 	assert.Error(t, err, "NewTracker did not return error when not supplied with correct logger")
 	assert.Nil(t, tracker, "NewTracker did not return nil when not supplied with correct logger")
+
+	// Restore functions for tests below.
+	restoreFunctions() xxxx
 
 	// Tracker with threshold 0 should default to 1 minute.
 	tracker, err = NewTracker(ctx, config.MustGetLogger(), cfg)
@@ -568,11 +598,13 @@ func TestResetSamples(t *testing.T) {
 	assert.False(t, ok, "Device should not be found in tracker")
 }
 
-// FROM JETBRAINS AI
-
 func TestNewTracker_GetGroupConfig(t *testing.T) {
 	ctx := context.Background()
 	logger := config.MustGetLogger()
+
+	t.Cleanup(func() {
+		restoreFunctions()
+	})
 
 	cfg := &config.AppCfg.TrackerConfig
 	if cfg.SampleFileSaveInterval == 0 {
@@ -622,6 +654,10 @@ func TestNewTracker_SampleFilePathInvalid(t *testing.T) {
 	ctx := context.Background()
 	logger := config.MustGetLogger()
 
+	t.Cleanup(func() {
+		restoreFunctions()
+	})
+
 	cfg := &models.TrackerConfig{
 		SampleFilePath: "nonexistent-path.json",
 	}
@@ -644,6 +680,10 @@ func TestNewTracker_SampleFilePathInvalid(t *testing.T) {
 func TestNewTracker_LoadSamples(t *testing.T) {
 	ctx := context.Background()
 	logger := config.MustGetLogger()
+
+	t.Cleanup(func() {
+		restoreFunctions()
+	})
 
 	cfg := &models.TrackerConfig{
 		SampleFilePath: "dummy-sample-file.json",
@@ -671,6 +711,10 @@ func TestNewTracker_LoadSamples(t *testing.T) {
 
 func TestNewTracker_HandlesEmptySampleFilePath(t *testing.T) {
 	logger := config.MustGetLogger()
+
+	t.Cleanup(func() {
+		restoreFunctions()
+	})
 
 	// Config with empty SampleFilePath
 	cfg := &models.TrackerConfig{
