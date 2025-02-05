@@ -14,9 +14,11 @@ import (
 	"relloyd/tubetimeout/models"
 )
 
-// var testFilePath = "/tmp/group_tracker_config.yaml"
-
 func TestGetGroupTrackerConfig_FileNotExist_CreatesFile(t *testing.T) {
+	t.Cleanup(func() {
+		restoreFunctions()
+	})
+
 	tkr := &Tracker{logger: config.MustGetLogger(), mu: &sync.Mutex{}}
 
 	testFile, _ := os.CreateTemp("", "group-tracker-config-*.yaml")
@@ -28,7 +30,7 @@ func TestGetGroupTrackerConfig_FileNotExist_CreatesFile(t *testing.T) {
 	}
 
 	configFileWritten := false
-	config.SafeWriteViaTemp = func(filePath string, data string) error {
+	config.FnSafeWriteViaTemp = func(filePath string, data string) error {
 		if filePath != testFile.Name() {
 			return errors.New("unexpected file path")
 		}
@@ -43,6 +45,10 @@ func TestGetGroupTrackerConfig_FileNotExist_CreatesFile(t *testing.T) {
 }
 
 func TestGetGroupTrackerConfig_FileExists_ParsesYAML(t *testing.T) {
+	t.Cleanup(func() {
+		restoreFunctions()
+	})
+
 	tkr := &Tracker{logger: config.MustGetLogger(), mu: &sync.Mutex{}}
 
 	testFile, _ := os.CreateTemp("", "group-tracker-config-*.yaml")
@@ -70,6 +76,10 @@ func TestGetGroupTrackerConfig_FileExists_ParsesYAML(t *testing.T) {
 }
 
 func TestGetGroupTrackerConfig_YAMLError_ReturnsError(t *testing.T) {
+	t.Cleanup(func() {
+		restoreFunctions()
+	})
+
 	tkr := &Tracker{logger: config.MustGetLogger(), mu: &sync.Mutex{}}
 
 	testFile, _ := os.CreateTemp("", "group-tracker-config-*.yaml")
@@ -93,6 +103,10 @@ func TestGetGroupTrackerConfig_YAMLError_ReturnsError(t *testing.T) {
 }
 
 func TestSetGroupTrackerConfig_SuccessfulWrite(t *testing.T) {
+	t.Cleanup(func() {
+		restoreFunctions()
+	})
+
 	tkr := &Tracker{logger: config.MustGetLogger(), mu: &sync.Mutex{}}
 
 	testFile, _ := os.CreateTemp("", "group-tracker-config-*.yaml")
@@ -110,7 +124,7 @@ func TestSetGroupTrackerConfig_SuccessfulWrite(t *testing.T) {
 	}
 
 	configFileWritten := false
-	config.SafeWriteViaTemp = func(filePath string, content string) error {
+	config.FnSafeWriteViaTemp = func(filePath string, content string) error {
 		configFileWritten = true
 		return nil
 	}
@@ -122,6 +136,10 @@ func TestSetGroupTrackerConfig_SuccessfulWrite(t *testing.T) {
 }
 
 func TestSetGroupTrackerConfig_EntriesAreFiltered(t *testing.T) {
+	t.Cleanup(func() {
+		restoreFunctions()
+	})
+	
 	existingGroupTrackerConfig := models.MapGroupTrackerConfig{
 		"existingGroup": &models.TrackerConfig{Granularity: time.Minute},
 	}
@@ -142,7 +160,7 @@ func TestSetGroupTrackerConfig_EntriesAreFiltered(t *testing.T) {
 		return testFile.Name(), nil
 	}
 
-	config.SafeWriteViaTemp = func(filePath string, content string) error {
+	config.FnSafeWriteViaTemp = func(filePath string, content string) error {
 		return nil
 	}
 

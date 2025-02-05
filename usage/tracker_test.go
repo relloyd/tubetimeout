@@ -25,10 +25,10 @@ var (
 )
 
 func init() {
-	originalFnLoadSamples             = fnLoadSamples
-	originalFnSaveSamples             = fnSaveSamples
-	originalFnGetTrackerSamplesFile   = fnGetTrackerSamplesFile
-	originalFnGetGroupTrackerConfig   = fnGetGroupTrackerConfig
+	originalFnLoadSamples = fnLoadSamples
+	originalFnSaveSamples = fnSaveSamples
+	originalFnGetTrackerSamplesFile = fnGetTrackerSamplesFile
+	originalFnGetGroupTrackerConfig = fnGetGroupTrackerConfig
 	originalFnSaveSamplesPeriodically = fnSaveSamplesPeriodically
 }
 
@@ -38,6 +38,7 @@ func restoreFunctions() {
 	fnGetTrackerSamplesFile = originalFnGetTrackerSamplesFile
 	fnGetGroupTrackerConfig = originalFnGetGroupTrackerConfig
 	fnSaveSamplesPeriodically = originalFnSaveSamplesPeriodically
+	config.FnSafeWriteViaTemp = config.DefaultSafeWriteViaTemp
 }
 
 type mockTrafficCounter struct {
@@ -106,8 +107,8 @@ func TestNewTracker(t *testing.T) {
 	assert.Error(t, err, "NewTracker did not return error when not supplied with correct logger")
 	assert.Nil(t, tracker, "NewTracker did not return nil when not supplied with correct logger")
 
-	// Restore functions for tests below.
-	restoreFunctions() xxxx
+	// Restore the function that loads samples.
+	fnLoadSamples = originalFnLoadSamples
 
 	// Tracker with threshold 0 should default to 1 minute.
 	tracker, err = NewTracker(ctx, config.MustGetLogger(), cfg)

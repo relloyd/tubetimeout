@@ -8,7 +8,7 @@ import (
 
 var (
 	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = getConfigFileFunc(createAppHomeDirAndGetConfigFile)
-	SafeWriteViaTemp                                = safeWriteViaTemp
+	FnSafeWriteViaTemp                              = DefaultSafeWriteViaTemp
 	homeDirExists                                   = false
 )
 
@@ -39,7 +39,7 @@ func createAppHomeDirAndGetConfigFile(fileName string) (string, error) {
 	return filePath, nil
 }
 
-func safeWriteViaTemp(filePath string, data string) error {
+func DefaultSafeWriteViaTemp(filePath string, data string) error {
 	tempPath := filePath + ".tmp"
 
 	// Create a temporary file.
