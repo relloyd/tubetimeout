@@ -237,7 +237,7 @@ func (h *Handler) modeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Resume the usage tracker.
-		h.logger.Info("Pause timer reset triggered for group %v", group)
+		h.logger.Infof("Pause timer reset triggered for group %v", group)
 		err := h.usageTracker.Resume(group)
 		if err != nil {
 			h.logger.Errorf("Error resetting group block/allow timer: %v", err)
@@ -259,7 +259,7 @@ func (h *Handler) modeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Resume the usage tracker.
-		h.logger.Info("Pause timer reset triggered for group %v", group)
+		h.logger.Infof("Pause timer reset triggered for group %v", group)
 		t, err := h.usageTracker.GetModeEndTime(group)
 		if err != nil {
 			h.logger.Errorf("Error getting group block/allow end time: %v", err)

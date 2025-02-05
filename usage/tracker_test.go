@@ -229,7 +229,7 @@ func TestAddSample_GroupDefaults(t *testing.T) {
 			Mode:        models.ModeMonitor,
 		},
 	}
-	tracker.AddSample(mockDeviceID)
+	tracker.AddSample(mockDeviceID, true)
 
 	// Get the deviceData
 	d, ok := tracker.devices.Load(mockDeviceID)
@@ -242,19 +242,29 @@ func TestAddSample_GroupDefaults(t *testing.T) {
 	dd.config.Mode = models.ModeAllow
 	dd.config.ModeEndTime = time.Now().Add(-1 * time.Hour)
 	dd.samples[0] = false
-	tracker.AddSample(mockDeviceID)
+	tracker.AddSample(mockDeviceID, true)
 	assert.Equal(t, models.ModeMonitor, dd.config.Mode, "AddSample did not set the mode correctly")
 	assert.Equal(t, false, dd.samples[0], "AddSample should not mark the first sample in allow mode")
 
 	// Try mode block.
 	dd.config.Mode = models.ModeBlock
 	dd.config.ModeEndTime = time.Now().Add(-1 * time.Hour)
-	tracker.AddSample(mockDeviceID)
+	tracker.AddSample(mockDeviceID, true)
 	assert.Equal(t, models.ModeMonitor, dd.config.Mode, "AddSample did not reset the mode correctly")
 	assert.Equal(t, false, dd.samples[0], "AddSample should not mark the first sample in block mode")
 
+	// Try mode monitor but with inactive bool value supplied.
+	dd.config.Mode = models.ModeMonitor
+	tracker.AddSample(mockDeviceID, false)
+	assert.Equal(t, false, dd.samples[0], "AddSample should not mark the first sample in monitor mode with active=false")
+
+	// Try mode monitor but with inactive bool value supplied.
+	dd.config.Mode = models.ModeMonitor
+	tracker.AddSample(mockDeviceID, true)
+	assert.Equal(t, true, dd.samples[0], "AddSample should mark the first sample in monitor mode with active=true")
+
 	// Check that defaults are used, well one of them anyway.
-	tracker.AddSample(mockDeviceID2)
+	tracker.AddSample(mockDeviceID2, true)
 	assert.True(t, ok, "AddSample found the deviceData")
 	d, ok = tracker.devices.Load(mockDeviceID2)
 	assert.True(t, ok, "AddSample found the deviceData")
@@ -286,7 +296,7 @@ func TestAddSample_SamplesAreSaved(t *testing.T) {
 	}
 
 	// Case 1a: Add a sample at the start of the buffer and verify that we cannot find the mixed case device ID.
-	tracker.AddSample(deviceID)
+	tracker.AddSample(deviceID, true)
 	data, ok := tracker.devices.Load(deviceID)
 	assert.False(t, ok, "AddSample should not find data by mixed case device ID")
 
@@ -305,7 +315,7 @@ func TestAddSample_SamplesAreSaved(t *testing.T) {
 
 	// Case 2: Add a sample at a later time within the same hour.
 	now = now.Add(5 * cfg.Granularity) // Advance time by 5 minutes.
-	tracker.AddSample(deviceID)
+	tracker.AddSample(deviceID, true)
 
 	index = dd.getIndex(now, dd.windowStartTime)
 	if !dd.samples[index] {
@@ -314,7 +324,7 @@ func TestAddSample_SamplesAreSaved(t *testing.T) {
 
 	// Case 3: Add a sample after the retention period has passed.
 	now = now.Add(cfg.Retention) // Advance time by 1 hour.
-	tracker.AddSample(deviceID)  // This should reset the whole buffer and record a new one.
+	tracker.AddSample(deviceID, true)  // This should reset the whole buffer and record a new one.
 	// Case 3a: Verify that the device data was reinitialized.
 	data, ok = tracker.devices.Load(deviceID)
 	if !ok {
@@ -330,7 +340,7 @@ func TestAddSample_SamplesAreSaved(t *testing.T) {
 	// Case 4: Add multiple samples in rapid succession.
 	now = now.Add(2 * cfg.Granularity) // Advance time by 2 minutes.
 	for i := 0; i < 3; i++ {
-		tracker.AddSample(deviceID)
+		tracker.AddSample(deviceID, true)
 		index = dd.getIndex(now, dd.windowStartTime)
 		if !dd.samples[index] {
 			t.Errorf("AddSample failed to mark the sample at index %d on iteration %d", index, i)
@@ -340,7 +350,7 @@ func TestAddSample_SamplesAreSaved(t *testing.T) {
 
 	// Case 5a: Add a sample with a large time jump forward.
 	now = now.Add(2 * cfg.Retention) // Advance time by 2 hours.
-	tracker.AddSample(deviceID)
+	tracker.AddSample(deviceID, true)
 	// Case 5a: Verify that the device data was reinitialized.
 	data, ok = tracker.devices.Load(deviceID)
 	if !ok {
@@ -582,7 +592,7 @@ func TestResetSamples(t *testing.T) {
 	tracker, err := NewTracker(context.Background(), config.MustGetLogger(), cfg)
 	assert.NoError(t, err, "NewTracker failed")
 
-	tracker.AddSample(testDevice)
+	tracker.AddSample(testDevice, true)
 	_, ok := tracker.devices.Load(testDevice)
 	assert.True(t, ok, "Device should exist in tracker")
 

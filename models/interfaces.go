@@ -29,6 +29,6 @@ type ManagerI interface {
 }
 
 type TrackerI interface {
-	AddSample(id string)
+	AddSample(id string, active bool)
 	HasExceededThreshold(id string) bool
 }

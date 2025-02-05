@@ -151,7 +151,7 @@ func getSampleSize(cfg *models.TrackerConfig) int {
 
 // AddSample records a sample for a given identifier at the current time.
 // TODO: add test for AddSample() when tracker is paused
-func (t *Tracker) AddSample(id string) {
+func (t *Tracker) AddSample(id string, active bool) {
 	id = strings.ToLower(id)
 
 	now := t.nowFunc() // Use nowFunc instead of time.Now
@@ -172,6 +172,7 @@ func (t *Tracker) AddSample(id string) {
 			Mode:        models.ModeMonitor,
 			ModeEndTime: time.Time{},
 		}
+		t.cfgGroups[models.Group(id)] = cfg // save the config, so we don't have to set this again until data is overridden by global group tracker config
 	}
 
 	// Get or initialize the device data.
@@ -182,11 +183,11 @@ func (t *Tracker) AddSample(id string) {
 
 	if loaded {
 		// Ensure the config is up to date.
-		dd.config = cfg // TODO: find the latest config and set it
+		dd.config = cfg
 		// TODO test that latest config is set
 	}
 
-	if dd.config.Mode == models.ModeMonitor { // if the tracker is not paused...
+	if active && dd.config.Mode == models.ModeMonitor { // if the group is active and the tracker is not paused...
 		// Ensure the time window is synchronized.
 		dd.syncWindow(t.logger, now)
 		// Mark the sample as seen.
