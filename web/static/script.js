@@ -24,8 +24,8 @@ document.getElementById("resetButton").addEventListener("click", () => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-    const apiUrl = '/groupMACs';
-    const usageApiUrl = '/usage'; // Usage data endpoint
+    const UrlGroupMACsAPI = '/groupMACs';
+    const UrlUsageAPI = '/usage'; // Usage data endpoint
     const saveButton = document.getElementById('save-config-btn'); // Reference to Save Button
 
     let flatGroupMACs = [];
@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Fetch configuration and usage data
     async function fetchConfig() {
-        const response = await fetch(apiUrl);
+        const response = await fetch(UrlGroupMACsAPI);
         flatGroupMACs = await response.json();
 
         // Extract groups dynamically
@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fetch usage data from /sampleSummary
     async function fetchUsageData() {
         try {
-            const response = await fetch(usageApiUrl);
+            const response = await fetch(UrlUsageAPI);
             usageData = await response.json(); // Example: { "GroupA": { "used": 50, "total": 100, "percentage": 50, "activity": { "macAddr": "lastActive" } } }
             console.log("Fetched usage data:", usageData);
         } catch (error) {
@@ -137,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function saveConfig() {
         const dataToSave = flatGroupMACs.filter(entry => entry.group);
         try {
-            const response = await fetch(apiUrl, {
+            const response = await fetch(UrlGroupMACsAPI, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(dataToSave),

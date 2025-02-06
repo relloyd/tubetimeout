@@ -185,6 +185,7 @@ func (t *Tracker) AddSample(id string, active bool) {
 		// Ensure the config is up to date.
 		dd.config = cfg
 		// TODO test that latest config is set
+		// TODO: when the sample size changes then we risk going out of bounds in the samples slice so we need to remake this!
 	}
 
 	if active && dd.config.Mode == models.ModeMonitor { // if the group is active and the tracker is not paused...
@@ -352,7 +353,7 @@ func (t *Tracker) SetMode(id string, d time.Duration, mode models.UsageTrackerMo
 
 	data, ok := t.devices.Load(id)
 	if !ok {
-		return fmt.Errorf("device %v not found", id)
+		return fmt.Errorf("usage tracker group %v not found", id)
 	}
 	dd := data.(*deviceData)
 
