@@ -44,11 +44,20 @@
 <div class="container">
   <h1>Device Groups</h1>
 
-  <!-- Form to Add New Group with tracker configuration -->
+  <!-- Consolidated Group Configuration Form -->
   <section>
-    <form id="add-group-form">
-      <input id="new-group-name" type="text" placeholder="New Group Name" required />
+    <h2>Group Configuration</h2>
+    <form id="group-config-form">
+      <label for="group-select">Select Group:</label>
+      <select id="group-select"></select>
+
+      <label for="group-name">Group Name:</label>
+      <input id="group-name" type="text" placeholder="Group Name" required />
+
+      <label for="group-retention">Retention (days):</label>
       <input id="group-retention" type="number" placeholder="Retention (days)" required />
+
+      <label for="group-start-day">Start Day:</label>
       <select id="group-start-day">
         <option value="0">Sunday</option>
         <option value="1">Monday</option>
@@ -58,37 +67,20 @@
         <option value="5">Friday</option>
         <option value="6">Saturday</option>
       </select>
+
+      <label for="group-start-time">Start Time:</label>
       <input id="group-start-time" type="time" required />
-      <button type="submit">Add</button>
+
+      <button type="button" id="save-group-btn">Save Group Configuration</button>
     </form>
   </section>
 
-  <!-- New form for Editing an Existing Group's tracker configuration -->
-  <section>
-    <h2>Edit Group Configuration</h2>
-    <form id="edit-group-form">
-      <select id="edit-group-dropdown"></select>
-      <input id="edit-group-retention" type="number" placeholder="Retention (days)" required />
-      <select id="edit-group-start-day">
-        <option value="0">Sunday</option>
-        <option value="1">Monday</option>
-        <option value="2">Tuesday</option>
-        <option value="3">Wednesday</option>
-        <option value="4">Thursday</option>
-        <option value="5">Friday</option>
-        <option value="6">Saturday</option>
-      </select>
-      <input id="edit-group-start-time" type="time" required />
-      <button type="button" id="update-group-btn">Update</button>
-    </form>
-  </section>
-
-  <!-- Device assignment section -->
+  <!-- Device Assignment Section -->
   <section>
     <h2>Assign Device to Group</h2>
     <select id="device-dropdown"></select>
     <input id="device-name" type="text" placeholder="Device Name" />
-    <select id="group-dropdown"></select>
+    <select id="device-group-dropdown"></select>
     <button id="add-to-group-btn" type="button">Add to Group</button>
   </section>
 
@@ -96,7 +88,7 @@
     <button id="save-config-btn" style="display: none;">Save Configuration</button>
   </div>
 
-  <!-- Container for rendered groups -->
+  <!-- Container for Rendered Groups -->
   <div id="groups-container"></div>
 
   <div id="notification" class="notification hidden"></div>

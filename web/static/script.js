@@ -1,6 +1,4 @@
 // ---------- Helper functions for AJAX requests ----------
-
-// Generic function for POST requests (used for saving configuration)
 async function postData(url, data) {
     try {
         const response = await fetch(url, {
@@ -14,7 +12,6 @@ async function postData(url, data) {
     }
 }
 
-// New helper for PUT requests (used for /mode)
 async function putData(url, data) {
     try {
         const response = await fetch(url, {
@@ -28,19 +25,15 @@ async function putData(url, data) {
     }
 }
 
-// ---------- Event Listeners for the Pause and Reset buttons ----------
-
-// Updated Pause button: now uses /mode via PUT.
-// (Here we prompt for the group name to pause; you could also tie this to one of your drop‐downs.)
+// ---------- Pause and Reset Button Handlers ----------
 document.getElementById("addButton").addEventListener("click", () => {
     const group = prompt("Enter group to pause:");
     if (group) {
-        // Using mode=2 to block traffic. minutes is sent as an integer string.
+        // Use mode=2 to block traffic; minutes sent as a string.
         putData("/mode", { group: group, minutes: "60", mode: "2" });
     }
 });
 
-// Updated Reset button: now requires a group parameter.
 document.getElementById("resetButton").addEventListener("click", () => {
     const group = prompt("Enter group to reset usage:");
     if (group) {
@@ -53,28 +46,25 @@ document.getElementById("resetButton").addEventListener("click", () => {
 
 // ---------- Main App Code ----------
 document.addEventListener('DOMContentLoaded', () => {
-    // Change API URL from /groupMACs to /groups for device-group assignments
+    // API endpoints – note the use of /groups instead of /groupMACs.
     const UrlGroupAPI = '/groups';
-    const UrlUsageAPI = '/usage'; // Usage data endpoint
-    const trackerConfigAPI = '/trackerConfig'; // Tracker config endpoint
-    const saveButton = document.getElementById('save-config-btn'); // Save Configuration Button
+    const UrlUsageAPI = '/usage';
+    const trackerConfigAPI = '/trackerConfig';
+    const saveButton = document.getElementById('save-config-btn');
 
     let flatGroupMACs = [];
-    // Now groups is an array of objects: { name, retention, startDay, startDuration }
+    // groups will be an array of objects, each with { name, retention, startDay, startDuration }
     let groups = [];
     let availableMACs = [];
-    let usageData = {}; // Usage data from /usage
+    let usageData = {};
 
-    // ---------- Fetch Functions ----------
-
-    // Fetch tracker configuration from /trackerConfig and store it in groups.
+    // Fetch tracker configuration – if the returned data isn’t an array, convert it.
     async function fetchTrackerConfig() {
         try {
             const response = await fetch(trackerConfigAPI);
             if (response.ok) {
                 const configData = await response.json();
-                // Expect configData to be an array of objects
-                groups = configData;
+                groups = Array.isArray(configData) ? configData : Object.values(configData);
             } else {
                 console.error("Failed to fetch tracker config.");
             }
@@ -83,57 +73,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Merge any groups found in device assignments into the groups array.
+    // Merge any group names found in device assignments into our groups array.
     function mergeDeviceGroups(deviceGroupNames) {
         deviceGroupNames.forEach(name => {
             if (!groups.find(g => g.name === name)) {
-                // Add a default tracker config (adjust defaults as needed)
                 groups.push({ name, retention: 0, startDay: "0", startDuration: 0 });
             }
         });
     }
 
-    // Fetch the device group assignments and usage data.
+    // Fetch the device assignments and usage data.
     async function fetchConfig() {
-        // First, get the tracker configuration
         await fetchTrackerConfig();
 
-        // Now fetch device group assignments
         const response = await fetch(UrlGroupAPI);
         flatGroupMACs = await response.json();
 
-        // Extract group names from devices (ignoring empty strings)
         const deviceGroupNames = [...new Set(flatGroupMACs.map(entry => entry.group).filter(Boolean))];
         mergeDeviceGroups(deviceGroupNames);
 
-        // Fetch usage data
         await fetchUsageData();
         renderDevices();
         renderGroups();
-        updateGroupDropdown(); // For device assignment (add-to-group form)
-        updateEditGroupDropdown(); // For editing tracker config
+        updateGroupSelect();
+        updateDeviceGroupDropdown();
     }
 
-    // Fetch usage data from /usage
     async function fetchUsageData() {
         try {
             const response = await fetch(UrlUsageAPI);
             usageData = await response.json();
-            console.log("Fetched usage data:", usageData);
         } catch (error) {
             console.error('Error fetching usage data:', error);
             usageData = {};
         }
     }
 
-    // ---------- Render Functions ----------
-
-    // Render Devices Dropdown and Inputs (for assigning a device to a group)
+    // Render the Devices dropdown (for device assignment)
     function renderDevices() {
         const deviceDropdown = document.getElementById('device-dropdown');
         deviceDropdown.innerHTML = '';
         availableMACs = flatGroupMACs;
-
         availableMACs.forEach(({ mac, name, group }) => {
             const option = document.createElement('option');
             option.value = mac;
@@ -141,12 +121,10 @@ document.addEventListener('DOMContentLoaded', () => {
             option.textContent = group ? `${label} (in ${group})` : label;
             deviceDropdown.appendChild(option);
         });
-
         deviceDropdown.onchange = updateDeviceNameInput;
         updateDeviceNameInput();
     }
 
-    // Update device name input based on selected device
     function updateDeviceNameInput() {
         const mac = document.getElementById('device-dropdown').value;
         const nameInput = document.getElementById('device-name');
@@ -154,42 +132,24 @@ document.addEventListener('DOMContentLoaded', () => {
         nameInput.value = entry && entry.name ? entry.name : '';
     }
 
-    // Update the dropdown used in the Add Group form (for device assignment)
-    function updateGroupDropdown() {
-        const groupDropdown = document.getElementById('group-dropdown');
-        groupDropdown.innerHTML = '';
-        // Use the group names from groups array
+    // Update the dropdown used when assigning a device to a group.
+    function updateDeviceGroupDropdown() {
+        const dropdown = document.getElementById('device-group-dropdown');
+        dropdown.innerHTML = '';
         groups.forEach(groupObj => {
             const option = document.createElement('option');
             option.value = groupObj.name;
             option.textContent = groupObj.name;
-            groupDropdown.appendChild(option);
-        });
-    }
-
-    // Update the dropdown used in the Edit Group form (for tracker config editing)
-    function updateEditGroupDropdown() {
-        const dropdown = document.getElementById('edit-group-dropdown');
-        dropdown.innerHTML = '';
-        groups.forEach(g => {
-            const option = document.createElement('option');
-            option.value = g.name;
-            option.textContent = g.name;
             dropdown.appendChild(option);
         });
-        // Populate fields for the first group (if any)
-        if (groups.length > 0) {
-            dropdown.value = groups[0].name;
-            dropdown.dispatchEvent(new Event('change'));
-        }
     }
 
-    // Render the groups and their devices, along with tracker config details.
+    // Render the groups, their usage, and tracker configuration details.
     function renderGroups() {
         const groupsContainer = document.getElementById('groups-container');
         groupsContainer.innerHTML = '';
 
-        // Group devices by their assigned groups.
+        // Group the device assignments.
         const grouped = flatGroupMACs.reduce((acc, { group, mac, name }) => {
             if (group) {
                 if (!acc[group]) acc[group] = [];
@@ -206,27 +166,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const groupHeader = document.createElement('div');
             groupHeader.classList.add('group-header');
 
-            // Group Title
             const groupTitle = document.createElement('h3');
             groupTitle.textContent = groupName;
             groupHeader.appendChild(groupTitle);
 
-            // Usage Info (if available)
             const usageInfo = document.createElement('span');
             const usage = usageData[groupName.toLowerCase()] || { used: 0, percentage: 0, activity: {} };
             usageInfo.textContent = `${usage.used} mins (${usage.percentage}%) usage`;
             groupHeader.appendChild(usageInfo);
 
-            // Remove Group Button
             const removeGroupBtn = document.createElement('button');
             removeGroupBtn.textContent = 'Remove Group';
-            removeGroupBtn.classList.add('remove-group-btn');
             removeGroupBtn.onclick = () => removeGroup(groupName);
             groupHeader.appendChild(removeGroupBtn);
 
             groupDiv.appendChild(groupHeader);
 
-            // --- Display Tracker Config details (if available) ---
+            // Display tracker configuration for the group (if available).
             const groupConfig = groups.find(g => g.name === groupName);
             if (groupConfig) {
                 const configInfo = document.createElement('div');
@@ -234,22 +190,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 configInfo.textContent = `Retention: ${groupConfig.retention} day(s), Start Day: ${getDayName(groupConfig.startDay)}, Start Time: ${formatMinutes(groupConfig.startDuration)}`;
                 groupDiv.appendChild(configInfo);
             }
-            // ------------------------------------------------------
 
-            // List of devices in the group
+            // List the devices in the group.
             const macList = document.createElement('ul');
             grouped[groupName].forEach(({ mac, name }) => {
                 const listItem = document.createElement('li');
                 const label = document.createElement('span');
                 label.textContent = `${mac.replace(/^:/g, '')} - ${name}`;
-
-                // Show last active time if available.
                 const lastActiveTimestamp = usage.activity && usage.activity[mac];
                 if (lastActiveTimestamp) {
                     label.textContent += ` active ${formatTimeSince(lastActiveTimestamp)}`;
                 }
-
-                // Remove device button
                 const removeBtn = document.createElement('button');
                 removeBtn.textContent = 'Remove';
                 removeBtn.onclick = () => removeMacFromGroup(mac);
@@ -257,13 +208,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 listItem.appendChild(removeBtn);
                 macList.appendChild(listItem);
             });
-
             groupDiv.appendChild(macList);
             groupsContainer.appendChild(groupDiv);
         });
     }
 
-    // ---------- Remove Functions ----------
     function removeMacFromGroup(mac) {
         flatGroupMACs.forEach(entry => {
             if (entry.mac === mac) entry.group = '';
@@ -278,19 +227,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (entry.group === groupName) entry.group = '';
         });
         groups = groups.filter(g => g.name !== groupName);
-        updateGroupDropdown();
-        updateEditGroupDropdown();
+        updateGroupSelect();
+        updateDeviceGroupDropdown();
         renderDevices();
         renderGroups();
         showSaveButton();
     }
 
-    // ---------- Save Configuration ----------
-    // When Save is clicked we POST both the device-group assignments and tracker configuration.
+    // Save both device assignments and tracker configuration.
     async function saveConfig() {
         const deviceGroupsToSave = flatGroupMACs.filter(entry => entry.group);
         try {
-            // Save device-group assignments (to /groups)
             let response = await fetch(UrlGroupAPI, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -298,7 +245,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if (!response.ok) throw new Error('Failed to save device groups');
 
-            // Save tracker configuration (to /trackerConfig)
             response = await fetch(trackerConfigAPI, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -315,7 +261,6 @@ document.addEventListener('DOMContentLoaded', () => {
         hideSaveButton();
     }
 
-    // ---------- Notification and Save Button Helpers ----------
     function showNotification(message, isError = false) {
         const notification = document.getElementById('notification');
         notification.textContent = message;
@@ -334,24 +279,17 @@ document.addEventListener('DOMContentLoaded', () => {
         saveButton.style.display = 'none';
     }
 
-    // ---------- Utility Functions ----------
     function formatTimeSince(timestampString) {
         const timestamp = new Date(timestampString);
         const now = new Date();
-        const differenceInSeconds = Math.floor((now - timestamp) / 1000);
-        if (differenceInSeconds < 60) {
-            return `${differenceInSeconds} second${differenceInSeconds === 1 ? '' : 's'} ago`;
-        }
-        const differenceInMinutes = Math.floor(differenceInSeconds / 60);
-        if (differenceInMinutes < 60) {
-            return `${differenceInMinutes} minute${differenceInMinutes === 1 ? '' : 's'} ago`;
-        }
-        const differenceInHours = Math.floor(differenceInMinutes / 60);
-        if (differenceInHours < 24) {
-            return `${differenceInHours} hour${differenceInHours === 1 ? '' : 's'} ago`;
-        }
-        const differenceInDays = Math.floor(differenceInHours / 24);
-        return `${differenceInDays} day${differenceInDays === 1 ? '' : 's'} ago`;
+        const diffSeconds = Math.floor((now - timestamp) / 1000);
+        if (diffSeconds < 60) return `${diffSeconds} second${diffSeconds === 1 ? '' : 's'} ago`;
+        const diffMinutes = Math.floor(diffSeconds / 60);
+        if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+        const diffHours = Math.floor(diffMinutes / 60);
+        if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
     }
 
     function getDayName(day) {
@@ -365,13 +303,97 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     }
 
-    // ---------- Event Listeners for Forms ----------
+    // ---------- Consolidated Group Configuration Form ----------
+    // This form supports both adding a new group and editing an existing one.
+    // A drop-down (with a “-- New Group --” option) lets the user choose an existing group or create a new one.
+    function updateGroupSelect() {
+        const groupSelect = document.getElementById('group-select');
+        groupSelect.innerHTML = '';
+        const newOption = document.createElement('option');
+        newOption.value = "";
+        newOption.textContent = "-- New Group --";
+        groupSelect.appendChild(newOption);
+        groups.forEach(groupObj => {
+            const option = document.createElement('option');
+            option.value = groupObj.name;
+            option.textContent = groupObj.name;
+            groupSelect.appendChild(option);
+        });
+        // Trigger a change to update the form fields.
+        groupSelect.dispatchEvent(new Event('change'));
+    }
 
-    // Add device to a group
+    // Update form fields when the selection changes.
+    document.getElementById('group-select').addEventListener('change', (e) => {
+        const selectedName = e.target.value;
+        const nameInput = document.getElementById('group-name');
+        const retentionInput = document.getElementById('group-retention');
+        const startDaySelect = document.getElementById('group-start-day');
+        const startTimeInput = document.getElementById('group-start-time');
+        if (selectedName === "") {
+            // New group: clear fields and enable name editing.
+            nameInput.value = "";
+            nameInput.disabled = false;
+            retentionInput.value = "";
+            startDaySelect.value = "0";
+            startTimeInput.value = "";
+        } else {
+            // Existing group: populate fields and disable editing the name.
+            const group = groups.find(g => g.name === selectedName);
+            if (group) {
+                nameInput.value = group.name;
+                nameInput.disabled = true;
+                retentionInput.value = group.retention;
+                startDaySelect.value = group.startDay;
+                const hours = Math.floor(group.startDuration / 60).toString().padStart(2, '0');
+                const mins = (group.startDuration % 60).toString().padStart(2, '0');
+                startTimeInput.value = `${hours}:${mins}`;
+            }
+        }
+    });
+
+    // Save (or update) the group configuration when the button is clicked.
+    document.getElementById('save-group-btn').addEventListener('click', () => {
+        const groupSelect = document.getElementById('group-select');
+        const selectedName = groupSelect.value;
+        const nameInput = document.getElementById('group-name').value.trim();
+        const retention = parseInt(document.getElementById('group-retention').value, 10);
+        const startDay = document.getElementById('group-start-day').value;
+        const startTimeStr = document.getElementById('group-start-time').value;
+        if (!nameInput || isNaN(retention) || !startTimeStr) {
+            alert("Please fill in all fields.");
+            return;
+        }
+        const [hours, minutes] = startTimeStr.split(':').map(Number);
+        const startDuration = hours * 60 + minutes;
+        if (selectedName === "") {
+            // New group – add only if it does not already exist.
+            if (!groups.find(g => g.name === nameInput)) {
+                groups.push({ name: nameInput, retention, startDay, startDuration });
+                updateGroupSelect();
+                updateDeviceGroupDropdown();
+            } else {
+                alert("Group already exists!");
+            }
+        } else {
+            // Update the existing group's configuration.
+            const group = groups.find(g => g.name === selectedName);
+            if (group) {
+                group.retention = retention;
+                group.startDay = startDay;
+                group.startDuration = startDuration;
+                showNotification(`Group ${group.name} updated.`, false);
+            }
+        }
+        showSaveButton();
+        renderGroups();
+    });
+
+    // Device assignment: add a device to a group.
     document.getElementById('add-to-group-btn').onclick = () => {
         const mac = document.getElementById('device-dropdown').value;
         const name = document.getElementById('device-name').value.trim();
-        const group = document.getElementById('group-dropdown').value;
+        const group = document.getElementById('device-group-dropdown').value;
         flatGroupMACs.forEach(entry => {
             if (entry.mac === mac) {
                 entry.name = name;
@@ -380,66 +402,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         renderDevices();
         renderGroups();
-        updateGroupDropdown();
         showSaveButton();
     };
-
-    // Add New Group (with tracker configuration)
-    document.getElementById('add-group-form').onsubmit = (e) => {
-        e.preventDefault();
-        const newGroupName = document.getElementById('new-group-name').value.trim();
-        const retention = parseInt(document.getElementById('group-retention').value.trim(), 10);
-        const startDay = document.getElementById('group-start-day').value;
-        const startTimeStr = document.getElementById('group-start-time').value;
-        if (!newGroupName || isNaN(retention) || !startTimeStr) return;
-
-        // Convert HH:MM to minutes past midnight.
-        const [hours, minutes] = startTimeStr.split(':').map(Number);
-        const startDuration = hours * 60 + minutes;
-
-        if (!groups.find(g => g.name === newGroupName)) {
-            groups.push({ name: newGroupName, retention, startDay, startDuration });
-            updateGroupDropdown();
-            updateEditGroupDropdown();
-        }
-        // Clear the inputs.
-        e.target.reset();
-        showSaveButton();
-    };
-
-    // Edit Group Form: When a group is selected, populate its fields.
-    document.getElementById('edit-group-dropdown').addEventListener('change', () => {
-        const selectedGroupName = document.getElementById('edit-group-dropdown').value;
-        const group = groups.find(g => g.name === selectedGroupName);
-        if (group) {
-            document.getElementById('edit-group-retention').value = group.retention;
-            document.getElementById('edit-group-start-day').value = group.startDay;
-            const hours = Math.floor(group.startDuration / 60).toString().padStart(2, '0');
-            const mins = (group.startDuration % 60).toString().padStart(2, '0');
-            document.getElementById('edit-group-start-time').value = `${hours}:${mins}`;
-        }
-    });
-
-    // When Update is clicked in the Edit Group form, update the in‑memory config.
-    document.getElementById('update-group-btn').addEventListener('click', () => {
-        const selectedGroupName = document.getElementById('edit-group-dropdown').value;
-        const retention = parseInt(document.getElementById('edit-group-retention').value, 10);
-        const startDay = document.getElementById('edit-group-start-day').value;
-        const startTimeStr = document.getElementById('edit-group-start-time').value;
-        if (!selectedGroupName || isNaN(retention) || !startTimeStr) return;
-        const [hours, minutes] = startTimeStr.split(':').map(Number);
-        const startDuration = hours * 60 + minutes;
-
-        const group = groups.find(g => g.name === selectedGroupName);
-        if (group) {
-            group.retention = retention;
-            group.startDay = startDay;
-            group.startDuration = startDuration;
-            showNotification(`Group ${selectedGroupName} updated.`, false);
-            showSaveButton();
-            renderGroups();
-        }
-    });
 
     saveButton.addEventListener('click', saveConfig);
     fetchConfig();
