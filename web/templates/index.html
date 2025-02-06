@@ -35,9 +35,7 @@
 
 <!-- Buttons Section -->
 <div class="button-container">
-  <!-- Add Button -->
   <button id="addButton">Pause (60 minutes)</button>
-  <!-- Reset Button -->
   <button id="resetButton">Resume</button>
 </div>
 
@@ -46,61 +44,62 @@
 <div class="container">
   <h1>Device Groups</h1>
 
-  <!-- Groups Section -->
+  <!-- Form to Add New Group with tracker configuration -->
   <section>
     <form id="add-group-form">
       <input id="new-group-name" type="text" placeholder="New Group Name" required />
+      <input id="group-retention" type="number" placeholder="Retention (days)" required />
+      <select id="group-start-day">
+        <option value="0">Sunday</option>
+        <option value="1">Monday</option>
+        <option value="2">Tuesday</option>
+        <option value="3">Wednesday</option>
+        <option value="4">Thursday</option>
+        <option value="5">Friday</option>
+        <option value="6">Saturday</option>
+      </select>
+      <input id="group-start-time" type="time" required />
       <button type="submit">Add</button>
     </form>
   </section>
 
-  <!-- Devices Section -->
+  <!-- New form for Editing an Existing Group's tracker configuration -->
   <section>
-    <div class="device-table-wrapper">
-      <table class="device-table">
-        <!-- Table Header -->
-        <thead>
-        <tr>
-          <th>Device ID</th>
-          <th>Label</th>
-          <th>Group</th>
-          <th>Action</th>
-        </tr>
-        </thead>
-        <!-- Table Body -->
-        <tbody>
-        <tr>
-          <!-- Device Dropdown -->
-          <td>
-            <select id="device-dropdown"></select>
-          </td>
-          <!-- Name Input -->
-          <td>
-            <input id="device-name" type="text" placeholder="Device Name" />
-          </td>
-          <!-- Group Dropdown -->
-          <td>
-            <select id="group-dropdown"></select>
-          </td>
-          <!-- Add Button -->
-          <td>
-            <button id="add-to-group-btn">Add</button>
-          </td>
-        </tr>
-        </tbody>
-      </table>
-    </div>
-    <div id="groups-container">
-      <!-- Groups content dynamically generated here -->
-    </div>
+    <h2>Edit Group Configuration</h2>
+    <form id="edit-group-form">
+      <select id="edit-group-dropdown"></select>
+      <input id="edit-group-retention" type="number" placeholder="Retention (days)" required />
+      <select id="edit-group-start-day">
+        <option value="0">Sunday</option>
+        <option value="1">Monday</option>
+        <option value="2">Tuesday</option>
+        <option value="3">Wednesday</option>
+        <option value="4">Thursday</option>
+        <option value="5">Friday</option>
+        <option value="6">Saturday</option>
+      </select>
+      <input id="edit-group-start-time" type="time" required />
+      <button type="button" id="update-group-btn">Update</button>
+    </form>
+  </section>
+
+  <!-- Device assignment section -->
+  <section>
+    <h2>Assign Device to Group</h2>
+    <select id="device-dropdown"></select>
+    <input id="device-name" type="text" placeholder="Device Name" />
+    <select id="group-dropdown"></select>
+    <button id="add-to-group-btn" type="button">Add to Group</button>
   </section>
 
   <div class="save-container">
     <button id="save-config-btn" style="display: none;">Save Configuration</button>
   </div>
 
+  <!-- Container for rendered groups -->
+  <div id="groups-container"></div>
+
   <div id="notification" class="notification hidden"></div>
 </div>
-
 </body>
 </html>

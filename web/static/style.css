@@ -223,6 +223,8 @@ select {
 .device-table {
     width: 100%;
     border-collapse: collapse;
+    border-radius: 6px; /* Added rounded corners */
+    overflow: hidden; /* Ensures corners are applied */
 }
 
 /* Table Headers */
