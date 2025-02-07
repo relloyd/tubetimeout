@@ -154,16 +154,48 @@ func (h *Handler) trackerConfigHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(&gtc)
 
+		// Flatten the tracker config.
+		var flatConfig []models.FlatTrackerConfig
+		for k, v := range gtc {
+			flatConfig = append(flatConfig, models.FlatTrackerConfig{
+				Group:       k,
+				Retention:   v.Retention,
+				Threshold:   v.Threshold,
+				StartDay:    v.StartDay,
+				StartTime:   v.StartTime,
+				Mode:        v.Mode,
+				ModeEndTime: v.ModeEndTime,
+			})
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(&flatConfig)
 	} else if r.Method == http.MethodPost {
-		var mgtc models.MapGroupTrackerConfig
-		if err := json.NewDecoder(r.Body).Decode(&mgtc); err != nil {
-			h.logger.Errorf("Failed to marshall tracker config: %v", err)
+		var flatConfig []models.FlatTrackerConfig
+		if err := json.NewDecoder(r.Body).Decode(&flatConfig); err != nil {
+			h.logger.Errorf("Failed to unmarshall tracker config: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
-		err := h.usageTracker.SetConfig(mgtc)
+
+		// Convert flat config to map.
+		gtc := make(models.MapGroupTrackerConfig)
+		for _, v := range flatConfig {
+			if v.Group == "" {
+				continue
+			}
+			gtc[v.Group] = &models.TrackerConfig{
+				Retention:              v.Retention,
+				Threshold:              v.Threshold,
+				StartDay:               v.StartDay,
+				StartTime:              v.StartTime,
+				Mode:                   v.Mode,
+				ModeEndTime:            v.ModeEndTime,
+			}
+		}
+
+		// Save the config.
+		err := h.usageTracker.SetConfig(gtc)
 		if err != nil {
 			h.logger.Errorf("Failed to set tracker config: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)

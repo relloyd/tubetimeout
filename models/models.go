@@ -62,9 +62,9 @@ type TrackerConfig struct {
 	// SampleSize is the number of slots in the circular buffer.
 	SampleSize int `yaml:"sampleSize"`
 	// Mode is the mode of the tracker.
-	Mode UsageTrackerMode
+	Mode UsageTrackerMode `yaml:"mode"`
 	// ModeEndTime is the time at which explicit blocking or allowing ends.
-	ModeEndTime time.Time
+	ModeEndTime time.Time `yaml:"modeEndTime"`
 }
 
 type Direction string

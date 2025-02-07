@@ -58,9 +58,24 @@ func setGroupTrackerConfig(t *Tracker, m models.MapGroupTrackerConfig) error {
 		}
 	}
 
-	for k, v := range m { // filter out bad records: empty key or nil values
-		if k == "" || v == nil {
-			delete(m, k)
+	// Filter and sanitise records.
+	for k, v := range m {
+		if k == "" || v == nil { // if the record is empty...
+			delete(m, k) // don't save it.
+		} else { // else populate missing value using defaults
+			v.Granularity = config.AppCfg.TrackerConfig.Granularity // always keep the default granularity
+			if v.Retention == 0 {
+				v.Retention = config.AppCfg.TrackerConfig.Retention
+			}
+			if v.Threshold == 0 {
+				v.Threshold = config.AppCfg.TrackerConfig.Threshold
+			}
+			if v.StartDay == 0 {
+				v.StartDay = config.AppCfg.TrackerConfig.StartDay
+			}
+			if v.StartTime == 0 {
+				v.StartTime = config.AppCfg.TrackerConfig.StartTime
+			}
 		}
 	}
 	if len(m) == 0 {

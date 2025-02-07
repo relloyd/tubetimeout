@@ -10,6 +10,7 @@ type FlatTrackerConfig struct {
 	Retention   time.Duration    `json:"retention"` // TODO: get the script to handle retention and threshold
 	Threshold   time.Duration    `json:"threshold"`
 	StartDay    int              `json:"startDay"`
+	StartTime   time.Duration    `json:"startTime"`
 	Mode        UsageTrackerMode `json:"mode"`
 	ModeEndTime time.Time        `json:"modeEndTime"`
 }
