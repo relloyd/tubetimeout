@@ -45,8 +45,8 @@ type UsageTrackerMode int
 
 const (
 	ModeMonitor UsageTrackerMode = iota
-	ModeBlock
 	ModeAllow
+	ModeBlock
 )
 
 // TrackerConfig contains the configuration for the usage tracker of a specific group.

@@ -362,15 +362,8 @@ func (t *Tracker) SetMode(id string, d time.Duration, mode models.UsageTrackerMo
 
 	// Save the mode requested.
 	dd.config.Mode = mode
+	dd.config.ModeEndTime = t.nowFunc().Add(d)
 
-	// Set an end time based on now.
-	if dd.config.ModeEndTime.IsZero() {
-		dd.config.ModeEndTime = t.nowFunc().Add(d)
-		return nil
-	}
-
-	// Add time to an existing end-time.
-	dd.config.ModeEndTime = dd.config.ModeEndTime.Add(d)
 	return nil
 }
 

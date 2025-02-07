@@ -245,7 +245,7 @@ func (h *Handler) modeHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			strMode = "resumed"
 		}
-		logMsg := fmt.Sprintf("Usage tracker for group %v", strMode)
+		logMsg := fmt.Sprintf("Usage tracker for group %v %v", group, strMode)
 		h.logger.Infof(logMsg)
 
 		// Set the pause/allow/block.

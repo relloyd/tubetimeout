@@ -76,12 +76,13 @@ document.addEventListener('DOMContentLoaded', () => {
         mergeDeviceGroups(deviceGroupNames);
 
         await fetchUsageData();
-        await updateAllGroupModes();
 
         renderDevices();
         renderGroups();
         updateGroupSelect();
         updateDeviceGroupDropdown();
+
+        updateAllGroupModes();
     }
 
     async function fetchUsageData() {
@@ -95,25 +96,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // For each group, call GET /mode?group=<groupName> and store the returned modeEndTime.
+    // For each group, call GET /mode?group=<groupName> and update the group's mode info.
     async function updateAllGroupModes() {
-        await Promise.all(groups.map(async (group) => {
-            try {
-                const response = await fetch(`/mode?group=${encodeURIComponent(group.name)}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data && data.modeEndTime) {
-                        group.modeEndTime = new Date(data.modeEndTime);
+        await Promise.all(
+            groups.map(async (group) => {
+                try {
+                    const response = await fetch(`/mode?group=${encodeURIComponent(group.name)}`);
+                    console.log(response.toString());
+                    if (response.ok) {
+                        const data = await response.json();
+                        // Convert mode to a number in case it's returned as a string.
+                        const modeVal = Number(data.mode);
+                        if (modeVal === 0) {
+                            group.currentMode = "monitoring";
+                            group.modeEndTime = null;
+                        } else if (modeVal === 1) {
+                            group.currentMode = "allowed";
+                            group.modeEndTime = new Date(data.modeEndTime);
+                        } else if (modeVal === 2) {
+                            group.currentMode = "blocked";
+                            group.modeEndTime = new Date(data.modeEndTime);
+                        } else {
+                            group.currentMode = "unknown";
+                            group.modeEndTime = null;
+                        }
                     } else {
+                        group.currentMode = "monitoring";
                         group.modeEndTime = null;
                     }
-                } else {
+                } catch (e) {
+                    console.error(`Error fetching mode for group ${group.name}:`, e);
+                    group.currentMode = "monitoring";
                     group.modeEndTime = null;
                 }
-            } catch (e) {
-                console.error(`Error fetching mode for group ${group.name}:`, e);
-                group.modeEndTime = null;
-            }
-        }));
+            })
+        );
+        // Re-render groups once all mode data has been updated.
         renderGroups();
     }
 
@@ -199,20 +217,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 groupDiv.appendChild(configInfo);
             }
 
-            // Display mode status: show mode and end time (or minutes remaining).
+            // Display mode status: show the current mode and its end time.
             const modeStatus = document.createElement('div');
             modeStatus.classList.add('group-mode-status');
             const now = new Date();
-            if (groupConfig && groupConfig.modeEndTime && groupConfig.modeEndTime > now) {
+            // If the group has a current mode that is not "monitoring" and its end time is in the future...
+            if (groupConfig && groupConfig.currentMode !== "monitoring" && groupConfig.modeEndTime && groupConfig.modeEndTime > now) {
                 let diffMinutes = Math.round((groupConfig.modeEndTime - now) / 60000);
-                // Use the current mode value if set; default to "blocked" otherwise.
-                const modeType = groupConfig.currentMode ? groupConfig.currentMode : "blocked";
                 if (diffMinutes < 60) {
-                    modeStatus.textContent = `${modeType} for ${diffMinutes} mins`;
+                    modeStatus.textContent = `${groupConfig.currentMode} for ${diffMinutes} mins`;
                 } else {
                     const hours = groupConfig.modeEndTime.getHours().toString().padStart(2, '0');
                     const minutes = groupConfig.modeEndTime.getMinutes().toString().padStart(2, '0');
-                    modeStatus.textContent = `${modeType} until ${hours}:${minutes}`;
+                    modeStatus.textContent = `${groupConfig.currentMode} until ${hours}:${minutes}`;
                 }
             } else {
                 modeStatus.textContent = "(monitoring)";
