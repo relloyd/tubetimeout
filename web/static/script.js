@@ -1,4 +1,5 @@
 // ---------- Helper functions for AJAX requests ----------
+
 async function postData(url, data) {
     try {
         const response = await fetch(url, {
@@ -25,24 +26,8 @@ async function putData(url, data) {
     }
 }
 
-// ---------- Pause and Reset Button Handlers ----------
-document.getElementById("addButton").addEventListener("click", () => {
-    const group = prompt("Enter group to pause:");
-    if (group) {
-        // Use mode=2 to block traffic; minutes sent as a string.
-        putData("/mode", { group: group, minutes: "60", mode: "2" });
-    }
-});
-
-document.getElementById("resetButton").addEventListener("click", () => {
-    const group = prompt("Enter group to reset usage:");
-    if (group) {
-        fetch(`/reset?group=${encodeURIComponent(group)}`)
-            .then(response => response.text())
-            .then(text => { document.getElementById("statusMessage").innerText = text; })
-            .catch(error => { document.getElementById("statusMessage").innerText = "Error: " + error.message; });
-    }
-});
+// ---------- Global Pause/Resume handlers removed ---
+// (Now each group section has its own mode controls)
 
 // ---------- Main App Code ----------
 document.addEventListener('DOMContentLoaded', () => {
@@ -58,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let availableMACs = [];
     let usageData = {};
 
-    // Fetch tracker configuration – if the returned data isn’t an array, convert it.
+    // Fetch tracker configuration – ensure data is an array.
     async function fetchTrackerConfig() {
         try {
             const response = await fetch(trackerConfigAPI);
@@ -109,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Render the Devices dropdown (for device assignment)
+    // Render Devices dropdown (for device assignment)
     function renderDevices() {
         const deviceDropdown = document.getElementById('device-dropdown');
         deviceDropdown.innerHTML = '';
@@ -132,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
         nameInput.value = entry && entry.name ? entry.name : '';
     }
 
-    // Update the dropdown used when assigning a device to a group.
+    // Update the dropdown used for device assignment.
     function updateDeviceGroupDropdown() {
         const dropdown = document.getElementById('device-group-dropdown');
         dropdown.innerHTML = '';
@@ -144,12 +129,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Render the groups, their usage, and tracker configuration details.
+    // Render the groups, their devices, tracker configuration, and mode controls.
     function renderGroups() {
         const groupsContainer = document.getElementById('groups-container');
         groupsContainer.innerHTML = '';
 
-        // Group the device assignments.
+        // Group devices by their assigned groups.
         const grouped = flatGroupMACs.reduce((acc, { group, mac, name }) => {
             if (group) {
                 if (!acc[group]) acc[group] = [];
@@ -163,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const groupDiv = document.createElement('div');
             groupDiv.classList.add('group');
 
+            // Group header with title and usage info.
             const groupHeader = document.createElement('div');
             groupHeader.classList.add('group-header');
 
@@ -179,10 +165,9 @@ document.addEventListener('DOMContentLoaded', () => {
             removeGroupBtn.textContent = 'Remove Group';
             removeGroupBtn.onclick = () => removeGroup(groupName);
             groupHeader.appendChild(removeGroupBtn);
-
             groupDiv.appendChild(groupHeader);
 
-            // Display tracker configuration for the group (if available).
+            // Display tracker configuration details.
             const groupConfig = groups.find(g => g.name === groupName);
             if (groupConfig) {
                 const configInfo = document.createElement('div');
@@ -191,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 groupDiv.appendChild(configInfo);
             }
 
-            // List the devices in the group.
+            // List devices in the group.
             const macList = document.createElement('ul');
             grouped[groupName].forEach(({ mac, name }) => {
                 const listItem = document.createElement('li');
@@ -209,6 +194,75 @@ document.addEventListener('DOMContentLoaded', () => {
                 macList.appendChild(listItem);
             });
             groupDiv.appendChild(macList);
+
+            // ---- Mode Controls for this Group ----
+            // Create a small control panel for setting mode (Allow/Block) and duration.
+            const modeControls = document.createElement('div');
+            modeControls.classList.add('group-mode-controls');
+
+            // Mode select (Allow or Block)
+            modeControls.appendChild(document.createTextNode("Mode: "));
+            const modeSelect = document.createElement('select');
+            modeSelect.classList.add('group-mode-select');
+            const optionAllow = document.createElement('option');
+            optionAllow.value = "1";
+            optionAllow.textContent = "Allow";
+            modeSelect.appendChild(optionAllow);
+            const optionBlock = document.createElement('option');
+            optionBlock.value = "2";
+            optionBlock.textContent = "Block";
+            modeSelect.appendChild(optionBlock);
+            modeControls.appendChild(modeSelect);
+
+            // Duration select
+            modeControls.appendChild(document.createTextNode(" Duration: "));
+            const durationSelect = document.createElement('select');
+            durationSelect.classList.add('group-duration-select');
+            const opt15 = document.createElement('option');
+            opt15.value = "15";
+            opt15.textContent = "15 mins";
+            durationSelect.appendChild(opt15);
+            const opt60 = document.createElement('option');
+            opt60.value = "60";
+            opt60.textContent = "1 hour";
+            durationSelect.appendChild(opt60);
+            const opt120 = document.createElement('option');
+            opt120.value = "120";
+            opt120.textContent = "2 hours";
+            durationSelect.appendChild(opt120);
+            const optUntilMidnight = document.createElement('option');
+            optUntilMidnight.value = "untilMidnight";
+            optUntilMidnight.textContent = "Until Midnight";
+            durationSelect.appendChild(optUntilMidnight);
+            modeControls.appendChild(durationSelect);
+
+            // "Apply Mode" button sends a PUT to /mode.
+            const applyModeButton = document.createElement('button');
+            applyModeButton.textContent = "Apply Mode";
+            applyModeButton.onclick = () => {
+                let duration = durationSelect.value;
+                if (duration === "untilMidnight") {
+                    const now = new Date();
+                    const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
+                    duration = (24 * 60 - minutesSinceMidnight).toString();
+                }
+                putData("/mode", { group: groupName, minutes: duration, mode: modeSelect.value });
+            };
+            modeControls.appendChild(applyModeButton);
+
+            // "Resume" button sends a DELETE to /mode.
+            const resumeModeButton = document.createElement('button');
+            resumeModeButton.textContent = "Resume";
+            resumeModeButton.onclick = () => {
+                fetch(`/mode?group=${encodeURIComponent(groupName)}`, { method: 'DELETE' })
+                    .then(response => response.text())
+                    .then(text => { document.getElementById("statusMessage").innerText = text; })
+                    .catch(error => { document.getElementById("statusMessage").innerText = "Error: " + error.message; });
+            };
+            modeControls.appendChild(resumeModeButton);
+            // ---------------------------------------
+
+            groupDiv.appendChild(modeControls);
             groupsContainer.appendChild(groupDiv);
         });
     }
@@ -303,9 +357,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     }
 
-    // ---------- Consolidated Group Configuration Form ----------
-    // This form supports both adding a new group and editing an existing one.
-    // A drop-down (with a “-- New Group --” option) lets the user choose an existing group or create a new one.
+    // ---------- Consolidated Group Configuration Form Handlers ----------
     function updateGroupSelect() {
         const groupSelect = document.getElementById('group-select');
         groupSelect.innerHTML = '';
@@ -319,11 +371,9 @@ document.addEventListener('DOMContentLoaded', () => {
             option.textContent = groupObj.name;
             groupSelect.appendChild(option);
         });
-        // Trigger a change to update the form fields.
         groupSelect.dispatchEvent(new Event('change'));
     }
 
-    // Update form fields when the selection changes.
     document.getElementById('group-select').addEventListener('change', (e) => {
         const selectedName = e.target.value;
         const nameInput = document.getElementById('group-name');
@@ -331,14 +381,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const startDaySelect = document.getElementById('group-start-day');
         const startTimeInput = document.getElementById('group-start-time');
         if (selectedName === "") {
-            // New group: clear fields and enable name editing.
             nameInput.value = "";
             nameInput.disabled = false;
             retentionInput.value = "";
             startDaySelect.value = "0";
             startTimeInput.value = "";
         } else {
-            // Existing group: populate fields and disable editing the name.
             const group = groups.find(g => g.name === selectedName);
             if (group) {
                 nameInput.value = group.name;
@@ -352,7 +400,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Save (or update) the group configuration when the button is clicked.
     document.getElementById('save-group-btn').addEventListener('click', () => {
         const groupSelect = document.getElementById('group-select');
         const selectedName = groupSelect.value;
@@ -367,7 +414,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const [hours, minutes] = startTimeStr.split(':').map(Number);
         const startDuration = hours * 60 + minutes;
         if (selectedName === "") {
-            // New group – add only if it does not already exist.
             if (!groups.find(g => g.name === nameInput)) {
                 groups.push({ name: nameInput, retention, startDay, startDuration });
                 updateGroupSelect();
@@ -376,7 +422,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert("Group already exists!");
             }
         } else {
-            // Update the existing group's configuration.
             const group = groups.find(g => g.name === selectedName);
             if (group) {
                 group.retention = retention;

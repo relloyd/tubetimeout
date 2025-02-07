@@ -33,44 +33,57 @@
   </table>
 </div>
 
-<!-- Buttons Section -->
-<div class="button-container">
-  <button id="addButton">Pause (60 minutes)</button>
-  <button id="resetButton">Resume</button>
-</div>
-
+<!-- Global status message -->
 <div id="statusMessage"></div>
 
 <div class="container">
   <h1>Device Groups</h1>
 
-  <!-- Consolidated Group Configuration Form -->
+  <!-- Consolidated Group Configuration Form in Table Layout -->
   <section>
     <h2>Group Configuration</h2>
     <form id="group-config-form">
-      <label for="group-select">Select Group:</label>
-      <select id="group-select"></select>
-
-      <label for="group-name">Group Name:</label>
-      <input id="group-name" type="text" placeholder="Group Name" required />
-
-      <label for="group-retention">Retention (days):</label>
-      <input id="group-retention" type="number" placeholder="Retention (days)" required />
-
-      <label for="group-start-day">Start Day:</label>
-      <select id="group-start-day">
-        <option value="0">Sunday</option>
-        <option value="1">Monday</option>
-        <option value="2">Tuesday</option>
-        <option value="3">Wednesday</option>
-        <option value="4">Thursday</option>
-        <option value="5">Friday</option>
-        <option value="6">Saturday</option>
-      </select>
-
-      <label for="group-start-time">Start Time:</label>
-      <input id="group-start-time" type="time" required />
-
+      <table>
+        <thead>
+        <tr>
+          <th>Select Group</th>
+          <th>Group Name</th>
+          <th>Retention (days)</th>
+          <th>Start Day</th>
+          <th>Start Time</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+          <td>
+            <select id="group-select">
+              <option value="">-- New Group --</option>
+            </select>
+          </td>
+          <td>
+            <input id="group-name" type="text" placeholder="Group Name" required />
+          </td>
+          <td>
+            <input id="group-retention" type="number" placeholder="Retention" required />
+          </td>
+          <td>
+            <select id="group-start-day">
+              <option value="0">Sunday</option>
+              <option value="1">Monday</option>
+              <option value="2">Tuesday</option>
+              <option value="3">Wednesday</option>
+              <option value="4">Thursday</option>
+              <option value="5">Friday</option>
+              <option value="6">Saturday</option>
+            </select>
+          </td>
+          <td>
+            <!-- Use step="300" to allow only 5-minute intervals -->
+            <input id="group-start-time" type="time" step="300" required />
+          </td>
+        </tr>
+        </tbody>
+      </table>
       <button type="button" id="save-group-btn">Save Group Configuration</button>
     </form>
   </section>
