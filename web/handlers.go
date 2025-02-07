@@ -174,11 +174,22 @@ func (h *Handler) trackerConfigHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+type modeEndTime struct {
+	ModeEndTime time.Time `json:"modeEndTime"`
+}
+
 // modeHandler is an API endpoint for /pause where the usage tracker can be set into a mode or resumed.
 func (h *Handler) modeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPut { // PUT will pause the group tracker...
+		err := r.ParseForm()
+		if err != nil {
+			h.logger.Errorf("Error parsing mode form: %v", err)
+			http.Error(w, "Unable to parse form", http.StatusBadRequest)
+			return
+		}
 		// Parse the group ID.
-		group := r.URL.Query().Get("group")
+
+		group := r.FormValue("group")
 		if group == "" {
 			h.logger.Errorf("Error pausing group: empty group supplied")
 			http.Error(w, "Invalid group", http.StatusBadRequest)
@@ -186,7 +197,7 @@ func (h *Handler) modeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Parse duration parameter.
-		minutes := r.URL.Query().Get("minutes")
+		minutes := r.FormValue("minutes")
 		duration, err := strconv.Atoi(minutes)
 		if err != nil || duration <= 0 {
 			h.logger.Errorf("Error pausing group: invalid duration: %v", err)
@@ -195,7 +206,7 @@ func (h *Handler) modeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Parse the mode.
-		strMode := r.URL.Query().Get("mode")
+		strMode := r.FormValue("mode")
 		intMode, err := strconv.Atoi(strMode)
 		if err != nil || intMode < 0 || intMode > 2 {
 			h.logger.Errorf("Error pausing group: invalid mode: %v", err)
@@ -249,17 +260,17 @@ func (h *Handler) modeHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(fmt.Sprintf("Group %v resumed successfully", group)))
 
-	} else if r.Method == http.MethodGet { // DELETE will resume the group tracker...
+	} else if r.Method == http.MethodGet { // GET will fetch the mode end time for the given group...
 		// Parse the group ID.
 		group := r.URL.Query().Get("group")
 		if group == "" {
-			h.logger.Errorf("Error resuming group: empty group supplied")
+			h.logger.Errorf("Error fetching mode timer for group: empty group supplied")
 			http.Error(w, "Invalid group", http.StatusBadRequest)
 			return
 		}
 
 		// Resume the usage tracker.
-		h.logger.Infof("Pause timer reset triggered for group %v", group)
+		h.logger.Infof("Fetched pause timer for group %v", group)
 		t, err := h.usageTracker.GetModeEndTime(group)
 		if err != nil {
 			h.logger.Errorf("Error getting group block/allow end time: %v", err)
@@ -269,7 +280,7 @@ func (h *Handler) modeHandler(w http.ResponseWriter, r *http.Request) {
 
 		// Respond.
 		w.WriteHeader(http.StatusOK)
-		err = json.NewEncoder(w).Encode(t)
+		err = json.NewEncoder(w).Encode(modeEndTime{ModeEndTime: t})
 		if err != nil {
 			h.logger.Errorf("Error getting group block/allow end time: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)

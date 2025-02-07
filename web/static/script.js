@@ -1,5 +1,4 @@
 // ---------- Helper functions for AJAX requests ----------
-
 async function postData(url, data) {
     try {
         const response = await fetch(url, {
@@ -14,20 +13,19 @@ async function postData(url, data) {
 }
 
 async function putData(url, data) {
+    const params = new URLSearchParams(data);
+    // console.log("putData: ", params.toString());
     try {
         const response = await fetch(url, {
             method: "PUT",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams(data),
+            body: params,
         });
         document.getElementById("statusMessage").innerText = await response.text();
     } catch (error) {
         document.getElementById("statusMessage").innerText = "Error: " + error.message;
     }
 }
-
-// ---------- Global Pause/Resume handlers removed ---
-// (Now each group section has its own mode controls)
 
 // ---------- Main App Code ----------
 document.addEventListener('DOMContentLoaded', () => {
@@ -38,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveButton = document.getElementById('save-config-btn');
 
     let flatGroupMACs = [];
-    // groups will be an array of objects, each with { name, retention, startDay, startDuration }
+    // groups will be an array of objects, each with: { name, retention, startDay, startDuration, currentMode, modeEndTime }
     let groups = [];
     let availableMACs = [];
     let usageData = {};
@@ -78,6 +76,8 @@ document.addEventListener('DOMContentLoaded', () => {
         mergeDeviceGroups(deviceGroupNames);
 
         await fetchUsageData();
+        await updateAllGroupModes();
+
         renderDevices();
         renderGroups();
         updateGroupSelect();
@@ -92,6 +92,29 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error fetching usage data:', error);
             usageData = {};
         }
+    }
+
+    // For each group, call GET /mode?group=<groupName> and store the returned modeEndTime.
+    async function updateAllGroupModes() {
+        await Promise.all(groups.map(async (group) => {
+            try {
+                const response = await fetch(`/mode?group=${encodeURIComponent(group.name)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.modeEndTime) {
+                        group.modeEndTime = new Date(data.modeEndTime);
+                    } else {
+                        group.modeEndTime = null;
+                    }
+                } else {
+                    group.modeEndTime = null;
+                }
+            } catch (e) {
+                console.error(`Error fetching mode for group ${group.name}:`, e);
+                group.modeEndTime = null;
+            }
+        }));
+        renderGroups();
     }
 
     // Render Devices dropdown (for device assignment)
@@ -129,12 +152,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Render the groups, their devices, tracker configuration, and mode controls.
+    // Render the groups, their devices, tracker configuration, mode status, and per‑group mode controls.
     function renderGroups() {
         const groupsContainer = document.getElementById('groups-container');
         groupsContainer.innerHTML = '';
 
-        // Group devices by their assigned groups.
+        // Group the device assignments.
         const grouped = flatGroupMACs.reduce((acc, { group, mac, name }) => {
             if (group) {
                 if (!acc[group]) acc[group] = [];
@@ -176,7 +199,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 groupDiv.appendChild(configInfo);
             }
 
-            // List devices in the group.
+            // Display mode status: show mode and end time (or minutes remaining).
+            const modeStatus = document.createElement('div');
+            modeStatus.classList.add('group-mode-status');
+            const now = new Date();
+            if (groupConfig && groupConfig.modeEndTime && groupConfig.modeEndTime > now) {
+                let diffMinutes = Math.round((groupConfig.modeEndTime - now) / 60000);
+                // Use the current mode value if set; default to "blocked" otherwise.
+                const modeType = groupConfig.currentMode ? groupConfig.currentMode : "blocked";
+                if (diffMinutes < 60) {
+                    modeStatus.textContent = `${modeType} for ${diffMinutes} mins`;
+                } else {
+                    const hours = groupConfig.modeEndTime.getHours().toString().padStart(2, '0');
+                    const minutes = groupConfig.modeEndTime.getMinutes().toString().padStart(2, '0');
+                    modeStatus.textContent = `${modeType} until ${hours}:${minutes}`;
+                }
+            } else {
+                modeStatus.textContent = "(monitoring)";
+            }
+            groupDiv.appendChild(modeStatus);
+
+            // List the devices in the group.
             const macList = document.createElement('ul');
             grouped[groupName].forEach(({ mac, name }) => {
                 const listItem = document.createElement('li');
@@ -195,12 +238,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             groupDiv.appendChild(macList);
 
-            // ---- Mode Controls for this Group ----
-            // Create a small control panel for setting mode (Allow/Block) and duration.
+            // ---- Per‑Group Mode Controls ----
             const modeControls = document.createElement('div');
             modeControls.classList.add('group-mode-controls');
 
-            // Mode select (Allow or Block)
+            // Mode select: Allow or Block.
             modeControls.appendChild(document.createTextNode("Mode: "));
             const modeSelect = document.createElement('select');
             modeSelect.classList.add('group-mode-select');
@@ -214,7 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modeSelect.appendChild(optionBlock);
             modeControls.appendChild(modeSelect);
 
-            // Duration select
+            // Duration select: preset options.
             modeControls.appendChild(document.createTextNode(" Duration: "));
             const durationSelect = document.createElement('select');
             durationSelect.classList.add('group-duration-select');
@@ -236,17 +278,24 @@ document.addEventListener('DOMContentLoaded', () => {
             durationSelect.appendChild(optUntilMidnight);
             modeControls.appendChild(durationSelect);
 
-            // "Apply Mode" button sends a PUT to /mode.
+            // "Apply Mode" button.
             const applyModeButton = document.createElement('button');
             applyModeButton.textContent = "Apply Mode";
             applyModeButton.onclick = () => {
-                let duration = durationSelect.value;
-                if (duration === "untilMidnight") {
+                let durationVal = durationSelect.value;
+                if (durationVal === "untilMidnight") {
                     const now = new Date();
                     const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
-                    duration = (24 * 60 - minutesSinceMidnight).toString();
+                    durationVal = (24 * 60 - minutesSinceMidnight).toString();
                 }
-                putData("/mode", { group: groupName, minutes: duration, mode: modeSelect.value });
+                // Update the group’s mode info immediately.
+                const groupObj = groups.find(g => g.name === groupName);
+                if (groupObj) {
+                    groupObj.currentMode = modeSelect.value === "1" ? "allowed" : "blocked";
+                    groupObj.modeEndTime = new Date(Date.now() + parseInt(durationVal, 10) * 60000);
+                }
+                renderGroups();
+                putData("/mode", { group: groupName, minutes: durationVal, mode: modeSelect.value });
             };
             modeControls.appendChild(applyModeButton);
 
