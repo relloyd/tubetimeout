@@ -375,19 +375,19 @@ func (t *Tracker) SetMode(id string, d time.Duration, mode models.UsageTrackerMo
 }
 
 // GetModeEndTime returns the end time of the pause for the given device.
-func (t *Tracker) GetModeEndTime(id string) (time.Time, error) {
+func (t *Tracker) GetModeEndTime(id string) (models.GroupMode, error) {
 	id = strings.ToLower(id)
 
 	data, ok := t.devices.Load(id)
 	if !ok {
-		return time.Time{}, fmt.Errorf("device %v not found", id)
+		return models.GroupMode{}, fmt.Errorf("group %v not found", id)
 	}
 	dd := data.(*deviceData)
 
 	dd.mu.Lock()
 	defer dd.mu.Unlock()
 
-	return dd.config.ModeEndTime, nil
+	return models.GroupMode{Mode: dd.config.Mode, ModeEndTime: dd.config.ModeEndTime}, nil
 }
 
 // Resume resumes the tracker for the given device.

@@ -89,3 +89,8 @@ const (
 	Ingress Direction = "in"
 	Egress  Direction = "out"
 )
+
+type GroupMode struct {
+	Mode        UsageTrackerMode `json:"mode"`
+	ModeEndTime time.Time        `json:"modeEndTime"`
+}

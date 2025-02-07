@@ -28,7 +28,7 @@ type GroupMACsGroupGetterSetter interface {
 type UsageTracker interface {
 	GetSummary() map[string]*models.GroupSummary
 	SetMode(id string, d time.Duration, mode models.UsageTrackerMode) error
-	GetModeEndTime(id string) (time.Time, error)
+	GetModeEndTime(id string) (models.GroupMode, error)
 	Resume(id string) error
 	Reset(id string)
 	GetConfig() (models.MapGroupTrackerConfig, error)
