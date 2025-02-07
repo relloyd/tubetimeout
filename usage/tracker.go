@@ -397,6 +397,8 @@ func (t *Tracker) Resume(id string) error {
 	defer dd.mu.Unlock()
 
 	dd.config.ModeEndTime = time.Time{}
+	dd.config.Mode = models.ModeMonitor
+
 	return nil
 }
 

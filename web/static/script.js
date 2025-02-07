@@ -102,7 +102,6 @@ document.addEventListener('DOMContentLoaded', () => {
             groups.map(async (group) => {
                 try {
                     const response = await fetch(`/mode?group=${encodeURIComponent(group.name)}`);
-                    console.log(response.toString());
                     if (response.ok) {
                         const data = await response.json();
                         // Convert mode to a number in case it's returned as a string.
@@ -321,11 +320,28 @@ document.addEventListener('DOMContentLoaded', () => {
             resumeModeButton.textContent = "Resume";
             resumeModeButton.onclick = () => {
                 fetch(`/mode?group=${encodeURIComponent(groupName)}`, { method: 'DELETE' })
-                    .then(response => response.text())
-                    .then(text => { document.getElementById("statusMessage").innerText = text; })
-                    .catch(error => { document.getElementById("statusMessage").innerText = "Error: " + error.message; });
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error("Failed to resume mode");
+                        }
+                        return response.text();
+                    })
+                    .then(text => {
+                        document.getElementById("statusMessage").innerText = text;
+                        // Update the group's mode information to reflect that it's now monitoring.
+                        const groupObj = groups.find(g => g.name === groupName);
+                        if (groupObj) {
+                            groupObj.currentMode = "monitoring";
+                            groupObj.modeEndTime = null;
+                        }
+                        renderGroups(); // Re-render groups to update the UI.
+                    })
+                    .catch(error => {
+                        document.getElementById("statusMessage").innerText = "Error: " + error.message;
+                    });
             };
             modeControls.appendChild(resumeModeButton);
+
             // ---------------------------------------
 
             groupDiv.appendChild(modeControls);
