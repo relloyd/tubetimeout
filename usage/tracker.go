@@ -308,8 +308,8 @@ func (d *deviceData) calculateWindow(now time.Time) (time.Time, time.Time) {
 
 // GetSummary returns a map of device IDs to the number of samples seen.
 // Used by package web for reporting.
-func (t *Tracker) GetSummary() map[string]*models.GroupSummary {
-	samples := make(map[string]*models.GroupSummary)
+func (t *Tracker) GetSummary() map[string]*models.TrackerSummary {
+	samples := make(map[string]*models.TrackerSummary)
 
 	t.devices.Range(func(k, v interface{}) bool {
 		data := v.(*deviceData)
@@ -329,7 +329,7 @@ func (t *Tracker) GetSummary() map[string]*models.GroupSummary {
 			usagePercent = 100
 		}
 
-		samples[k.(string)] = &models.GroupSummary{
+		samples[k.(string)] = &models.TrackerSummary{
 			Used:       count,
 			Total:      total,
 			Percentage: usagePercent,
@@ -341,7 +341,7 @@ func (t *Tracker) GetSummary() map[string]*models.GroupSummary {
 	return samples
 }
 
-// ResetGroup resets the tracker sample data for the given device.
+// Reset resets the tracker sample data for the given device.
 func (t *Tracker) Reset(id string) {
 	id = strings.ToLower(id)
 	t.devices.Delete(id)
@@ -368,19 +368,19 @@ func (t *Tracker) SetMode(id string, d time.Duration, mode models.UsageTrackerMo
 }
 
 // GetModeEndTime returns the end time of the pause for the given device.
-func (t *Tracker) GetModeEndTime(id string) (models.GroupMode, error) {
+func (t *Tracker) GetModeEndTime(id string) (models.TrackerMode, error) {
 	id = strings.ToLower(id)
 
 	data, ok := t.devices.Load(id)
 	if !ok {
-		return models.GroupMode{}, fmt.Errorf("group %v not found", id)
+		return models.TrackerMode{}, fmt.Errorf("group %v not found", id)
 	}
 	dd := data.(*deviceData)
 
 	dd.mu.Lock()
 	defer dd.mu.Unlock()
 
-	return models.GroupMode{Mode: dd.config.Mode, ModeEndTime: dd.config.ModeEndTime}, nil
+	return models.TrackerMode{Mode: dd.config.Mode, ModeEndTime: dd.config.ModeEndTime}, nil
 }
 
 // Resume resumes the tracker for the given device.

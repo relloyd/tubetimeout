@@ -41,13 +41,7 @@ type NamedMAC struct {
 	Name string `yaml:"name"`
 }
 
-type UsageTrackerMode int
-
-const (
-	ModeMonitor UsageTrackerMode = iota
-	ModeAllow
-	ModeBlock
-)
+type MapGroupTrackerConfig map[Group]*TrackerConfig
 
 // TrackerConfig contains the configuration for the usage tracker of a specific group.
 type TrackerConfig struct {
@@ -73,16 +67,6 @@ type TrackerConfig struct {
 	ModeEndTime time.Time
 }
 
-type MapGroupTrackerConfig map[Group]*TrackerConfig
-
-// GroupSummary contains the used and total count of a group used by the usage tracker and web for reporting.
-type GroupSummary struct {
-	Used            int               `json:"used"`
-	Total           int               `json:"total"`
-	Percentage      int               `json:"percentage"`
-	LastActiveTimes map[MAC]time.Time `json:"activity"`
-}
-
 type Direction string
 
 const (
@@ -90,7 +74,10 @@ const (
 	Egress  Direction = "out"
 )
 
-type GroupMode struct {
-	Mode        UsageTrackerMode `json:"mode"`
-	ModeEndTime time.Time        `json:"modeEndTime"`
-}
+type UsageTrackerMode int
+
+const (
+	ModeMonitor UsageTrackerMode = iota
+	ModeAllow
+	ModeBlock
+)

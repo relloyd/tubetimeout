@@ -113,7 +113,7 @@ func (h *Handler) activityHandler(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) usageHandler(w http.ResponseWriter, r *http.Request) {
 	// TODO: test the methods for usageHandler as we borked them before!
 	if r.Method == http.MethodGet {
-		summary := h.usageTracker.GetSummary()                   // map[string]models.GroupSummary, where string is the device ID, which is a group
+		summary := h.usageTracker.GetSummary()                   // map[string]models.TrackerSummary, where string is the device ID, which is a group
 		lastActiveTimes := h.monitor.GetTrafficLastActiveTimes() //  map[models.Group]map[models.MAC]time.Time, where the string is the group
 
 		for group, v := range lastActiveTimes {

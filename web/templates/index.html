@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>App Configuration</title>
+  <title>TubeTimout</title>
   <link rel="stylesheet" href="/static/style.css" />
   <script src="/static/script.js" defer></script>
 </head>
 <body>
 <div class="container">
-  <h1>TubeTimeout Configuration</h1>
+  <h1>TubeTimeout</h1>
   <table>
     <thead>
     <tr>
@@ -37,18 +37,15 @@
 <div id="statusMessage"></div>
 
 <div class="container">
-  <h1>Device Groups</h1>
-
-  <!-- Consolidated Group Configuration Form in Table Layout -->
   <section>
-    <h2>Group Configuration</h2>
+    <h1>Group Configuration</h1>
     <form id="group-config-form">
       <table>
         <thead>
         <tr>
           <th>Select Group</th>
           <th>Group Name</th>
-          <th>Retention (days)</th>
+          <th>Retention (minutes)</th>
           <th>Start Day</th>
           <th>Start Time</th>
         </tr>
@@ -56,17 +53,21 @@
         <tbody>
         <tr>
           <td>
+            <label for="group-select"></label>
             <select id="group-select">
               <option value="">-- New Group --</option>
             </select>
           </td>
           <td>
+            <label for="group-name"></label>
             <input id="group-name" type="text" placeholder="Group Name" required />
           </td>
           <td>
+            <label for="group-retention"></label>
             <input id="group-retention" type="number" placeholder="Retention" required />
           </td>
           <td>
+            <label for="group-start-day"></label>
             <select id="group-start-day">
               <option value="0">Sunday</option>
               <option value="1">Monday</option>
@@ -78,23 +79,34 @@
             </select>
           </td>
           <td>
-            <!-- Only 5-minute intervals allowed -->
-            <input id="group-start-time" type="time" step="300" required />
+            <label for="group-start-time"></label><input id="group-start-time" type="time" step="300" required />
           </td>
         </tr>
         </tbody>
       </table>
-      <button type="button" id="save-group-btn">Save Group Configuration</button>
+      <button type="button" id="save-group-btn">Save</button>
     </form>
   </section>
 
-  <!-- Device Assignment Section -->
   <section>
-    <h2>Assign Device to Group</h2>
-    <select id="device-dropdown"></select>
-    <input id="device-name" type="text" placeholder="Device Name" />
-    <select id="device-group-dropdown"></select>
-    <button id="add-to-group-btn" type="button">Add to Group</button>
+    <h1>Assign Devices to Groups</h1>
+    <table>
+      <thead>
+      <tr>
+        <th>Device</th>
+        <th>Name</th>
+        <th>Group</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+        <td><label for="device-dropdown"></label><select id="device-dropdown"></select></td>
+        <td><label for="device-name"></label><input id="device-name" type="text" placeholder="Device Name" /></td>
+        <td><label for="device-group-dropdown"></label><select id="device-group-dropdown"></select></td>
+        <td><button id="add-to-group-btn" type="button">Add to Group</button></td>
+      </tr>
+      </tbody>
+    </table>
   </section>
 
   <div class="save-container">

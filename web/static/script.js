@@ -29,22 +29,40 @@ async function putData(url, data) {
 
 // ---------- Main App Code ----------
 document.addEventListener('DOMContentLoaded', () => {
+    const saveButton = document.getElementById('save-config-btn');
+
     // API endpoints – note the use of /groups instead of /groupMACs.
     const UrlGroupAPI = '/groups';
     const UrlUsageAPI = '/usage';
-    const trackerConfigAPI = '/trackerConfig';
-    const saveButton = document.getElementById('save-config-btn');
+    const UrlTrackerAPI = '/trackerConfig';
 
-    let flatGroupMACs = [];
-    // groups will be an array of objects, each with: { name, retention, startDay, startDuration, currentMode, modeEndTime }
-    let groups = [];
-    let availableMACs = [];
+    let groupMACs = []; // device groups
+    let groups = [];  // groups will be an array of objects, each with: { name, retention, threshold, startDay, startDuration, currentMode, modeEndTime }
     let usageData = {};
+    let availableMACs = [];
+
+    // Fetch the device assignments and usage data.
+    async function fetchConfigAndRender() {
+        await fetchTrackerConfig();
+        await fetchUsageData();
+
+        const response = await fetch(UrlGroupAPI);
+        groupMACs = await response.json();
+        const deviceGroupNames = [...new Set(groupMACs.map(entry => entry.group).filter(Boolean))];
+        mergeDeviceGroups(deviceGroupNames);
+
+        renderDevices();
+        renderGroups();
+        updateGroupSelect();
+        updateDeviceGroupDropdown();
+
+        updateAllGroupModes();
+    }
 
     // Fetch tracker configuration – ensure data is an array.
     async function fetchTrackerConfig() {
         try {
-            const response = await fetch(trackerConfigAPI);
+            const response = await fetch(UrlTrackerAPI);
             if (response.ok) {
                 const configData = await response.json();
                 groups = Array.isArray(configData) ? configData : Object.values(configData);
@@ -60,29 +78,40 @@ document.addEventListener('DOMContentLoaded', () => {
     function mergeDeviceGroups(deviceGroupNames) {
         deviceGroupNames.forEach(name => {
             if (!groups.find(g => g.name === name)) {
-                groups.push({ name, retention: 0, startDay: "0", startDuration: 0 });
+                groups.push({ name, retention: 0, threshold: 0, startDay: "0", startDuration: 0, currentMode: 0, modeEndTime: new Date() });
             }
         });
     }
 
-    // Fetch the device assignments and usage data.
-    async function fetchConfig() {
-        await fetchTrackerConfig();
+    // Save both device assignments and tracker configuration.
+    async function saveConfig() {
+        try {
+            // Save Device Groups.
+            const deviceGroupsToSave = groupMACs.filter(entry => entry.group);
+            let response = await fetch(UrlGroupAPI, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(deviceGroupsToSave),
+            });
+            if (!response.ok) throw new Error('Failed to save device groups');
 
-        const response = await fetch(UrlGroupAPI);
-        flatGroupMACs = await response.json();
-
-        const deviceGroupNames = [...new Set(flatGroupMACs.map(entry => entry.group).filter(Boolean))];
-        mergeDeviceGroups(deviceGroupNames);
-
-        await fetchUsageData();
-
-        renderDevices();
-        renderGroups();
-        updateGroupSelect();
-        updateDeviceGroupDropdown();
-
-        updateAllGroupModes();
+            // Save Tracker Config.
+            const groupBody = JSON.stringify(groups)
+            console.log(groupBody);
+            response = await fetch(UrlTrackerAPI, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: groupBody,
+            });
+            if (response.ok) {
+                showNotification('Configuration saved successfully', false);
+            } else {
+                showNotification('Failed to save tracker config', true);
+            }
+        } catch (error) {
+            showNotification('Error saving configuration: ' + error.message, true);
+        }
+        hideSaveButton();
     }
 
     async function fetchUsageData() {
@@ -138,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderDevices() {
         const deviceDropdown = document.getElementById('device-dropdown');
         deviceDropdown.innerHTML = '';
-        availableMACs = flatGroupMACs;
+        availableMACs = groupMACs;
         availableMACs.forEach(({ mac, name, group }) => {
             const option = document.createElement('option');
             option.value = mac;
@@ -153,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateDeviceNameInput() {
         const mac = document.getElementById('device-dropdown').value;
         const nameInput = document.getElementById('device-name');
-        const entry = flatGroupMACs.find(entry => entry.mac === mac);
+        const entry = groupMACs.find(entry => entry.mac === mac);
         nameInput.value = entry && entry.name ? entry.name : '';
     }
 
@@ -175,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
         groupsContainer.innerHTML = '';
 
         // Group the device assignments.
-        const grouped = flatGroupMACs.reduce((acc, { group, mac, name }) => {
+        const grouped = groupMACs.reduce((acc, { group, mac, name }) => {
             if (group) {
                 if (!acc[group]) acc[group] = [];
                 acc[group].push({ mac, name });
@@ -350,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function removeMacFromGroup(mac) {
-        flatGroupMACs.forEach(entry => {
+        groupMACs.forEach(entry => {
             if (entry.mac === mac) entry.group = '';
         });
         renderDevices();
@@ -359,7 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function removeGroup(groupName) {
-        flatGroupMACs.forEach(entry => {
+        groupMACs.forEach(entry => {
             if (entry.group === groupName) entry.group = '';
         });
         groups = groups.filter(g => g.name !== groupName);
@@ -368,33 +397,6 @@ document.addEventListener('DOMContentLoaded', () => {
         renderDevices();
         renderGroups();
         showSaveButton();
-    }
-
-    // Save both device assignments and tracker configuration.
-    async function saveConfig() {
-        const deviceGroupsToSave = flatGroupMACs.filter(entry => entry.group);
-        try {
-            let response = await fetch(UrlGroupAPI, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(deviceGroupsToSave),
-            });
-            if (!response.ok) throw new Error('Failed to save device groups');
-
-            response = await fetch(trackerConfigAPI, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(groups),
-            });
-            if (response.ok) {
-                showNotification('Configuration saved successfully', false);
-            } else {
-                showNotification('Failed to save tracker config', true);
-            }
-        } catch (error) {
-            showNotification('Error saving configuration: ' + error.message, true);
-        }
-        hideSaveButton();
     }
 
     function showNotification(message, isError = false) {
@@ -521,7 +523,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const mac = document.getElementById('device-dropdown').value;
         const name = document.getElementById('device-name').value.trim();
         const group = document.getElementById('device-group-dropdown').value;
-        flatGroupMACs.forEach(entry => {
+        groupMACs.forEach(entry => {
             if (entry.mac === mac) {
                 entry.name = name;
                 entry.group = group;
@@ -533,5 +535,5 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     saveButton.addEventListener('click', saveConfig);
-    fetchConfig();
+    fetchConfigAndRender();
 });

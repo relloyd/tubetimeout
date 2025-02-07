@@ -281,3 +281,10 @@ select {
     font-size: 16px;        /* Slightly larger text for readability */
     cursor: pointer;        /* Pointer cursor for better UX */
 }
+
+/* Optional inline CSS for better layout */
+#group-config-form {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
