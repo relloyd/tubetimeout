@@ -46,7 +46,7 @@ type MapGroupTrackerConfig map[Group]*TrackerConfig
 // TrackerConfig contains the configuration for the usage tracker of a specific group.
 type TrackerConfig struct {
 	// Granularity is the sampling resolution.
-	Granularity time.Duration `envconfig:"GRANULARITY" default:"1m"`
+	Granularity time.Duration `yaml:"-" envconfig:"GRANULARITY" default:"1m"`
 	// Retention is the period for samples to be kept and evaluated.
 	Retention time.Duration `yaml:"retention" envconfig:"RETENTION" default:"168h"` // 168h == 1 week
 	// Threshold is duration for exceeding conditions.
@@ -56,9 +56,9 @@ type TrackerConfig struct {
 	// StartDuration is the duration past midnight to start the window.
 	StartDuration time.Duration `yaml:"startTime" envconfig:"START_TIME" default:"12h"` // 12 PM
 	// SampleFilePath is the path to the file to save/read the device ID samples from.
-	SampleFilePath string `envconfig:"FILE_PATH" default:"samples.json"`
+	SampleFilePath string `yaml:"-" envconfig:"FILE_PATH" default:"samples.json"`
 	// SampleFileSaveInterval is the interval at which the samples are saved to the file.
-	SampleFileSaveInterval time.Duration `envconfig:"SAVE_INTERVAL" default:"1m"`
+	SampleFileSaveInterval time.Duration `yaml:"-" envconfig:"SAVE_INTERVAL" default:"1m"`
 	// SampleSize is the number of slots in the circular buffer.
 	SampleSize int `yaml:"sampleSize"`
 	// Mode is the mode of the tracker.

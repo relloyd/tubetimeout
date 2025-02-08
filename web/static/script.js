@@ -1,4 +1,6 @@
 // ---------- Main App Code ----------
+// noinspection ExceptionCaughtLocallyJS
+
 document.addEventListener('DOMContentLoaded', () => {
     const saveButton = document.getElementById('save-config-btn');
 
@@ -226,8 +228,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(deviceGroupsToSave),
             });
-            if (!response.ok) throw new Error('Failed to save device groups');
-
+            if (!response.ok) {
+                throw new Error('Failed to save device groups');
+            }
             // Save Tracker Config.
             const groupBody = JSON.stringify(groups)
             console.log(groupBody);
@@ -376,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const retention = humaniseDuration(groupConfig.retention);
                 const threshold = humaniseDuration(groupConfig.threshold);
                 const startDurationHHMM = formatMinutes(durationToMinutes(groupConfig.startDuration));
-                configInfo.textContent = `Block after ${threshold} usage. Reset every ${retention}. Next reset ${getDayName(groupConfig.startDay)} ${startDurationHHMM}`;
+                configInfo.textContent = `Enable TubeTimeout after ${threshold}. Reset every ${retention}. Next reset, ${getDayName(groupConfig.startDay)} ${startDurationHHMM}`;
                 groupDiv.appendChild(configInfo);
             }
 
@@ -580,21 +583,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const thresholdInput = document.getElementById('group-threshold');
         const startDaySelect = document.getElementById('group-start-day');
         const startTimeInput = document.getElementById('group-start-time');
-        if (selectedName === "") {
+        if (selectedName === "") { // if we need to be ready for a new group...
             nameInput.value = "";
             nameInput.disabled = false;
             retentionInput.value = "";
             thresholdInput.value = "";
-            startDaySelect.value = "0";
+            startDaySelect.value = 0;
             startTimeInput.value = "00:00:00";
-        } else {
+        } else { // else we're editing an existing group...
             const group = groups.find(g => g.name === selectedName);
             if (group) {
                 nameInput.value = group.name;
                 nameInput.disabled = true;
                 retentionInput.value = durationToDays(group.retention);
-                thresholdInput.value = durationToHours(group.threshold);
-                startDaySelect.value = group.startDay;
+                thresholdInput.value = durationToMinutes(group.threshold);
+                startDaySelect.value = group.startDay.toString();
                 startTimeInput.value = durationToTimeString(group.startDuration);
             }
         }
@@ -606,19 +609,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const nameInput = document.getElementById('group-name').value.trim();
         const retention = parseInt(document.getElementById('group-retention').value, 10);
         const threshold = parseInt(document.getElementById('group-threshold').value, 10);
-        const startDay = document.getElementById('group-start-day').value;
+        const startDay = parseInt(document.getElementById('group-start-day').value, 10);
         const startTime = document.getElementById('group-start-time').value;
         if (!nameInput || isNaN(retention) || isNaN(threshold) || !startTime) {
             alert("Please fill in all fields.");
             return;
         }
         const retentionDuration = daysToDuration(retention);
-        const thresholdDuration = hoursToDuration(threshold);
-        const startTimeDuration = timeStringToDuration(startTime);
+        const thresholdDuration = minutesToDuration(threshold);
+        const startDuration = timeStringToDuration(startTime);
         if (selectedName === "") { // if we're editing a new group...
             if (!groups.find(g => g.name === nameInput)) {  // if the group doesn't exist in memory...
                 // Save the group in memory.
-                groups.push({ name: nameInput, retention: retentionDuration, threshold: thresholdDuration, startDay: startDay, startDuration: startTimeDuration, currentMode: modeMonitor, modeEndTime: new Date() });
+                groups.push({ name: nameInput, retention: retentionDuration, threshold: thresholdDuration, startDay: startDay, startDuration: startDuration, currentMode: modeMonitor, modeEndTime: new Date() });
                 updateGroupSelect();
                 updateDeviceGroupDropdown();
             } else {
@@ -631,7 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 group.retention = retentionDuration;
                 group.threshold = thresholdDuration;
                 group.startDay = startDay;
-                group.startDuration = startTimeDuration;
+                group.startDuration = startDuration;
                 showNotification(`Group ${group.name} updated.`, false);
             }
         }
