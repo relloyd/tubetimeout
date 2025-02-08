@@ -70,11 +70,11 @@ func setGroupTrackerConfig(t *Tracker, m models.MapGroupTrackerConfig) error {
 			if v.Threshold == 0 {
 				v.Threshold = config.AppCfg.TrackerConfig.Threshold
 			}
-			if v.StartDay == 0 {
-				v.StartDay = config.AppCfg.TrackerConfig.StartDay
+			if v.StartDayInt == 0 {
+				v.StartDayInt = config.AppCfg.TrackerConfig.StartDayInt
 			}
-			if v.StartTime == 0 {
-				v.StartTime = config.AppCfg.TrackerConfig.StartTime
+			if v.StartDuration == 0 {
+				v.StartDuration = config.AppCfg.TrackerConfig.StartDuration
 			}
 		}
 	}

@@ -107,7 +107,8 @@ func (dw *DomainWatcher) Start(ctx context.Context) {
 }
 
 // TODO: fully replace the domains each time, rather than adding to them and test for this!
-//   only notify if they're new
+//
+//	only notify if they're new
 func (dw *DomainWatcher) loadGroupDomains() {
 	var err error
 	dw.groupDomains, err = fnGroupDomainLoader(dw.logger)

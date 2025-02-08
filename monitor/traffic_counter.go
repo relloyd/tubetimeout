@@ -102,7 +102,7 @@ func getTrafficMapMACFromKey(key string) models.MAC {
 // See also getTrafficMapKey().
 func (t *TrafficMap) GetTrafficLastActiveTimes() map[models.Group]map[models.MAC]time.Time {
 	retval := make(map[models.Group]map[models.MAC]time.Time)
-	t.trafficMap.Range(func(key any, value any) bool{
+	t.trafficMap.Range(func(key any, value any) bool {
 		k := key.(string) // key is group-mac
 		v := value.(*trafficStats)
 		gm := strings.Split(k, "-")

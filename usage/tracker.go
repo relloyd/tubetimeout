@@ -119,7 +119,7 @@ func newDeviceData(now time.Time, cfg *models.TrackerConfig) *deviceData {
 	}
 
 	if cfg.Retention < 24*time.Hour {
-		cfg.StartDay = 0
+		cfg.StartDayInt = 0
 	}
 
 	if cfg.Threshold == 0 {
@@ -163,14 +163,14 @@ func (t *Tracker) AddSample(id string, active bool) {
 	if !ok {
 		t.logger.Errorf("unable to load config for group %v, using defaults", id)
 		cfg = &models.TrackerConfig{
-			Granularity: t.cfgTrackerDefaults.Granularity,
-			Retention:   t.cfgTrackerDefaults.Retention,
-			Threshold:   t.cfgTrackerDefaults.Threshold,
-			StartDay:    t.cfgTrackerDefaults.StartDay,
-			StartTime:   t.cfgTrackerDefaults.StartTime,
-			SampleSize:  getSampleSize(t.cfgTrackerDefaults),
-			Mode:        models.ModeMonitor,
-			ModeEndTime: time.Time{},
+			Granularity:   t.cfgTrackerDefaults.Granularity,
+			Retention:     t.cfgTrackerDefaults.Retention,
+			Threshold:     t.cfgTrackerDefaults.Threshold,
+			StartDayInt:   t.cfgTrackerDefaults.StartDayInt,
+			StartDuration: t.cfgTrackerDefaults.StartDuration,
+			SampleSize:    getSampleSize(t.cfgTrackerDefaults),
+			Mode:          models.ModeMonitor,
+			ModeEndTime:   time.Time{},
 		}
 		t.cfgGroups[models.Group(id)] = cfg // save the config, so we don't have to set this again until data is overridden by global group tracker config
 	}
@@ -277,8 +277,8 @@ func (d *deviceData) calculateWindow(now time.Time) (time.Time, time.Time) {
 
 	if d.config.Retention >= 7*24*time.Hour {
 		// Weekly retention logic
-		startOfWeek := now.Truncate(7*24*time.Hour).AddDate(0, 0, d.config.StartDay-int(now.Weekday()))
-		lastWindowStart = startOfWeek.Add(d.config.StartTime).Truncate(d.config.Granularity)
+		startOfWeek := now.Truncate(7*24*time.Hour).AddDate(0, 0, d.config.StartDayInt-int(now.Weekday()))
+		lastWindowStart = startOfWeek.Add(d.config.StartDuration).Truncate(d.config.Granularity)
 		if now.Before(lastWindowStart) {
 			lastWindowStart = lastWindowStart.Add(-7 * 24 * time.Hour).Truncate(d.config.Granularity)
 		}
@@ -286,7 +286,7 @@ func (d *deviceData) calculateWindow(now time.Time) (time.Time, time.Time) {
 	} else if d.config.Retention >= 24*time.Hour {
 		// Daily retention logic
 		startOfDay := now.Truncate(24 * time.Hour)
-		lastWindowStart = startOfDay.Add(d.config.StartTime)
+		lastWindowStart = startOfDay.Add(d.config.StartDuration)
 		if now.Before(lastWindowStart) {
 			lastWindowStart = lastWindowStart.Add(-24 * time.Hour).Truncate(d.config.Granularity)
 		}
@@ -294,10 +294,10 @@ func (d *deviceData) calculateWindow(now time.Time) (time.Time, time.Time) {
 	} else {
 		// Sub-daily retention logic
 		baseWindowStart := now.Truncate(d.config.Retention)
-		lastWindowStart = baseWindowStart.Add(d.config.StartTime).Truncate(d.config.Granularity)
+		lastWindowStart = baseWindowStart.Add(d.config.StartDuration).Truncate(d.config.Granularity)
 		if now.Before(lastWindowStart) {
 			baseWindowStart = baseWindowStart.Add(-d.config.Retention)
-			lastWindowStart = baseWindowStart.Add(d.config.StartTime).Truncate(d.config.Granularity)
+			lastWindowStart = baseWindowStart.Add(d.config.StartDuration).Truncate(d.config.Granularity)
 		}
 		nextWindowStart = lastWindowStart.Add(d.config.Retention).Truncate(d.config.Granularity)
 	}

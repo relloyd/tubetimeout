@@ -1,32 +1,3 @@
-// ---------- Helper functions for AJAX requests ----------
-async function postData(url, data) {
-    try {
-        const response = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams(data),
-        });
-        document.getElementById("statusMessage").innerText = await response.text();
-    } catch (error) {
-        document.getElementById("statusMessage").innerText = "Error: " + error.message;
-    }
-}
-
-async function putData(url, data) {
-    const params = new URLSearchParams(data);
-    // console.log("putData: ", params.toString());
-    try {
-        const response = await fetch(url, {
-            method: "PUT",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: params,
-        });
-        document.getElementById("statusMessage").innerText = await response.text();
-    } catch (error) {
-        document.getElementById("statusMessage").innerText = "Error: " + error.message;
-    }
-}
-
 // ---------- Main App Code ----------
 document.addEventListener('DOMContentLoaded', () => {
     const saveButton = document.getElementById('save-config-btn');
@@ -36,10 +7,172 @@ document.addEventListener('DOMContentLoaded', () => {
     const UrlUsageAPI = '/usage';
     const UrlTrackerAPI = '/trackerConfig';
 
+    const nanosecondsPerMinute = 1e9 * 60; // 1e9 nanoseconds per second * 60 seconds
+    const nanosecondsPerHour = 1e9 * 60 * 60; // ... * 60 mins
+    const nanosecondsPerDay = 1e9 * 60 * 60 * 24; // ... * 24 hours
+
     let groupMACs = []; // device groups
     let groups = [];  // groups will be an array of objects, each with: { name, retention, threshold, startDay, startDuration, currentMode, modeEndTime }
     let usageData = {};
     let availableMACs = [];
+
+    // ---------- Helper functions for AJAX requests ----------
+    async function postData(url, data) {
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams(data),
+            });
+            document.getElementById("statusMessage").innerText = await response.text();
+        } catch (error) {
+            document.getElementById("statusMessage").innerText = "Error: " + error.message;
+        }
+    }
+
+    async function putData(url, data) {
+        const params = new URLSearchParams(data);
+        // console.log("putData: ", params.toString());
+        try {
+            const response = await fetch(url, {
+                method: "PUT",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: params,
+            });
+            document.getElementById("statusMessage").innerText = await response.text();
+        } catch (error) {
+            document.getElementById("statusMessage").innerText = "Error: " + error.message;
+        }
+    }
+
+    /*
+    * Converts a Go duration (in nanoseconds) to a human-readable string.
+    * @param {number} duration - The duration in nanoseconds.
+    * @returns {string} - A human-readable string (e.g., "45 minutes" or "1 hour 15 minutes").
+    */
+    function humaniseDuration(duration) {
+        // Define conversion constants
+        const nsInSecond = 1e9;                   // 1 second = 1e9 nanoseconds
+        const nsInMinute = 60 * nsInSecond;         // 1 minute = 60 seconds
+        const nsInHour = 60 * nsInMinute;           // 1 hour = 60 minutes
+        const nsInDay = 24 * nsInHour;              // 1 day = 24 hours
+
+        if (duration < nsInHour) {
+            // For durations less than one hour, show minutes only.
+            const minutes = Math.floor(duration / nsInMinute);
+            if (minutes > 0) {
+                return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+            } else {
+                return ""
+            }
+        } else if (duration < nsInDay) {
+            // For durations less than one day, show hours and minutes.
+            const hours = Math.floor(duration / nsInHour);
+            const minutes = Math.floor((duration % nsInHour) / nsInMinute);
+            let result = `${hours} hour${hours !== 1 ? "s" : ""}`;
+            if (minutes > 0) {
+                result += ` ${minutes} minute${minutes !== 1 ? "s" : ""}`;
+            }
+            return result;
+        } else {
+            // For durations of one day or more, show days, hours, and minutes.
+            const days = Math.floor(duration / nsInDay);
+            const remainder = duration % nsInDay;
+            const hours = Math.floor(remainder / nsInHour);
+            const minutes = Math.floor((remainder % nsInHour) / nsInMinute);
+
+            let result = `${days} day${days !== 1 ? "s" : ""}`;
+            if (hours > 0) {
+                result += ` ${hours} hour${hours !== 1 ? "s" : ""}`;
+            }
+            if (minutes > 0) {
+                result += ` ${minutes} minute${minutes !== 1 ? "s" : ""}`;
+            }
+            return result;
+        }
+    }
+
+    /*
+     * Converts a Go duration (in nanoseconds) to a "HH:mm:ss" formatted string.
+     * @param {number} duration - The Go duration in nanoseconds.
+     * @returns {string} A string formatted as "HH:mm:ss".
+     */
+    function durationToTimeString(duration) {
+        // Convert the duration from nanoseconds to total seconds.
+        const totalSeconds = Math.floor(duration / 1e9);
+
+        // Calculate hours, minutes, and seconds.
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        // Helper function to pad numbers with a leading zero if needed.
+        const pad = (num) => String(num).padStart(2, '0');
+
+        const retval = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+        console.log(`durationToTimeString: converted duration ${duration} to ${retval}`)
+        return retval;
+    }
+
+    /*
+     * Converts a time string to a Golang duration as a string.
+     * @param {time} string - The time in HH:mm
+     * @returns {string} A string
+     */
+    function timeStringToDuration(timeString) {
+        const [hours, mins] = timeString.split(':').map(Number);
+        const minutes = hours * 60 + mins;
+        const retval = minutesToDuration(minutes);
+        console.log(`timeStringToDuration: converted ${timeString} to ${retval}`);
+        return retval;
+    }
+
+    function daysToDuration(days) {
+        return nanosecondsPerDay * days;
+    }
+
+    function hoursToDuration(hours) {
+        return nanosecondsPerHour * hours;
+    }
+
+    function minutesToDuration(minutes) {
+        return minutes * nanosecondsPerMinute;
+    }
+
+    function durationToMinutes(duration) {
+        return duration / nanosecondsPerMinute;
+    }
+
+    function durationToHours(duration) {
+        return duration / nanosecondsPerHour;
+    }
+
+    function durationToDays(duration) {
+        return duration / nanosecondsPerDay;
+    }
+
+    function formatTimeSince(timestampString) {
+        const timestamp = new Date(timestampString);
+        const now = new Date();
+        const diffSeconds = Math.floor((now - timestamp) / 1000);
+        if (diffSeconds < 60) return `${diffSeconds} second${diffSeconds === 1 ? '' : 's'} ago`;
+        const diffMinutes = Math.floor(diffSeconds / 60);
+        if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+        const diffHours = Math.floor(diffMinutes / 60);
+        if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+    }
+
+    function formatMinutes(totalMinutes) {
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    }
+
+    const modeMonitor = "Monitor";
+    const modeBlock = "Block";
+    const modeAllow = "Allow";
 
     // Fetch the device assignments and usage data.
     async function fetchConfigAndRender() {
@@ -78,7 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function mergeDeviceGroups(deviceGroupNames) {
         deviceGroupNames.forEach(name => {
             if (!groups.find(g => g.name === name)) {
-                groups.push({ name, retention: 0, threshold: 0, startDay: 0, startDuration: 0, currentMode: 0, modeEndTime: new Date() });
+                groups.push({ name: name, retention: 0, threshold: 0, startDay: 0, startDuration: 0, currentMode: modeMonitor, modeEndTime: new Date() });
             }
         });
     }
@@ -124,7 +257,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // For each group, call GET /mode?group=<groupName> and store the returned modeEndTime.
     // For each group, call GET /mode?group=<groupName> and update the group's mode info.
     async function updateAllGroupModes() {
         await Promise.all(
@@ -136,25 +268,25 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Convert mode to a number in case it's returned as a string.
                         const modeVal = Number(data.mode);
                         if (modeVal === 0) {
-                            group.currentMode = "monitoring";
+                            group.currentMode = modeMonitor;
                             group.modeEndTime = null;
                         } else if (modeVal === 1) {
-                            group.currentMode = "allowed";
+                            group.currentMode = modeAllow;
                             group.modeEndTime = new Date(data.modeEndTime);
                         } else if (modeVal === 2) {
-                            group.currentMode = "blocked";
+                            group.currentMode = modeBlock;
                             group.modeEndTime = new Date(data.modeEndTime);
                         } else {
                             group.currentMode = "unknown";
                             group.modeEndTime = null;
                         }
                     } else {
-                        group.currentMode = "monitoring";
+                        group.currentMode = modeMonitor;
                         group.modeEndTime = null;
                     }
                 } catch (e) {
                     console.error(`Error fetching mode for group ${group.name}:`, e);
-                    group.currentMode = "monitoring";
+                    group.currentMode = modeMonitor;
                     group.modeEndTime = null;
                 }
             })
@@ -241,7 +373,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (groupConfig) {
                 const configInfo = document.createElement('div');
                 configInfo.classList.add('group-config-info');
-                configInfo.textContent = `Retention: ${groupConfig.retention} day(s), block after: ${groupConfig.threshold}, reset on: ${getDayName(groupConfig.startDay)} ${formatMinutes(groupConfig.startDuration)}`;
+                const retention = humaniseDuration(groupConfig.retention);
+                const threshold = humaniseDuration(groupConfig.threshold);
+                const startDurationHHMM = formatMinutes(durationToMinutes(groupConfig.startDuration));
+                configInfo.textContent = `Block after ${threshold} usage. Reset every ${retention}. Next reset ${getDayName(groupConfig.startDay)} ${startDurationHHMM}`;
                 groupDiv.appendChild(configInfo);
             }
 
@@ -250,7 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modeStatus.classList.add('group-mode-status');
             const now = new Date();
             // If the group has a current mode that is not "monitoring" and its end time is in the future...
-            if (groupConfig && groupConfig.currentMode !== "monitoring" && groupConfig.modeEndTime && groupConfig.modeEndTime > now) {
+            if (groupConfig && groupConfig.currentMode !== modeMonitor && groupConfig.modeEndTime && groupConfig.modeEndTime > now) {
                 let diffMinutes = Math.round((groupConfig.modeEndTime - now) / 60000);
                 if (diffMinutes < 60) {
                     modeStatus.textContent = `${groupConfig.currentMode} for ${diffMinutes} mins`;
@@ -260,7 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     modeStatus.textContent = `${groupConfig.currentMode} until ${hours}:${minutes}`;
                 }
             } else {
-                modeStatus.textContent = "(monitoring)";
+                modeStatus.textContent = ""; // empty text when in normal monitoring mode
             }
             groupDiv.appendChild(modeStatus);
 
@@ -288,7 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modeControls.classList.add('group-mode-controls');
 
             // Mode select: Allow or Block.
-            modeControls.appendChild(document.createTextNode("Mode: "));
+            modeControls.appendChild(document.createTextNode("Block / Allow: "));
             const modeSelect = document.createElement('select');
             modeSelect.classList.add('group-mode-select');
             const optionAllow = document.createElement('option');
@@ -302,7 +437,6 @@ document.addEventListener('DOMContentLoaded', () => {
             modeControls.appendChild(modeSelect);
 
             // Duration select: preset options.
-            modeControls.appendChild(document.createTextNode(" Duration: "));
             const durationSelect = document.createElement('select');
             durationSelect.classList.add('group-duration-select');
             const opt15 = document.createElement('option');
@@ -325,7 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // "Apply Mode" button.
             const applyModeButton = document.createElement('button');
-            applyModeButton.textContent = "Apply Mode";
+            applyModeButton.textContent = "Apply";
             applyModeButton.onclick = () => {
                 let durationVal = durationSelect.value;
                 if (durationVal === "untilMidnight") {
@@ -336,7 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Update the group’s mode info immediately.
                 const groupObj = groups.find(g => g.name === groupName);
                 if (groupObj) {
-                    groupObj.currentMode = modeSelect.value === "1" ? "allowed" : "blocked";
+                    groupObj.currentMode = modeSelect.value === "1" ? modeAllow : modeBlock;
                     groupObj.modeEndTime = new Date(Date.now() + parseInt(durationVal, 10) * 60000);
                 }
                 renderGroups();
@@ -360,7 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Update the group's mode information to reflect that it's now monitoring.
                         const groupObj = groups.find(g => g.name === groupName);
                         if (groupObj) {
-                            groupObj.currentMode = "monitoring";
+                            groupObj.currentMode = modeMonitor;
                             groupObj.modeEndTime = null;
                         }
                         renderGroups(); // Re-render groups to update the UI.
@@ -417,28 +551,9 @@ document.addEventListener('DOMContentLoaded', () => {
         saveButton.style.display = 'none';
     }
 
-    function formatTimeSince(timestampString) {
-        const timestamp = new Date(timestampString);
-        const now = new Date();
-        const diffSeconds = Math.floor((now - timestamp) / 1000);
-        if (diffSeconds < 60) return `${diffSeconds} second${diffSeconds === 1 ? '' : 's'} ago`;
-        const diffMinutes = Math.floor(diffSeconds / 60);
-        if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
-        const diffHours = Math.floor(diffMinutes / 60);
-        if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
-        const diffDays = Math.floor(diffHours / 24);
-        return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
-    }
-
     function getDayName(day) {
         const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
         return days[parseInt(day, 10)] || "Unknown";
-    }
-
-    function formatMinutes(totalMinutes) {
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = totalMinutes % 60;
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     }
 
     // ---------- Consolidated Group Configuration Form Handlers ----------
@@ -471,18 +586,16 @@ document.addEventListener('DOMContentLoaded', () => {
             retentionInput.value = "";
             thresholdInput.value = "";
             startDaySelect.value = "0";
-            startTimeInput.value = "";
+            startTimeInput.value = "00:00:00";
         } else {
             const group = groups.find(g => g.name === selectedName);
             if (group) {
                 nameInput.value = group.name;
                 nameInput.disabled = true;
-                retentionInput.value = group.retention;
-                thresholdInput.value = group.threshold;
+                retentionInput.value = durationToDays(group.retention);
+                thresholdInput.value = durationToHours(group.threshold);
                 startDaySelect.value = group.startDay;
-                const hours = Math.floor(group.startDuration / 60).toString().padStart(2, '0');
-                const mins = (group.startDuration % 60).toString().padStart(2, '0');
-                startTimeInput.value = `${hours}:${mins}`;
+                startTimeInput.value = durationToTimeString(group.startDuration);
             }
         }
     });
@@ -494,28 +607,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const retention = parseInt(document.getElementById('group-retention').value, 10);
         const threshold = parseInt(document.getElementById('group-threshold').value, 10);
         const startDay = document.getElementById('group-start-day').value;
-        const startTimeStr = document.getElementById('group-start-time').value;
-        if (!nameInput || isNaN(retention) || isNaN(threshold) || !startTimeStr) {
+        const startTime = document.getElementById('group-start-time').value;
+        if (!nameInput || isNaN(retention) || isNaN(threshold) || !startTime) {
             alert("Please fill in all fields.");
             return;
         }
-        const [hours, minutes] = startTimeStr.split(':').map(Number);
-        const startDuration = hours * 60 + minutes;
-        if (selectedName === "") {
-            if (!groups.find(g => g.name === nameInput)) {
-                groups.push({ name: nameInput, retention, threshold, startDay, startDuration });
+        const retentionDuration = daysToDuration(retention);
+        const thresholdDuration = hoursToDuration(threshold);
+        const startTimeDuration = timeStringToDuration(startTime);
+        if (selectedName === "") { // if we're editing a new group...
+            if (!groups.find(g => g.name === nameInput)) {  // if the group doesn't exist in memory...
+                // Save the group in memory.
+                groups.push({ name: nameInput, retention: retentionDuration, threshold: thresholdDuration, startDay: startDay, startDuration: startTimeDuration, currentMode: modeMonitor, modeEndTime: new Date() });
                 updateGroupSelect();
                 updateDeviceGroupDropdown();
             } else {
                 alert("Group already exists!");
             }
-        } else {
+        } else { // else we're editing an existing group...
             const group = groups.find(g => g.name === selectedName);
-            if (group) {
-                group.retention = retention;
-                group.threshold = threshold;
+            if (group) { // if the group exists in memory...
+                // Update the in-memory copy.
+                group.retention = retentionDuration;
+                group.threshold = thresholdDuration;
                 group.startDay = startDay;
-                group.startDuration = startDuration;
+                group.startDuration = startTimeDuration;
                 showNotification(`Group ${group.name} updated.`, false);
             }
         }

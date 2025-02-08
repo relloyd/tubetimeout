@@ -65,14 +65,14 @@ func TestNewTracker(t *testing.T) {
 	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
 		return models.MapGroupTrackerConfig{
 			"GroupA": {
-				Granularity: 1 * time.Minute,
-				Retention:   30 * time.Minute,
-				Threshold:   5 * time.Minute,
-				StartDay:    0,
-				StartTime:   0,
-				SampleSize:  1,
-				ModeEndTime: time.Time{},
-				Mode:        models.ModeAllow,
+				Granularity:   1 * time.Minute,
+				Retention:     30 * time.Minute,
+				Threshold:     5 * time.Minute,
+				StartDayInt:   0,
+				StartDuration: 0,
+				SampleSize:    1,
+				ModeEndTime:   time.Time{},
+				Mode:          models.ModeAllow,
 			},
 		}, nil
 	}
@@ -133,8 +133,8 @@ func TestHasExceededThreshold(t *testing.T) {
 		Granularity:            1 * time.Minute,
 		Retention:              1 * time.Hour,
 		Threshold:              10 * time.Minute,
-		StartDay:               0,
-		StartTime:              0,
+		StartDayInt:            0,
+		StartDuration:          0,
 		SampleSize:             0,
 		ModeEndTime:            time.Time{},
 		Mode:                   models.ModeMonitor,
@@ -323,8 +323,8 @@ func TestAddSample_SamplesAreSaved(t *testing.T) {
 	}
 
 	// Case 3: Add a sample after the retention period has passed.
-	now = now.Add(cfg.Retention) // Advance time by 1 hour.
-	tracker.AddSample(deviceID, true)  // This should reset the whole buffer and record a new one.
+	now = now.Add(cfg.Retention)      // Advance time by 1 hour.
+	tracker.AddSample(deviceID, true) // This should reset the whole buffer and record a new one.
 	// Case 3a: Verify that the device data was reinitialized.
 	data, ok = tracker.devices.Load(deviceID)
 	if !ok {
@@ -445,9 +445,9 @@ func TestCalculateWindow(t *testing.T) {
 		{
 			name: "Weekly Retention - Current Week",
 			config: &models.TrackerConfig{
-				Retention: 7 * 24 * time.Hour,
-				StartDay:  int(time.Monday),
-				StartTime: 10 * time.Hour,
+				Retention:     7 * 24 * time.Hour,
+				StartDayInt:   int(time.Monday),
+				StartDuration: 10 * time.Hour,
 			},
 			now:          time.Date(2024, 12, 2, 15, 0, 0, 0, time.UTC), // Monday
 			expectedLast: time.Date(2024, 12, 2, 10, 0, 0, 0, time.UTC),
@@ -456,9 +456,9 @@ func TestCalculateWindow(t *testing.T) {
 		{
 			name: "Daily Retention - Current Day",
 			config: &models.TrackerConfig{
-				Retention: 24 * time.Hour,
-				StartDay:  int(time.Sunday), // Ignored for daily retention
-				StartTime: 6 * time.Hour,
+				Retention:     24 * time.Hour,
+				StartDayInt:   int(time.Sunday), // Ignored for daily retention
+				StartDuration: 6 * time.Hour,
 			},
 			now:          time.Date(2024, 12, 2, 15, 0, 0, 0, time.UTC), // Monday
 			expectedLast: time.Date(2024, 12, 2, 6, 0, 0, 0, time.UTC),
@@ -467,9 +467,9 @@ func TestCalculateWindow(t *testing.T) {
 		{
 			name: "Sub-Daily Retention",
 			config: &models.TrackerConfig{
-				Retention: 12 * time.Hour,
-				StartDay:  0, // Ignored for sub-daily retention
-				StartTime: 3 * time.Hour,
+				Retention:     12 * time.Hour,
+				StartDayInt:   0, // Ignored for sub-daily retention
+				StartDuration: 3 * time.Hour,
 			},
 			now:          time.Date(2024, 12, 2, 15, 0, 0, 0, time.UTC), // Monday
 			expectedLast: time.Date(2024, 12, 2, 15, 0, 0, 0, time.UTC),
@@ -478,9 +478,9 @@ func TestCalculateWindow(t *testing.T) {
 		{
 			name: "Sub-Daily Retention 2",
 			config: &models.TrackerConfig{
-				Retention: 10 * time.Minute,
-				StartDay:  0, // Ignored for sub-daily retention
-				StartTime: 3 * time.Minute,
+				Retention:     10 * time.Minute,
+				StartDayInt:   0, // Ignored for sub-daily retention
+				StartDuration: 3 * time.Minute,
 			},
 			now:          time.Date(2024, 12, 2, 13, 50, 0, 0, time.UTC), // Monday
 			expectedLast: time.Date(2024, 12, 2, 13, 43, 0, 0, time.UTC),

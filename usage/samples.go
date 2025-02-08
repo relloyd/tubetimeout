@@ -35,13 +35,13 @@ func loadSamples(path string) (*sync.Map, error) {
 	for k, v := range loadedData {
 		if v.Config == nil { // if the samples file doesn't have tracker config persisted...
 			v.Config = &models.TrackerConfig{
-				Granularity:            config.AppCfg.TrackerConfig.Granularity,
-				Retention:              config.AppCfg.TrackerConfig.Retention,
-				Threshold:              config.AppCfg.TrackerConfig.Threshold,
-				StartDay:               config.AppCfg.TrackerConfig.StartDay,
-				StartTime:              config.AppCfg.TrackerConfig.StartTime,
-				Mode:                   models.ModeMonitor,
-				ModeEndTime:            time.Time{},
+				Granularity:   config.AppCfg.TrackerConfig.Granularity,
+				Retention:     config.AppCfg.TrackerConfig.Retention,
+				Threshold:     config.AppCfg.TrackerConfig.Threshold,
+				StartDayInt:   config.AppCfg.TrackerConfig.StartDayInt,
+				StartDuration: config.AppCfg.TrackerConfig.StartDuration,
+				Mode:          models.ModeMonitor,
+				ModeEndTime:   time.Time{},
 			} // set a starter values.
 		}
 		m.Store(k, &deviceData{

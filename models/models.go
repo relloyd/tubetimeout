@@ -51,10 +51,10 @@ type TrackerConfig struct {
 	Retention time.Duration `yaml:"retention" envconfig:"RETENTION" default:"168h"` // 168h == 1 week
 	// Threshold is duration for exceeding conditions.
 	Threshold time.Duration `yaml:"threshold" envconfig:"THRESHOLD" default:"180m"`
-	// StartDay is the day of the week to start the window.
-	StartDay int `yaml:"startDay" envconfig:"START_DAY" default:"5"` // Friday
-	// StartTime is the duration past midnight to start the window.
-	StartTime time.Duration `yaml:"startTime" envconfig:"START_TIME" default:"12h"` // 12 PM
+	// StartDayInt is the day of the week to start the window.
+	StartDayInt int `yaml:"startDay" envconfig:"START_DAY" default:"5"` // Friday
+	// StartDuration is the duration past midnight to start the window.
+	StartDuration time.Duration `yaml:"startTime" envconfig:"START_TIME" default:"12h"` // 12 PM
 	// SampleFilePath is the path to the file to save/read the device ID samples from.
 	SampleFilePath string `envconfig:"FILE_PATH" default:"samples.json"`
 	// SampleFileSaveInterval is the interval at which the samples are saved to the file.

@@ -139,7 +139,7 @@ func TestSetGroupTrackerConfig_EntriesAreFiltered(t *testing.T) {
 	t.Cleanup(func() {
 		restoreFunctions()
 	})
-	
+
 	existingGroupTrackerConfig := models.MapGroupTrackerConfig{
 		"existingGroup": &models.TrackerConfig{Granularity: time.Minute},
 	}

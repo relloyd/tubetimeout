@@ -159,13 +159,13 @@ func (h *Handler) trackerConfigHandler(w http.ResponseWriter, r *http.Request) {
 		flatConfig := make([]models.FlatTrackerConfig, 0) // make empty slice so we marshall at least something below
 		for k, v := range gtc {
 			flatConfig = append(flatConfig, models.FlatTrackerConfig{
-				Group:       k,
-				Retention:   v.Retention,
-				Threshold:   v.Threshold,
-				StartDay:    v.StartDay,
-				StartTime:   v.StartTime,
-				Mode:        v.Mode,
-				ModeEndTime: v.ModeEndTime,
+				Group:         k,
+				Retention:     v.Retention,
+				Threshold:     v.Threshold,
+				StartDayInt:   v.StartDayInt,
+				StartDuration: v.StartDuration,
+				Mode:          v.Mode,
+				ModeEndTime:   v.ModeEndTime,
 			})
 		}
 
@@ -185,12 +185,12 @@ func (h *Handler) trackerConfigHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			gtc[v.Group] = &models.TrackerConfig{
-				Retention:              v.Retention,
-				Threshold:              v.Threshold,
-				StartDay:               v.StartDay,
-				StartTime:              v.StartTime,
-				Mode:                   v.Mode,
-				ModeEndTime:            v.ModeEndTime,
+				Retention:     v.Retention,
+				Threshold:     v.Threshold,
+				StartDayInt:   v.StartDayInt,
+				StartDuration: v.StartDuration,
+				Mode:          v.Mode,
+				ModeEndTime:   v.ModeEndTime,
 			}
 		}
 

@@ -54,7 +54,7 @@ func TestScanNetwork(t *testing.T) {
 		}
 	}
 	// Validate the IP MACs.
-	expectedMim := models.MapIpMACs {
+	expectedMim := models.MapIpMACs{
 		"192.168.1.10": "00:11:22:33:44:55",
 		"192.168.1.11": "66:77:88:99:AA:BB",
 		"192.168.1.12": "CC:DD:EE:FF:00:11",

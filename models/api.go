@@ -6,13 +6,13 @@ import (
 
 // FlatTrackerConfig is used by the API.
 type FlatTrackerConfig struct {
-	Group       Group            `json:"name"`
-	Retention   time.Duration    `json:"retention"` // TODO: get the script to handle retention and threshold
-	Threshold   time.Duration    `json:"threshold"`
-	StartDay    int              `json:"startDay"`
-	StartTime   time.Duration    `json:"startTime"`
-	Mode        UsageTrackerMode `json:"mode"`
-	ModeEndTime time.Time        `json:"modeEndTime"`
+	Group         Group            `json:"name"`
+	Retention     time.Duration    `json:"retention"` // TODO: get the script to handle retention and threshold
+	Threshold     time.Duration    `json:"threshold"`
+	StartDayInt   int              `json:"startDay"`
+	StartDuration time.Duration    `json:"startDuration"`
+	Mode          UsageTrackerMode `json:"mode"`
+	ModeEndTime   time.Time        `json:"modeEndTime"`
 }
 
 // TrackerMode is used by the API to return data to the web page.
