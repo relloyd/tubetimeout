@@ -26,9 +26,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: new URLSearchParams(data),
             });
-            document.getElementById("statusMessage").innerText = await response.text();
+            // document.getElementById("statusMessage").innerText = await response.text();
+            showNotification(await response.text(), false);
+
         } catch (error) {
-            document.getElementById("statusMessage").innerText = "Error: " + error.message;
+            // document.getElementById("statusMessage").innerText = "Error: " + error.message;
+            showNotification("Error: " + error.message, true);
         }
     }
 
@@ -41,9 +44,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: params,
             });
-            document.getElementById("statusMessage").innerText = await response.text();
+            // document.getElementById("statusMessage").innerText = await response.text();
+            showNotification(await response.text(), false);
         } catch (error) {
-            document.getElementById("statusMessage").innerText = "Error: " + error.message;
+            // document.getElementById("statusMessage").innerText = "Error: " + error.message;
+            showNotification("Error: " + error.message, true);
         }
     }
 
@@ -494,7 +499,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         return response.text();
                     })
                     .then(text => {
-                        document.getElementById("statusMessage").innerText = text;
+                        // document.getElementById("statusMessage").innerText = text;
+                        showNotification(text, false);
                         // Update the group's mode information to reflect that it's now monitoring.
                         const groupObj = groups.find(g => g.name === groupName);
                         if (groupObj) {
@@ -504,7 +510,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         renderGroups(); // Re-render groups to update the UI.
                     })
                     .catch(error => {
-                        document.getElementById("statusMessage").innerText = "Error: " + error.message;
+                        // document.getElementById("statusMessage").innerText = "Error: " + error.message;
+                        showNotification( "Error: " + error.message, true)
                     });
             };
             modeControls.appendChild(resumeModeButton);
