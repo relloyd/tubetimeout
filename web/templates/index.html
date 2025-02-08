@@ -33,9 +33,6 @@
   </table>
 </div>
 
-<!-- Global status message -->
-<div id="statusMessage"></div>
-
 <div class="container">
   <section>
     <h1>Usage Tracker Groups</h1>
@@ -97,23 +94,25 @@
 
   <section>
     <h1>Devices</h1>
-    <table>
-      <thead>
-      <tr>
-        <th>Device</th>
-        <th>Name</th>
-        <th>Group</th>
-      </tr>
-      </thead>
-      <tbody>
-      <tr>
-        <td><label for="device-dropdown"></label><select id="device-dropdown"></select></td>
-        <td><label for="device-name"></label><input id="device-name" type="text" placeholder="Device Name" /></td>
-        <td><label for="device-group-dropdown"></label><select id="device-group-dropdown"></select></td>
-        <td><button id="add-to-group-btn" type="button">Add to Group</button></td>
-      </tr>
-      </tbody>
-    </table>
+    <div class="table-responsive">
+      <table>
+        <thead>
+        <tr>
+          <th>Device</th>
+          <th>Name</th>
+          <th>Group</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+          <td><label for="device-dropdown"></label><select id="device-dropdown"></select></td>
+          <td><label for="device-name"></label><input id="device-name" type="text" placeholder="Device Name" /></td>
+          <td><label for="device-group-dropdown"></label><select id="device-group-dropdown"></select></td>
+          <td><button id="add-to-group-btn" type="button">Add to Group</button></td>
+        </tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <div class="save-container">
@@ -123,6 +122,7 @@
   <div id="groups-container"></div>
 
   <div id="notification" class="notification hidden"></div>
+  <div id="statusMessage"></div>
 </div>
 </body>
 </html>

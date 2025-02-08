@@ -64,8 +64,9 @@ section {
 
 /* Wrap tables in a responsive container */
 .table-responsive {
-    overflow-x: auto;
     margin-bottom: 20px;
+    border-radius: 8px;
+    overflow: hidden;
 }
 
 /* Style for the form (if you wish to center its contents) */
@@ -189,6 +190,8 @@ button:hover {
 }
 
 .group-mode-status {
+    font-size: 0.9rem;
+    color: #666;
     margin-bottom: 10px;
 }
 
@@ -196,7 +199,7 @@ button:hover {
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
-    margin-top: auto;
+    margin-top: 20px;
 }
 
 .group-mode-controls select,

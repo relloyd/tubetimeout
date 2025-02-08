@@ -380,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const retention = humaniseDuration(groupConfig.retention);
                 const threshold = humaniseDuration(groupConfig.threshold);
                 const startDurationHHMM = formatMinutes(durationToMinutes(groupConfig.startDuration));
-                configInfo.textContent = `Enable TubeTimeout after ${threshold}. Reset every ${retention}. Next reset, ${getDayName(groupConfig.startDay)} ${startDurationHHMM}`;
+                configInfo.textContent = `Block group after ${threshold} usage. Next reset on ${getDayName(groupConfig.startDay)} ${startDurationHHMM}`;
                 groupDiv.appendChild(configInfo);
             }
 
@@ -396,7 +396,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     const hours = groupConfig.modeEndTime.getHours().toString().padStart(2, '0');
                     const minutes = groupConfig.modeEndTime.getMinutes().toString().padStart(2, '0');
-                    modeStatus.textContent = `${groupConfig.currentMode} until ${hours}:${minutes}`;
+                    modeStatus.textContent = `${groupConfig.currentMode}ed until ${hours}:${minutes}`;
                 }
             } else {
                 modeStatus.textContent = ""; // empty text when in normal monitoring mode
