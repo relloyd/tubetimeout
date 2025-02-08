@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function mergeDeviceGroups(deviceGroupNames) {
         deviceGroupNames.forEach(name => {
             if (!groups.find(g => g.name === name)) {
-                groups.push({ name, retention: 0, threshold: 0, startDay: "0", startDuration: 0, currentMode: 0, modeEndTime: new Date() });
+                groups.push({ name, retention: 0, threshold: 0, startDay: 0, startDuration: 0, currentMode: 0, modeEndTime: new Date() });
             }
         });
     }
@@ -241,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (groupConfig) {
                 const configInfo = document.createElement('div');
                 configInfo.classList.add('group-config-info');
-                configInfo.textContent = `Retention: ${groupConfig.retention} day(s), Start Day: ${getDayName(groupConfig.startDay)}, Start Time: ${formatMinutes(groupConfig.startDuration)}`;
+                configInfo.textContent = `Retention: ${groupConfig.retention} day(s), block after: ${groupConfig.threshold}, reset on: ${getDayName(groupConfig.startDay)} ${formatMinutes(groupConfig.startDuration)}`;
                 groupDiv.appendChild(configInfo);
             }
 
@@ -462,12 +462,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedName = e.target.value;
         const nameInput = document.getElementById('group-name');
         const retentionInput = document.getElementById('group-retention');
+        const thresholdInput = document.getElementById('group-threshold');
         const startDaySelect = document.getElementById('group-start-day');
         const startTimeInput = document.getElementById('group-start-time');
         if (selectedName === "") {
             nameInput.value = "";
             nameInput.disabled = false;
             retentionInput.value = "";
+            thresholdInput.value = "";
             startDaySelect.value = "0";
             startTimeInput.value = "";
         } else {
@@ -476,6 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 nameInput.value = group.name;
                 nameInput.disabled = true;
                 retentionInput.value = group.retention;
+                thresholdInput.value = group.threshold;
                 startDaySelect.value = group.startDay;
                 const hours = Math.floor(group.startDuration / 60).toString().padStart(2, '0');
                 const mins = (group.startDuration % 60).toString().padStart(2, '0');
@@ -489,9 +492,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedName = groupSelect.value;
         const nameInput = document.getElementById('group-name').value.trim();
         const retention = parseInt(document.getElementById('group-retention').value, 10);
+        const threshold = parseInt(document.getElementById('group-threshold').value, 10);
         const startDay = document.getElementById('group-start-day').value;
         const startTimeStr = document.getElementById('group-start-time').value;
-        if (!nameInput || isNaN(retention) || !startTimeStr) {
+        if (!nameInput || isNaN(retention) || isNaN(threshold) || !startTimeStr) {
             alert("Please fill in all fields.");
             return;
         }
@@ -499,7 +503,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const startDuration = hours * 60 + minutes;
         if (selectedName === "") {
             if (!groups.find(g => g.name === nameInput)) {
-                groups.push({ name: nameInput, retention, startDay, startDuration });
+                groups.push({ name: nameInput, retention, threshold, startDay, startDuration });
                 updateGroupSelect();
                 updateDeviceGroupDropdown();
             } else {
@@ -509,6 +513,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const group = groups.find(g => g.name === selectedName);
             if (group) {
                 group.retention = retention;
+                group.threshold = threshold;
                 group.startDay = startDay;
                 group.startDuration = startDuration;
                 showNotification(`Group ${group.name} updated.`, false);

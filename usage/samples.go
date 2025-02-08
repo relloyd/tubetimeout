@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
 )
 
 func loadSamples(path string) (*sync.Map, error) {
@@ -31,6 +33,17 @@ func loadSamples(path string) (*sync.Map, error) {
 	// Convert DTO to sync.Map.
 	m := &sync.Map{}
 	for k, v := range loadedData {
+		if v.Config == nil { // if the samples file doesn't have tracker config persisted...
+			v.Config = &models.TrackerConfig{
+				Granularity:            config.AppCfg.TrackerConfig.Granularity,
+				Retention:              config.AppCfg.TrackerConfig.Retention,
+				Threshold:              config.AppCfg.TrackerConfig.Threshold,
+				StartDay:               config.AppCfg.TrackerConfig.StartDay,
+				StartTime:              config.AppCfg.TrackerConfig.StartTime,
+				Mode:                   models.ModeMonitor,
+				ModeEndTime:            time.Time{},
+			} // set a starter values.
+		}
 		m.Store(k, &deviceData{
 			mu:              &sync.Mutex{}, // Reinitialize the mutex
 			config:          v.Config,

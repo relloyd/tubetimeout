@@ -41,7 +41,7 @@ func TestGetGroupTrackerConfig_FileNotExist_CreatesFile(t *testing.T) {
 	cfg, err := getGroupTrackerConfig(tkr)
 	assert.NoError(t, err)
 	assert.True(t, configFileWritten, "expected file to be written")
-	assert.Nil(t, cfg)
+	assert.Nil(t, cfg, "expected config to be nil as it was only just written")
 }
 
 func TestGetGroupTrackerConfig_FileExists_ParsesYAML(t *testing.T) {

@@ -156,7 +156,7 @@ func (h *Handler) trackerConfigHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Flatten the tracker config.
-		var flatConfig []models.FlatTrackerConfig
+		flatConfig := make([]models.FlatTrackerConfig, 0) // make empty slice so we marshall at least something below
 		for k, v := range gtc {
 			flatConfig = append(flatConfig, models.FlatTrackerConfig{
 				Group:       k,
