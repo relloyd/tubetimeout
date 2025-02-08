@@ -365,10 +365,11 @@ document.addEventListener('DOMContentLoaded', () => {
             usageInfo.textContent = `${usage.used} mins (${usage.percentage}%) usage`;
             groupHeader.appendChild(usageInfo);
 
-            const removeGroupBtn = document.createElement('button');
-            removeGroupBtn.textContent = 'Remove Group';
-            removeGroupBtn.onclick = () => removeGroup(groupName);
-            groupHeader.appendChild(removeGroupBtn);
+            // const removeGroupBtn = document.createElement('button');
+            // removeGroupBtn.textContent = 'Remove Group';
+            // removeGroupBtn.onclick = () => removeGroup(groupName);
+            // groupHeader.appendChild(removeGroupBtn);
+
             groupDiv.appendChild(groupHeader);
 
             // Display tracker configuration details.
