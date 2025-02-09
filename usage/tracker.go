@@ -113,7 +113,7 @@ type deviceDataDTO struct {
 	WindowStartTime time.Time             `json:"windowStartTime"`
 }
 
-func getDefaultGroupTrackerConfig(t *models.TrackerConfig) (*models.TrackerConfig) {
+func getDefaultGroupTrackerConfig(t *models.TrackerConfig) *models.TrackerConfig {
 	return &models.TrackerConfig{
 		Granularity:   t.Granularity,
 		Retention:     t.Retention,

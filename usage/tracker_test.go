@@ -98,7 +98,7 @@ func TestNewTracker(t *testing.T) {
 	assert.Error(t, err, "NewTracker did not return error when not supplied with correct logger")
 	assert.Nil(t, tracker, "NewTracker did not return nil when not supplied with correct logger")
 
-	// Restore the function that loads samples.
+	// Restore the function that loads samples so it can load the samples we created above.
 	fnLoadSamples = originalFnLoadSamples
 
 	// Tracker with threshold 0 should default to 1 minute.
