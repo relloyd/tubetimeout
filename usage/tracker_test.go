@@ -54,7 +54,7 @@ func TestNewTracker(t *testing.T) {
 	assert.NoError(t, err, "Failed to save samples")
 
 	// Case 1: Create a tracker with a 1-hour retention, 10-minute threshold, and 1-minute granularity.
-	cfg := &models.TrackerConfig{
+	cfgTrackerDefaults := &models.TrackerConfig{
 		Retention:              1 * time.Hour,
 		Threshold:              0 * time.Minute, // expect tracker to use at least 1 min.
 		Granularity:            1 * time.Minute,
@@ -94,7 +94,7 @@ func TestNewTracker(t *testing.T) {
 	assert.Error(t, err, "NewTracker did not return error when not supplied with correct cfg")
 	assert.Nil(t, tracker, "NewTracker did not return nil when not supplied with correct cfg")
 
-	tracker, err = NewTracker(ctx, nil, cfg)
+	tracker, err = NewTracker(ctx, nil, cfgTrackerDefaults)
 	assert.Error(t, err, "NewTracker did not return error when not supplied with correct logger")
 	assert.Nil(t, tracker, "NewTracker did not return nil when not supplied with correct logger")
 
@@ -102,13 +102,13 @@ func TestNewTracker(t *testing.T) {
 	fnLoadSamples = originalFnLoadSamples
 
 	// Tracker with threshold 0 should default to 1 minute.
-	tracker, err = NewTracker(ctx, config.MustGetLogger(), cfg)
+	tracker, err = NewTracker(ctx, config.MustGetLogger(), cfgTrackerDefaults)
 	assert.NoError(t, err, "NewTracker failed")
 	assert.NotNil(t, tracker, "NewTracker returned nil")
 	assert.NotNil(t, tracker.devices, "NewTracker did not initialize devices map")
-	assert.Equal(t, cfg.Retention, tracker.cfgTrackerDefaults.Retention, "NewTracker did not set retention")
-	assert.Equal(t, cfg.Granularity, tracker.cfgTrackerDefaults.Granularity, "NewTracker did not set granularity")
-	assert.Equal(t, cfg.Threshold, tracker.cfgTrackerDefaults.Threshold, "NewTracker did not set threshold")
+	assert.Equal(t, cfgTrackerDefaults.Retention, tracker.cfgTrackerDefaults.Retention, "NewTracker did not set retention")
+	assert.Equal(t, cfgTrackerDefaults.Granularity, tracker.cfgTrackerDefaults.Granularity, "NewTracker did not set granularity")
+	assert.Equal(t, cfgTrackerDefaults.Threshold, tracker.cfgTrackerDefaults.Threshold, "NewTracker did not set threshold")
 	assert.NotNil(t, tracker.nowFunc, "NewTracker did not set a default nowFunc")
 	assert.NotNil(t, tracker.mu, "NewTracker did not setup the mutex")
 
@@ -511,11 +511,13 @@ func saveSomeSamples(t *testing.T) (*sync.Map, *os.File, error) {
 	// Create sample data.
 	devices := &sync.Map{}
 	devices.Store("device1", &deviceData{
+		config:          getDefaultGroupTrackerConfig(&config.AppCfg.TrackerConfig),
 		samples:         []bool{true, false, true, false},
 		windowStartTime: time.Now().UTC(),
 		mu:              &sync.Mutex{},
 	})
 	devices.Store("device2", &deviceData{
+		config:          getDefaultGroupTrackerConfig(&config.AppCfg.TrackerConfig),
 		samples:         []bool{false, true, false, true},
 		windowStartTime: time.Now().Add(-time.Hour).UTC(),
 		mu:              &sync.Mutex{},

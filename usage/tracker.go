@@ -113,6 +113,19 @@ type deviceDataDTO struct {
 	WindowStartTime time.Time             `json:"windowStartTime"`
 }
 
+func getDefaultGroupTrackerConfig(t *models.TrackerConfig) (*models.TrackerConfig) {
+	return &models.TrackerConfig{
+		Granularity:   t.Granularity,
+		Retention:     t.Retention,
+		Threshold:     t.Threshold,
+		StartDayInt:   t.StartDayInt,
+		StartDuration: t.StartDuration,
+		SampleSize:    getSampleSize(t),
+		Mode:          models.ModeMonitor,
+		ModeEndTime:   time.Time{},
+	}
+}
+
 func newDeviceData(now time.Time, cfg *models.TrackerConfig) *deviceData {
 	if cfg.Retention > 7*24*time.Hour {
 		cfg.Retention = 7 * 24 * time.Hour
@@ -162,16 +175,7 @@ func (t *Tracker) AddSample(id string, active bool) {
 	cfg, ok := t.cfgGroups[models.Group(id)]
 	if !ok {
 		t.logger.Errorf("unable to load config for group %v, using defaults", id)
-		cfg = &models.TrackerConfig{
-			Granularity:   t.cfgTrackerDefaults.Granularity,
-			Retention:     t.cfgTrackerDefaults.Retention,
-			Threshold:     t.cfgTrackerDefaults.Threshold,
-			StartDayInt:   t.cfgTrackerDefaults.StartDayInt,
-			StartDuration: t.cfgTrackerDefaults.StartDuration,
-			SampleSize:    getSampleSize(t.cfgTrackerDefaults),
-			Mode:          models.ModeMonitor,
-			ModeEndTime:   time.Time{},
-		}
+		cfg = getDefaultGroupTrackerConfig(t.cfgTrackerDefaults)
 		t.cfgGroups[models.Group(id)] = cfg // save the config, so we don't have to set this again until data is overridden by global group tracker config
 	}
 

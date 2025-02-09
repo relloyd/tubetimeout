@@ -42,7 +42,11 @@ func loadSamples(path string) (*sync.Map, error) {
 				StartDuration: config.AppCfg.TrackerConfig.StartDuration,
 				Mode:          models.ModeMonitor,
 				ModeEndTime:   time.Time{},
-			} // set a starter values.
+			} // set starter values.
+			// TODO: test for default TrackerConfig being set when loading samples files if it's not present. It's needed for window synchronisation.
+			//   TrackerConfig data will be set by the web interface eventually and should come before or at the same time as groupMAC data.
+			//   Remember that the web interface writes groupMAC data back to the API and tracker config data back to the API separately.
+			//   Then we have samples being saved that contain the tracker config, so there is a lot of scope for things to get out of sync!
 		}
 		m.Store(k, &deviceData{
 			mu:              &sync.Mutex{}, // Reinitialize the mutex
