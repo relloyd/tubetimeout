@@ -573,7 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
         groupSelect.innerHTML = '';
         const newOption = document.createElement('option');
         newOption.value = "";
-        newOption.textContent = "-- New Group --";
+        newOption.textContent = "-- New Tracker --";
         groupSelect.appendChild(newOption);
         groups.forEach(groupObj => {
             const option = document.createElement('option');

@@ -336,3 +336,19 @@ button {
 button:hover {
     background-color: var(--primary-hover);
 }
+
+.app-footer {
+    width: 100%;
+    background: #f1f1f1; /* Light grey background */
+    color: #333; /* Dark grey text for contrast */
+    text-align: center;
+    font-size: 0.85rem;
+    padding: 10px 0;
+    font-family: Arial, sans-serif;
+    margin-top: 40px; /* Adds spacing above the footer */
+    border-top: 1px solid #ddd; /* Subtle border for separation */
+}
+
+.app-footer span {
+    opacity: 0.8; /* Slight fade for subtle effect */
+}
