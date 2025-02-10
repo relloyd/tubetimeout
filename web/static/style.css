@@ -265,26 +265,74 @@ button:hover {
     color: #fff;
 }
 
-/* ------------------------------------
-   Responsive Adjustments
-------------------------------------- */
-@media (max-width: 600px) {
-    h1 {
-        font-size: 1.5rem;
-    }
+/* General container for form sections */
+.form-section {
+    max-width: 500px;
+    margin: 40px auto;
+    padding: 20px;
+    background: var(--card-bg);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+}
 
-    th,
-    td {
-        padding: 10px;
-    }
+.form-section h1 {
+    text-align: center;
+    font-size: 1.5rem;
+    margin-bottom: 20px;
+}
 
-    button {
-        font-size: 0.9rem;
-        padding: 8px 16px;
-    }
+/* Card-style form container */
+.form-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
 
-    .group-mode-controls select,
-    .group-mode-controls button {
-        min-width: 80px;
-    }
+/* Card wrapper for inputs */
+.form-card {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Each input field */
+.form-field {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-field label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: var(--primary-color);
+}
+
+.form-field input,
+.form-field select {
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+/* Centering the button */
+.button-container {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+
+button {
+    padding: 12px 20px;
+    background-color: var(--primary-color);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+button:hover {
+    background-color: var(--primary-hover);
 }

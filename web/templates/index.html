@@ -34,84 +34,74 @@
 </div>
 
 <div class="container">
-  <section>
-    <h1>Usage Tracker Groups</h1>
-    <form id="group-config-form">
-      <div class="table-responsive">
-        <table>
-          <thead>
-          <tr>
-            <th>Tracker</th>
-            <th>Name</th>
-            <th>Retention (days)</th>
-            <th>Block Threshold (minutes)</th>
-            <th>Start Day</th>
-            <th>Start Time</th>
-          </tr>
-          </thead>
-          <tbody>
-          <tr>
-            <td>
-              <label for="group-select"></label>
-              <select id="group-select">
-                <option value="">-- New Tracker --</option>
-              </select>
-            </td>
-            <td>
-              <label for="group-name"></label>
-              <input id="group-name" type="text" placeholder="Name" required />
-            </td>
-            <td>
-              <label for="group-retention"></label>
-              <input id="group-retention" type="number" placeholder="Retention" required />
-            </td>
-            <td>
-              <label for="group-threshold"></label>
-              <input id="group-threshold" type="number" placeholder="Threshold" required />
-            </td>
-            <td>
-              <label for="group-start-day"></label>
-              <select id="group-start-day">
-                <option value="0">Sunday</option>
-                <option value="1">Monday</option>
-                <option value="2">Tuesday</option>
-                <option value="3">Wednesday</option>
-                <option value="4">Thursday</option>
-                <option value="5">Friday</option>
-                <option value="6">Saturday</option>
-              </select>
-            </td>
-            <td>
-              <label for="group-start-time"></label><input id="group-start-time" type="time" step="300" required />
-            </td>
-          </tr>
-          </tbody>
-        </table>
+  <section class="form-section">
+    <h1>Tracker Configuration</h1>
+    <div class="form-container">
+      <div class="form-card">
+        <div class="form-field">
+          <label for="group-select">Tracker</label>
+          <select id="group-select">
+            <option value="">-- New Group --</option>
+            <option value="Chatty TV">Chatty TV</option>
+            <option value="Richard">Richard</option>
+            <option value="youtube">youtube</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="group-name">Name</label>
+          <input id="group-name" type="text" placeholder="Name" required>
+        </div>
+        <div class="form-field">
+          <label for="group-retention">Retention (days)</label>
+          <input id="group-retention" type="number" placeholder="Retention" required>
+        </div>
+        <div class="form-field">
+          <label for="group-threshold">Block Threshold (minutes)</label>
+          <input id="group-threshold" type="number" placeholder="Threshold" required>
+        </div>
+        <div class="form-field">
+          <label for="group-start-day">Start Day</label>
+          <select id="group-start-day">
+            <option value="0">Sunday</option>
+            <option value="1">Monday</option>
+            <option value="2">Tuesday</option>
+            <option value="3">Wednesday</option>
+            <option value="4">Thursday</option>
+            <option value="5">Friday</option>
+            <option value="6">Saturday</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="group-start-time">Start Time</label>
+          <input id="group-start-time" type="time" step="300" required>
+        </div>
       </div>
-      <button type="button" id="save-group-btn">Save Tracker</button>
-    </form>
+      <div class="button-container">
+        <button id="save-tracker-btn">Save Tracker</button>
+      </div>
+    </div>
   </section>
 
-  <section>
+  <section class="form-section">
     <h1>Devices</h1>
-    <div class="table-responsive">
-      <table>
-        <thead>
-        <tr>
-          <th>Device</th>
-          <th>Name</th>
-          <th>Group</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr>
-          <td><label for="device-dropdown"></label><select id="device-dropdown"></select></td>
-          <td><label for="device-name"></label><input id="device-name" type="text" placeholder="Device Name" /></td>
-          <td><label for="device-group-dropdown"></label><select id="device-group-dropdown"></select></td>
-          <td><button id="add-to-group-btn" type="button">Add to Group</button></td>
-        </tr>
-        </tbody>
-      </table>
+    <div class="form-container">
+      <div class="form-card">
+        <div class="form-field">
+          <label for="device-dropdown">Device</label>
+          <select id="device-dropdown"></select>
+        </div>
+        <div class="form-field">
+          <label for="device-name">Name</label>
+          <input id="device-name" type="text" placeholder="Device Name" required>
+        </div>
+        <div class="form-field">
+          <label for="device-group-dropdown">Group</label>
+          <select id="device-group-dropdown"></select>
+        </div>
+      </div>
+      <div class="button-container">
+        <button id="add-to-group-btn" type="button">Add to Group</button>
+      </div>
     </div>
   </section>
 

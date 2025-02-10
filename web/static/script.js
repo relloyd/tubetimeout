@@ -611,7 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    document.getElementById('save-group-btn').addEventListener('click', () => {
+    document.getElementById('save-tracker-btn').addEventListener('click', () => {
         const groupSelect = document.getElementById('group-select');
         const selectedName = groupSelect.value;
         const nameInput = document.getElementById('group-name').value.trim();
