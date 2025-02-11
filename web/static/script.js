@@ -547,10 +547,23 @@ document.addEventListener('DOMContentLoaded', () => {
     function showNotification(message, isError = false) {
         const notification = document.getElementById('notification');
         notification.textContent = message;
-        notification.classList.toggle('error', isError);
+
+        if (isError) {
+            notification.classList.add('error');
+            notification.classList.remove('success');
+        } else {
+            notification.classList.add('success');
+            notification.classList.remove('error');
+        }
+
+        notification.classList.add('show');
         notification.classList.remove('hidden');
+
         setTimeout(() => {
-            notification.classList.add('hidden');
+            notification.classList.remove('show');
+            setTimeout(() => {
+                notification.classList.add('hidden'); // Hide after transition
+            }, 300); // Matches the transition duration
         }, 3000);
     }
 

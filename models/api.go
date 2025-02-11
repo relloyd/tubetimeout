@@ -7,7 +7,7 @@ import (
 // FlatTrackerConfig is used by the API.
 type FlatTrackerConfig struct {
 	Group         Group            `json:"name"`
-	Retention     time.Duration    `json:"retention"` // TODO: get the script to handle retention and threshold
+	Retention     time.Duration    `json:"retention"`
 	Threshold     time.Duration    `json:"threshold"`
 	StartDayInt   int              `json:"startDay"`
 	StartDuration time.Duration    `json:"startDuration"`
