@@ -283,8 +283,13 @@ button:hover {
    Form Sections
 ------------------------------------- */
 .form-section {
-    max-width: 500px;
-    margin: 40px auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.form-container {
     background: #fafafa;
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -293,24 +298,16 @@ button:hover {
     flex-direction: column;
 }
 
-.form-section h1 {
+.form-container h1 {
     text-align: center;
     font-size: 1.5rem;
     margin-bottom: 20px;
-}
-
-/* Card-style form container */
-.form-container {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
 }
 
 /* Card wrapper for inputs */
 .form-card {
     display: flex;
     flex-direction: column;
-    gap: 15px;
 }
 
 /* Each input field */
