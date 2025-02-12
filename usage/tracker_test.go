@@ -285,7 +285,7 @@ func TestAddSample_SamplesAreSaved(t *testing.T) {
 	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
 	assert.NoError(t, err, "NewTracker failed")
 
-	deviceID := "Test-Device" // use mixed case to assert case insensitivity
+	deviceID := "Test-Device"
 
 	// Mock current time to control time progression in tests.
 	now := time.Now().Truncate(cfg.Granularity)
@@ -297,11 +297,10 @@ func TestAddSample_SamplesAreSaved(t *testing.T) {
 
 	// Case 1a: Add a sample at the start of the buffer and verify that we cannot find the mixed case device ID.
 	tracker.AddSample(deviceID, true)
-	data, ok := tracker.devices.Load(deviceID)
+	data, ok := tracker.devices.Load(strings.ToLower(deviceID)) // use lower case to assert case sensitivity
 	assert.False(t, ok, "AddSample should not find data by mixed case device ID")
 
-	// Case 1b: Add a sample at the start of the buffer and verify that we can find the lower case device ID.
-	deviceID = strings.ToLower(deviceID)
+	// Case 1b: Add a sample at the start of the buffer and verify that we can find the device ID.
 	data, ok = tracker.devices.Load(deviceID)
 	if !ok {
 		t.Fatalf("AddSample did not initialize device data")
@@ -589,7 +588,7 @@ func TestResetSamples(t *testing.T) {
 		Threshold:   10 * time.Minute,
 	}
 
-	testDevice := strings.ToLower("test-device") // use explicit lower case device ID
+	testDevice := "test-device"
 
 	tracker, err := NewTracker(context.Background(), config.MustGetLogger(), cfg)
 	assert.NoError(t, err, "NewTracker failed")

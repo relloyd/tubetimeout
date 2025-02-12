@@ -176,6 +176,8 @@ func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) (models.MapIpGrou
 			continue
 		}
 
+		arpMAC = models.NewMAC(arpMAC) // sanitise the MAC. // TODO: test that MACs are sanitised here
+
 		mim[models.Ip(arpIp)] = models.MAC(arpMAC) // save the MAC address for the IP.
 
 		if managerModeMatchAllSourceIps && gm.Groups == nil { // if there are no groups of MACs found...
@@ -186,8 +188,8 @@ func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) (models.MapIpGrou
 			for group, macs := range gm.Groups {
 				for _, gmac := range macs {
 					if gmac.MAC == arpMAC {
-						groups := mig[models.Ip(arpIp)]                             // retrieve existing groups for the IP.
-						mig[models.Ip(arpIp)] = append(groups, models.Group(group)) // append the new group to the existing groups.
+						groups := mig[models.Ip(arpIp)]               // retrieve existing groups for the IP.
+						mig[models.Ip(arpIp)] = append(groups, group) // append the new group to the existing groups.
 					}
 				}
 			}

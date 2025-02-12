@@ -25,7 +25,7 @@ func TestIsSrcIpDestDomainKnown(t *testing.T) {
 			managerModeMatchAll: true,
 			sourceIpGroups:      models.IpGroups{},
 			destDomainGroups:    models.DomainGroups{Data: models.MapDomainGroups{"example.com": {"group1"}}},
-			expectedGroups:      []models.Group{"192.168.0.1:group1"},
+			expectedGroups:      []models.Group{"192.168.0.1/group1"},
 			expectedOk:          true,
 		},
 		{

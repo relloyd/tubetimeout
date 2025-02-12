@@ -3,7 +3,6 @@ package usage
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -165,8 +164,6 @@ func getSampleSize(cfg *models.TrackerConfig) int {
 // AddSample records a sample for a given identifier at the current time.
 // TODO: add test for AddSample() when tracker is paused
 func (t *Tracker) AddSample(id string, active bool) {
-	id = strings.ToLower(id)
-
 	now := t.nowFunc() // Use nowFunc instead of time.Now
 
 	// Load the config for the group/id or use defaults.
@@ -210,8 +207,6 @@ func (t *Tracker) AddSample(id string, active bool) {
 // HasExceededThreshold checks if a device has exceeded the threshold duration.
 // TODO: add test for HasExceededThreshold() when tracker is paused
 func (t *Tracker) HasExceededThreshold(id string) bool {
-	id = strings.ToLower(id) // force lower case for deviceID
-
 	data, ok := t.devices.Load(id)
 	if !ok {
 		return false
@@ -347,14 +342,11 @@ func (t *Tracker) GetSummary() map[string]*models.TrackerSummary {
 
 // Reset resets the tracker sample data for the given device.
 func (t *Tracker) Reset(id string) {
-	id = strings.ToLower(id)
 	t.devices.Delete(id)
 }
 
 // SetMode pauses the tracker for the given device for the specified duration.
 func (t *Tracker) SetMode(id string, d time.Duration, mode models.UsageTrackerMode) error {
-	id = strings.ToLower(id)
-
 	data, ok := t.devices.Load(id)
 	if !ok {
 		return fmt.Errorf("usage tracker group %v not found", id)
@@ -373,11 +365,9 @@ func (t *Tracker) SetMode(id string, d time.Duration, mode models.UsageTrackerMo
 
 // GetModeEndTime returns the end time of the pause for the given device.
 func (t *Tracker) GetModeEndTime(id string) (models.TrackerMode, error) {
-	id = strings.ToLower(id)
-
 	data, ok := t.devices.Load(id)
 	if !ok {
-		return models.TrackerMode{}, fmt.Errorf("group %v not found", id)
+		return models.TrackerMode{}, models.ErrGroupNotFound
 	}
 	dd := data.(*deviceData)
 
@@ -389,8 +379,6 @@ func (t *Tracker) GetModeEndTime(id string) (models.TrackerMode, error) {
 
 // Resume resumes the tracker for the given device.
 func (t *Tracker) Resume(id string) error {
-	id = strings.ToLower(id)
-
 	data, ok := t.devices.Load(id)
 	if !ok {
 		return fmt.Errorf("device %v not found", id)

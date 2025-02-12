@@ -19,8 +19,8 @@ func TestScanNetwork(t *testing.T) {
 	groupMacsLoaderFunc = func(logger *zap.SugaredLogger) (config.GroupMACsConfig, error) {
 		return config.GroupMACsConfig{
 			Groups: map[models.Group][]models.NamedMAC{
-				"group1": {{MAC: "00:11:22:33:44:55", Name: ""}, {MAC: "66:77:88:99:AA:BB", Name: ""}},
-				"group2": {{MAC: "CC:DD:EE:FF:00:11", Name: ""}},
+				"group1": {{MAC: "00-11-22-33-44-55", Name: ""}, {MAC: "66-77-88-99-AA-BB", Name: ""}},
+				"group2": {{MAC: "CC-DD-EE-FF-00-11", Name: ""}},
 			},
 		}, nil
 	}
@@ -55,9 +55,9 @@ func TestScanNetwork(t *testing.T) {
 	}
 	// Validate the IP MACs.
 	expectedMim := models.MapIpMACs{
-		"192.168.1.10": "00:11:22:33:44:55",
-		"192.168.1.11": "66:77:88:99:AA:BB",
-		"192.168.1.12": "CC:DD:EE:FF:00:11",
+		"192.168.1.10": "00-11-22-33-44-55",
+		"192.168.1.11": "66-77-88-99-AA-BB",
+		"192.168.1.12": "CC-DD-EE-FF-00-11",
 	}
 	assert.Equal(t, len(expectedMim), len(mim), "Number of entries in the map Ip MACs")
 	for expectedIp, expectedMAC := range expectedMim {

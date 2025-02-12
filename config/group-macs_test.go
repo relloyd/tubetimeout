@@ -14,19 +14,19 @@ func setupConfig(t *testing.T) {
 	yamlContent := `
 groups:
   group1:
-  - mac: "00:11:22:33:44:55"
+  - mac: "00-11-22-33-44-55"
     name: "my-device"
-  - mac: "66:77:88:99:AA:BB"
+  - mac: "66-77-88-99-AA-BB"
     name: ""
   group2:
-  - mac: "CC:DD:EE:FF:00:11"
+  - mac: "CC-DD-EE-FF-00-11"
     name: ""
-  - mac: "22:33:44:55:66:77"
+  - mac: "22-33-44-55-66-77"
     name: ""
 unusedMACs: 
-  - mac: "11:22:33:44:55:66"
+  - mac: "11-22-33-44-55-66"
     name: "unused-device"
-  - mac: "22:33:44:55:66:77"
+  - mac: "22-33-44-55-66-77"
     name: "unused-device-2"
 `
 	// Create a temporary file to hold the YAML content
@@ -70,8 +70,8 @@ func TestGetGroupMACs(t *testing.T) {
 
 	// Validate the result.
 	expectedGroups := map[models.Group][]models.NamedMAC{
-		"group1": {{MAC: "00:11:22:33:44:55", Name: "my-device"}, {MAC: "66:77:88:99:AA:BB", Name: ""}},
-		"group2": {{MAC: "CC:DD:EE:FF:00:11", Name: ""}, {MAC: "22:33:44:55:66:77", Name: ""}},
+		"group1": {{MAC: "00-11-22-33-44-55", Name: "my-device"}, {MAC: "66-77-88-99-AA-BB", Name: ""}},
+		"group2": {{MAC: "CC-DD-EE-FF-00-11", Name: ""}, {MAC: "22-33-44-55-66-77", Name: ""}},
 	}
 
 	assert.Equal(t, len(expectedGroups), len(gm.Groups), "Number of groups")

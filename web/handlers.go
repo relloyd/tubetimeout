@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -220,7 +221,12 @@ func (h *Handler) modeHandler(w http.ResponseWriter, r *http.Request) {
 		// Resume the usage tracker.
 		modeData, err := h.usageTracker.GetModeEndTime(group)
 		h.logger.Infof("Fetched mode data for group %v", group)
-		if err != nil {
+		if err != nil && errors.Is(err, models.ErrGroupNotFound) {
+			h.logger.Errorf("Error fetching mode timer for group %v: %v", group, err)
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(err.Error()))
+			return
+		} else if err != nil {
 			h.logger.Errorf("Error getting group mode end time: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return

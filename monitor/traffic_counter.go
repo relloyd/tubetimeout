@@ -11,6 +11,10 @@ import (
 	"relloyd/tubetimeout/models"
 )
 
+var (
+	defaultTrafficMapKeySeparator = "/"
+)
+
 type TrafficCounter interface {
 	CountTraffic(group models.Group, ip models.Ip, direction models.Direction, count int, packetLen int) bool
 }
@@ -89,11 +93,11 @@ func (t *TrafficMap) UpdateSourceIpMACs(newData models.MapIpMACs) {
 }
 
 func getTrafficMapKey(group models.Group, mac models.MAC) string {
-	return strings.ToLower(fmt.Sprintf("%v-%v", group, mac))
+	return fmt.Sprintf("%v%v%v", group, defaultTrafficMapKeySeparator, mac)
 }
 
 func getTrafficMapMACFromKey(key string) models.MAC {
-	s := strings.Split(key, "-")
+	s := strings.Split(key, defaultTrafficMapKeySeparator)
 	return models.MAC(s[1])
 }
 
@@ -103,9 +107,9 @@ func getTrafficMapMACFromKey(key string) models.MAC {
 func (t *TrafficMap) GetTrafficLastActiveTimes() map[models.Group]map[models.MAC]time.Time {
 	retval := make(map[models.Group]map[models.MAC]time.Time)
 	t.trafficMap.Range(func(key any, value any) bool {
-		k := key.(string) // key is group-mac
+		k := key.(string) // key is "group/mac"
 		v := value.(*trafficStats)
-		gm := strings.Split(k, "-")
+		gm := strings.Split(k, defaultTrafficMapKeySeparator)
 		group := models.Group(gm[0])
 		mac := models.MAC(gm[1])
 		if retval[group] == nil {

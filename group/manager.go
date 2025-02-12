@@ -163,5 +163,5 @@ func (m *Manager) IsSrcIpDestDomainKnown(srcIp models.Ip, dstDomain models.Domai
 }
 
 func getMetaSrcIpDestGroup(srcIp models.Ip, dstGroup models.Group) models.Group {
-	return models.Group(fmt.Sprintf("%v:%v", srcIp, dstGroup))
+	return models.Group(fmt.Sprintf("%v/%v", srcIp, dstGroup))
 }
