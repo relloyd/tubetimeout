@@ -185,8 +185,11 @@ func (t *Tracker) AddSample(id string, active bool) {
 	if loaded {
 		// Ensure the config is up to date.
 		dd.config = cfg
-		// TODO test that latest config is set
-		// TODO: when the sample size changes then we risk going out of bounds in the samples slice so we need to remake this!
+		if dd.config.SampleSize != cfg.SampleSize { // if the tracker size has changed...
+			dd.samples = make([]bool, cfg.SampleSize) // reset the samples to zero usage.
+		}
+		// TODO: test that latest config is set.
+		// TODO: test that samples are reset when the tracker config changes.
 	}
 
 	if active && dd.config.Mode == models.ModeMonitor { // if the group is active and the tracker is not paused...
