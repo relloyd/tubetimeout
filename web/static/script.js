@@ -37,7 +37,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function putData(url, data) {
         const params = new URLSearchParams(data);
-        // console.log("putData: ", params.toString());
         try {
             const response = await fetch(url, {
                 method: "PUT",
@@ -117,7 +116,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const pad = (num) => String(num).padStart(2, '0');
 
         const retval = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-        console.log(`durationToTimeString: converted duration ${duration} to ${retval}`)
         return retval;
     }
 
@@ -130,7 +128,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const [hours, mins] = timeString.split(':').map(Number);
         const minutes = hours * 60 + mins;
         const retval = minutesToDuration(minutes);
-        console.log(`timeStringToDuration: converted ${timeString} to ${retval}`);
         return retval;
     }
 
@@ -238,7 +235,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             // Save Tracker Config.
             const groupBody = JSON.stringify(groups)
-            console.log(groupBody);
             response = await fetch(UrlTrackerAPI, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
