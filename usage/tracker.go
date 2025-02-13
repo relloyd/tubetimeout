@@ -208,7 +208,7 @@ func (t *Tracker) AddSample(id string, active bool) {
 	if (dd.config.Mode == models.ModeAllow || dd.config.Mode == models.ModeBlock) &&
 		dd.config.ModeEndTime.Before(now) { // if the tracker block/allow time has expired...
 		t.logger.Infof("Usage tracker %v is active again (monitor mode set)", id)
-		dd.config.Mode = models.ModeMonitor
+		dd.config.Mode = models.ModeMonitor  // TODO: add test for mode being reset in addSample
 	}
 }
 
@@ -371,7 +371,15 @@ func (t *Tracker) SetMode(id string, d time.Duration, mode models.UsageTrackerMo
 	dd.config.Mode = mode
 	dd.config.ModeEndTime = t.nowFunc().Add(d)
 
-	return nil
+	// Save the new tracker config to file.
+	grp, ok := t.cfgGroups[models.Group(id)]
+	if !ok {
+		t.logger.Errorf("group %v not found while setting a allow/block mode", id)
+		return fmt.Errorf("group %v not found while setting a allow/block mode", id)
+	}
+	grp.Mode = dd.config.Mode
+	grp.ModeEndTime = dd.config.ModeEndTime
+	return t.SetConfig(t.cfgGroups)
 }
 
 // GetModeEndTime returns the end time of the pause for the given device.

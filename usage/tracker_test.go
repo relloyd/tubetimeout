@@ -758,3 +758,77 @@ func TestNewTracker_HandlesEmptySampleFilePath(t *testing.T) {
 	assert.NoError(t, err, "expected no error, but got: %v", err)
 	assert.NotNil(t, tracker, "expected tracker to be non-nil, but got nil")
 }
+
+func TestTracker_SetMode(t *testing.T) {
+	ctx := context.Background()
+	// logger := config.MustGetLogger()
+
+	// Setup: Create a tracker with a 1-hour retention, 10-minute threshold, and 1-minute granularity.
+	cfg := &models.TrackerConfig{
+		Granularity:            1 * time.Minute,
+		Retention:              1 * time.Hour,
+		Threshold:              10 * time.Minute,
+		StartDayInt:            0,
+		StartDuration:          0,
+		SampleSize:             0,
+		ModeEndTime:            time.Time{},
+		Mode:                   models.ModeMonitor,
+		SampleFileSaveInterval: 50 * time.Millisecond,
+	}
+
+	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+		return models.MapGroupTrackerConfig{
+			"GroupA": {
+				Granularity:   1 * time.Minute,
+				Retention:     30 * time.Minute,
+				Threshold:     5 * time.Minute,
+				StartDayInt:   0,
+				StartDuration: 0,
+				SampleSize:    1,
+				ModeEndTime:   time.Time{},
+				Mode:          models.ModeAllow,
+			},
+		}, nil
+	}
+
+	configWasSaved := false
+	config.FnSafeWriteViaTemp = func(filePath string, data string) error {
+		configWasSaved = true
+		return nil
+	}
+
+	t.Cleanup(func() {
+		config.FnSafeWriteViaTemp = config.DefaultSafeWriteViaTemp // restore the file writer func
+		fnGetGroupTrackerConfig = getGroupTrackerConfig
+	})
+
+	// Test Cases.
+
+	tracker, err := NewTracker(ctx, config.MustGetLogger(), cfg)
+	assert.NoError(t, err, "NewTracker failed")
+
+	now := time.Now()
+	tracker.nowFunc = func() time.Time {
+		return now
+	}
+
+	deviceID := "test-device" // device not in group config faked above.
+	tracker.AddSample(deviceID, true)
+
+	data, ok := tracker.devices.Load(deviceID) // save data that doesn't already exist so it takes default values
+	assert.True(t, ok, "expected device to be loaded")
+	dd := data.(*deviceData)
+	assert.Equal(t, models.ModeMonitor, dd.config.Mode, "expected default mode to be monitor")
+	assert.Equal(t, time.Time{}, dd.config.ModeEndTime, "expected default mode to be default end-time")
+
+	err = tracker.SetMode(deviceID, time.Minute, models.ModeAllow)
+	assert.NoError(t, err, "expected no error setting mode")
+	assert.Equal(t, models.ModeAllow, dd.config.Mode, "expected mode to be allow")
+	assert.Equal(t, now.Add(time.Minute), dd.config.ModeEndTime, "expected mode end time to bet set")
+
+	groupData, ok := tracker.cfgGroups[models.Group(deviceID)]
+	assert.True(t, ok, "expected device group to be loaded")
+	assert.Equal(t, dd.config.Mode, groupData.Mode, "expected central group data mode to match the mode we set")
+	assert.Equal(t, dd.config.ModeEndTime, groupData.ModeEndTime, "expected mode end time to be set in the central group data")
+	assert.True(t, configWasSaved, "expected central group config to be saved")
+}
