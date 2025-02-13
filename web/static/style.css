@@ -121,8 +121,8 @@ select {
 ------------------------------------- */
 button {
     display: inline-block;
-    padding: 10px 20px;
-    background-color: var(--primary-color);
+    padding: 20px 20px;
+    background-color: var(--error-color);
     color: #fff;
     border: none;
     border-radius: 4px;

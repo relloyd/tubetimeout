@@ -495,7 +495,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         return response.text();
                     })
                     .then(text => {
-                        // document.getElementById("statusMessage").innerText = text;
                         showNotification(text, false);
                         // Update the group's mode information to reflect that it's now monitoring.
                         const groupObj = groups.find(g => g.name === groupName);
@@ -506,7 +505,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         renderGroups(); // Re-render groups to update the UI.
                     })
                     .catch(error => {
-                        // document.getElementById("statusMessage").innerText = "Error: " + error.message;
                         showNotification( "Error: " + error.message, true)
                     });
             };
@@ -642,7 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateGroupSelect();
                 updateDeviceGroupDropdown();
             } else {
-                alert("Group already exists!");
+                alert("Tracker already exists!");
             }
         } else { // else we're editing an existing group...
             const group = groups.find(g => g.name === selectedName);
@@ -652,7 +650,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 group.threshold = thresholdDuration;
                 group.startDay = startDay;
                 group.startDuration = startDuration;
-                showNotification(`Group ${group.name} updated.`, false);
+                showNotification(`Tracker ${group.name} updated. Please save config`, false);
             }
         }
         showSaveButton();
@@ -673,6 +671,8 @@ document.addEventListener('DOMContentLoaded', () => {
         renderDevices();
         renderGroups();
         showSaveButton();
+        showNotification(`Group ${group.name} updated. Please save config`, false);
+
     };
 
     saveButton.addEventListener('click', saveConfig);
