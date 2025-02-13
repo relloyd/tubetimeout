@@ -171,7 +171,7 @@ func (t *Tracker) AddSample(id string, active bool) {
 	defer t.mu.Unlock()
 	cfg, ok := t.cfgGroups[models.Group(id)]
 	if !ok {
-		t.logger.Errorf("unable to load config for group %v, using defaults", id)
+		t.logger.Errorf("Unable to load config for group %v, using defaults", id)
 		cfg = getDefaultGroupTrackerConfig(t.cfgTrackerDefaults)
 		t.cfgGroups[models.Group(id)] = cfg // save the config, so we don't have to set this again until data is overridden by global group tracker config
 	}
@@ -182,10 +182,13 @@ func (t *Tracker) AddSample(id string, active bool) {
 	dd.mu.Lock()
 	defer dd.mu.Unlock()
 
+	t.logger.Debugf("Usage tracker for group %v: retention=%v, threshold=%v, mode=%v, modeEndTime=%v", id, cfg.Retention, cfg.Threshold, cfg.Mode, cfg.ModeEndTime)
+
 	if loaded {
 		// Ensure the config is up to date.
 		dd.config = cfg
 		if dd.config.SampleSize != cfg.SampleSize { // if the tracker size has changed...
+			t.logger.Info("Tracker sample size changed for group %v, resetting now", id)
 			dd.samples = make([]bool, cfg.SampleSize) // reset the samples to zero usage.
 		}
 		// TODO: test that latest config is set.
@@ -198,11 +201,13 @@ func (t *Tracker) AddSample(id string, active bool) {
 		// Mark the sample as seen.
 		index := dd.getIndex(now, dd.windowStartTime)
 		dd.samples[index] = true
+		t.logger.Debugf("Usage tracker %v in monitor mode (counting the sample)", id)
 	}
 
 	// Reset the mode.
 	if (dd.config.Mode == models.ModeAllow || dd.config.Mode == models.ModeBlock) &&
 		dd.config.ModeEndTime.Before(now) { // if the tracker block/allow time has expired...
+		t.logger.Infof("Usage tracker %v is active again (monitor mode set)", id)
 		dd.config.Mode = models.ModeMonitor
 	}
 }
@@ -212,6 +217,7 @@ func (t *Tracker) AddSample(id string, active bool) {
 func (t *Tracker) HasExceededThreshold(id string) bool {
 	data, ok := t.devices.Load(id)
 	if !ok {
+		t.logger.Errorf("Unable to load config for group %v, returning false has-not-exceeded-threshold", id)
 		return false
 	}
 
@@ -219,9 +225,11 @@ func (t *Tracker) HasExceededThreshold(id string) bool {
 	dd.mu.Lock()
 	defer dd.mu.Unlock()
 
-	if dd.config.Mode == models.ModeAllow && dd.config.ModeEndTime.Before(time.Now()) { // if the tracker is paused...
+	if dd.config.Mode == models.ModeAllow && time.Now().Before(dd.config.ModeEndTime) { // if the tracker is paused...
+		t.logger.Debugf("Usage tracker %s is allowed until %v", id, dd.config.ModeEndTime)
 		return false
-	} else if dd.config.Mode == models.ModeBlock && dd.config.ModeEndTime.Before(time.Now()) { // if the tracker is paused...
+	} else if dd.config.Mode == models.ModeBlock && time.Now().Before(dd.config.ModeEndTime) { // if the tracker is paused...
+		t.logger.Debugf("Usage tracker %s is blocked until %v", id, dd.config.ModeEndTime)
 		return true
 	} // else the tracker is in monitor mode
 

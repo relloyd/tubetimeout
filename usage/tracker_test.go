@@ -201,6 +201,26 @@ func TestHasExceededThreshold(t *testing.T) {
 	if !tracker.HasExceededThreshold(deviceID) {
 		t.Error("HasExceededThreshold returned false with valid samples meeting the threshold")
 	}
+
+	// Case 5a: Allow mode
+	for i := 0; i < 10; i++ {
+		data.samples[i] = true // expire the tracker so it blocks.
+	}
+	data.config.Mode = models.ModeAllow
+	data.config.ModeEndTime = time.Now().Add(-time.Minute) // set an expired allow time.
+	assert.True(t, tracker.HasExceededThreshold(deviceID), "HasExceededThreshold should return true for expired tracker and allow mode")
+	data.config.ModeEndTime = time.Now().Add(time.Minute) // set an allow time in the future.
+	assert.False(t, tracker.HasExceededThreshold(deviceID), "HasExceededThreshold should return false for expired tracker but valid allow mode")
+
+	// Case 5b: block mode
+	for i := 0; i < 10; i++ {
+		data.samples[i] = false // open the tracker so it allows.
+	}
+	data.config.Mode = models.ModeBlock
+	data.config.ModeEndTime = time.Now().Add(-time.Minute) // set an expired block time.
+	assert.False(t, tracker.HasExceededThreshold(deviceID), "HasExceededThreshold should return false for open tracker and expired block mode")
+	data.config.ModeEndTime = time.Now().Add(time.Minute) // set an expired block time.
+	assert.True(t, tracker.HasExceededThreshold(deviceID), "HasExceededThreshold should return true for open tracker and valid block mode")
 }
 
 func TestAddSample_GroupDefaults(t *testing.T) {
