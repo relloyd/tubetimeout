@@ -366,7 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
             groupHeader.appendChild(groupTitle);
 
             const usageInfo = document.createElement('span');
-            const usage = usageData[groupName.toLowerCase()] || { used: 0, percentage: 0, activity: {} };
+            const usage = usageData[groupName] || { used: 0, percentage: 0, activity: {} };
             usageInfo.textContent = `${usage.used} mins (${usage.percentage}%) usage`;
             groupHeader.appendChild(usageInfo);
 
