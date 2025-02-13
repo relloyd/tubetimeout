@@ -208,7 +208,7 @@ func (t *Tracker) AddSample(id string, active bool) {
 	if (dd.config.Mode == models.ModeAllow || dd.config.Mode == models.ModeBlock) &&
 		dd.config.ModeEndTime.Before(now) { // if the tracker block/allow time has expired...
 		t.logger.Infof("Usage tracker %v is active again (monitor mode set)", id)
-		dd.config.Mode = models.ModeMonitor  // TODO: add test for mode being reset in addSample
+		dd.config.Mode = models.ModeMonitor // TODO: add test for mode being reset in addSample
 	}
 }
 
@@ -322,19 +322,19 @@ func (t *Tracker) GetSummary() map[string]*models.TrackerSummary {
 	samples := make(map[string]*models.TrackerSummary)
 
 	t.devices.Range(func(k, v interface{}) bool {
-		data := v.(*deviceData)
-		data.mu.Lock()
-		defer data.mu.Unlock()
+		dd := v.(*deviceData)
+		dd.mu.Lock()
+		defer dd.mu.Unlock()
 		count := 0
 		total := 0
-		for _, seen := range data.samples {
+		for _, seen := range dd.samples {
 			if seen {
 				count++
 			}
 			total++
 		}
 
-		usagePercent := int(float64(count) / config.AppCfg.TrackerConfig.Threshold.Minutes() * 100)
+		usagePercent := int(float64(count) / dd.config.Threshold.Minutes() * 100) // TODO: test that summary data uses the local device data config not global config.AppCfg.
 		if usagePercent > 100 {
 			usagePercent = 100
 		}
