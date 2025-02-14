@@ -1,4 +1,13 @@
-/* Modern, Responsive Stylesheet */
+@font-face {
+    font-family: 'Exo2';
+    src: url('/static/exo-2-v24-latin-regular.woff2') format('woff2');
+    font-weight: 500;
+    font-style: normal;
+}
+
+input, textarea, select {
+    font: inherit;
+}
 
 /* ------------------------------------
    CSS Variables & Reset
@@ -27,7 +36,7 @@
    Global Styles
 ------------------------------------- */
 body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Exo2', sans-serif;
     background-color: var(--bg-color);
     color: var(--text-color);
     line-height: 1.6;
@@ -359,7 +368,6 @@ button:hover {
     text-align: center;
     font-size: 0.85rem;
     padding: 10px 0;
-    font-family: Arial, sans-serif;
     margin-top: 40px; /* Adds spacing above the footer */
     border-top: 1px solid #ddd; /* Subtle border for separation */
 }
