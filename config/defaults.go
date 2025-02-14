@@ -67,6 +67,8 @@ type MonitorConfig struct {
 }
 
 type ActivityMonitorConfig struct {
-	// ThresholdIngressEgressKB is the difference between ingress and egress that triggers the activity monitor to assume traffic is active.
+	// ThresholdIngressEgressKB is the difference between ingress and egress that makes the activity monitor to assume traffic is active when EnableThresholdLogic is set.
 	ThresholdIngressEgressKB int `envconfig:"THRESHOLD_INGRESS_EGRESS_KB" default:"0"`
+	// EnableThresholdLogic true causes monitor.isActive() to require ingress to be higher than egress to consider traffic as active.
+	EnableThresholdLogic bool `envconfig:"ENABLE_THRESHOLD_LOGIC" default:"false"`
 }

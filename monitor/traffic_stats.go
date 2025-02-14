@@ -113,9 +113,15 @@ func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection m
 // isActive determines if the traffic rate is deemed "active" i.e. true, based on the current rate.
 func (a *trafficStats) isActive(lastMinuteIndex int, logStats bool) bool {
 	activeStatus := false // assume inactive; give the benefit of doubt to start with.
-	if a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] >= config.AppCfg.ActivityMonitorConfig.ThresholdIngressEgressKB &&
-		a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] > a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] { // // if ingress is xKB more than egress...
-		activeStatus = true
+	if config.AppCfg.ActivityMonitorConfig.EnableThresholdLogic { // if ingress should be compared to egress...
+		if a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] >= config.AppCfg.ActivityMonitorConfig.ThresholdIngressEgressKB &&
+			a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] > a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] { // // if ingress is xKB more than egress...
+			activeStatus = true
+		}
+	} else { // else if there is ANY traffic...
+		if a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] > 0 || a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] > 0 {
+			activeStatus = true
+		}
 	}
 
 	if logStats {

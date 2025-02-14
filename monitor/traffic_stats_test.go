@@ -108,34 +108,44 @@ func TestTrafficMap_IsActive(t *testing.T) {
 	nowFunc = func() time.Time {
 		return mockTime
 	}
-	windowSize := 5
+	windowSize := 10 // match the number of tests
 
 	// Assert active status.
 	monitor := newTrafficStats(config.MustGetLogger(), monitorNameForTesting, windowSize)
 	startTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
 	mockTime = startTime
 	data := []struct {
-		count            int
-		packetLenEgress  int
-		packetLenIngress int
-		wantActive       bool
-		test             string
+		count                         int
+		packetLenEgress               int
+		packetLenIngress              int
+		wantActive                    bool
+		enableIngressEgressComparison bool
+		test                          string
 	}{
-		{1, 0, 0, false, "initial values should be inactive"},
-		{1, 1, 1, false, "equal ingress/egress is inactive"},
-		{1, 10, 1, false, "bigger egress is inactive"},
-		{1, 1, 2, false, "ingress must be xKB bigger than egress for active"},
-		{1, 1, config.AppCfg.ActivityMonitorConfig.ThresholdIngressEgressKB - 1, false, "ingress must be gte to threshold for active"},
-		{1, 2, config.AppCfg.ActivityMonitorConfig.ThresholdIngressEgressKB +3, true, "ingress gte thresholdIngressEgressKB is active"},
+		{1, 1, 1, false, true, "equal ingress/egress is inactive"},
+		{1, 10, 1, false, true, "bigger egress is inactive"},
+		{1, 0, 0, false, true, "initial values should be inactive"},
+		{1, 1, config.AppCfg.ActivityMonitorConfig.ThresholdIngressEgressKB - 1, false, true, "ingress must be gte to threshold for active"},
+		{1, 2, config.AppCfg.ActivityMonitorConfig.ThresholdIngressEgressKB + 3, true, true, "ingress gte thresholdIngressEgressKB is active"},
+		{1, 1, 2, true, true, "ingress must be xKB bigger than egress for active"},
+		{1, 0, 0, false, false, "expected inactive for neither ingress nor egress"},
+		{1, 1, 0, true, false, "expected active for egress"},
+		{1, 0, 1, true, false, "expected active for ingress"},
+		{1, 1, 1, true, false, "expected active for both ingress and egress"},
 	}
 	for i, d := range data {
 		mockTime = startTime.Add(time.Duration(i) * time.Minute)
 		monitor.countTraffic(d.count, d.packetLenIngress, models.Ingress)
 		monitor.countTraffic(d.count, d.packetLenEgress, models.Egress)
-		if d.wantActive {
-			assert.True(t, monitor.isActive(0, true), d.test)
+		if d.enableIngressEgressComparison {
+			config.AppCfg.ActivityMonitorConfig.EnableThresholdLogic = true
 		} else {
-			assert.False(t, monitor.isActive(0, true), d.test)
+			config.AppCfg.ActivityMonitorConfig.EnableThresholdLogic = false
+		}
+		if d.wantActive {
+			assert.True(t, monitor.isActive(i, true), d.test)
+		} else {
+			assert.False(t, monitor.isActive(i, true), d.test)
 		}
 	}
 }
