@@ -29,12 +29,13 @@ func init() {
 }
 
 type AppConfig struct {
-	LogLevel      string               `envconfig:"LOG_LEVEL" default:"info"`
-	DebugConfig   DebugConfig          `envconfig:"DEBUG"`
-	FilterConfig  FilterConfig         `envconfig:"FILTER"`
-	WebConfig     WebConfig            `envconfig:"WEB"`
-	MonitorConfig MonitorConfig        `envconfig:"MONITOR"`
-	TrackerConfig models.TrackerConfig `envconfig:"TRACKER"`
+	LogLevel              string                `envconfig:"LOG_LEVEL" default:"info"`
+	DebugConfig           DebugConfig           `envconfig:"DEBUG"`
+	FilterConfig          FilterConfig          `envconfig:"FILTER"`
+	WebConfig             WebConfig             `envconfig:"WEB"`
+	MonitorConfig         MonitorConfig         `envconfig:"MONITOR"`
+	TrackerConfig         models.TrackerConfig  `envconfig:"TRACKER"`
+	ActivityMonitorConfig ActivityMonitorConfig `envconfig:"ACTIVITY_MONITOR"`
 }
 
 type DebugConfig struct {
@@ -63,4 +64,9 @@ type WebConfig struct {
 
 type MonitorConfig struct {
 	PurgeStatsAfterDuration time.Duration `envconfig:"PURGE_DURATION" default:"168h"` // 168h = 7 * 24h = 7days
+}
+
+type ActivityMonitorConfig struct {
+	// ThresholdIngressEgressKB is the difference between ingress and egress that triggers the activity monitor to assume traffic is active.
+	ThresholdIngressEgressKB int `envconfig:"THRESHOLD_INGRESS_EGRESS_KB" default:"0"`
 }

@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/models"
 )
 
 var (
 	nowFunc                  = time.Now
-	thresholdIngressEgressKB = 25 * 1024
 )
 
 // TODO: maybe remove rollingCounts of packets if packet len is good enough to determine activity.
@@ -113,7 +113,7 @@ func (a *trafficStats) countTraffic(count int, packetLen int, trafficDirection m
 // isActive determines if the traffic rate is deemed "active" i.e. true, based on the current rate.
 func (a *trafficStats) isActive(lastMinuteIndex int, logStats bool) bool {
 	activeStatus := false // assume inactive; give the benefit of doubt to start with.
-	if a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] >= thresholdIngressEgressKB &&
+	if a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] >= config.AppCfg.ActivityMonitorConfig.ThresholdIngressEgressKB &&
 		a.rollingPacketLenTotal[models.Ingress][lastMinuteIndex] > a.rollingPacketLenTotal[models.Egress][lastMinuteIndex] { // // if ingress is xKB more than egress...
 		activeStatus = true
 	}

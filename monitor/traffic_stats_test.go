@@ -124,9 +124,9 @@ func TestTrafficMap_IsActive(t *testing.T) {
 		{1, 0, 0, false, "initial values should be inactive"},
 		{1, 1, 1, false, "equal ingress/egress is inactive"},
 		{1, 10, 1, false, "bigger egress is inactive"},
-		{1, 1, 2, false, "ingress must be xKB bigger than egress for active"},                      //
-		{1, 1, thresholdIngressEgressKB - 1, false, "ingress must be gte to threshold for active"}, //
-		{1, 2, thresholdIngressEgressKB, true, "ingress gte thresholdIngressEgressKB is active"},   //
+		{1, 1, 2, false, "ingress must be xKB bigger than egress for active"},
+		{1, 1, config.AppCfg.ActivityMonitorConfig.ThresholdIngressEgressKB - 1, false, "ingress must be gte to threshold for active"},
+		{1, 2, config.AppCfg.ActivityMonitorConfig.ThresholdIngressEgressKB +3, true, "ingress gte thresholdIngressEgressKB is active"},
 	}
 	for i, d := range data {
 		mockTime = startTime.Add(time.Duration(i) * time.Minute)
