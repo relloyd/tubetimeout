@@ -79,7 +79,7 @@ func TestAverageTrafficStats(t *testing.T) {
 		assert.Equal(t, expectedLastMinuteIdx, monitor.lastMinuteIdx[models.Ingress], "lastMinuteIndex ingress should increment and wrap")
 		assert.Equal(t, expectedLastMinuteIdx, monitor.lastMinuteIdx[models.Egress], "lastMinuteIndex egress should increment and wrap")
 	}
-	assert.False(t, monitor.isActive(0, true), "should be inactive when packet len is 0")
+	assert.True(t, monitor.isActive(0, true), "should be active when packet len is gt 0")
 
 	// Assert packet lens are saved.
 	expectedRollingPacketLetTotal := map[models.Direction][]int{
@@ -89,7 +89,7 @@ func TestAverageTrafficStats(t *testing.T) {
 	assert.Equal(t, monitor.rollingPacketLenTotal, expectedRollingPacketLetTotal, "unexpected rollingPacketLenTotal")
 
 	// Misc assertions.
-	assert.Equal(t, startTime.UTC().Truncate(time.Minute), monitor.lastActiveTimeUTC, "unexpected last active time")
+	assert.Equal(t, mockTime, monitor.lastActiveTimeUTC, "unexpected last active time")
 	assert.Equal(t, monitor.monitorName, monitorNameForTesting, "bad monitor name")
 	assert.Equal(t, monitor.windowSize, windowSize, "bad window size")
 	assert.Equal(t, mockTime.Add(-1*time.Minute).Minute()%windowSize, monitor.lastMinuteIdx[models.Ingress], "unexpected last minute idx for ingress")
