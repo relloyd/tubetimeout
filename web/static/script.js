@@ -671,7 +671,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderDevices();
         renderGroups();
         showSaveButton();
-        showNotification(`Group ${group.name} updated. Please save config`, false);
+        showNotification(`Group ${group.name} updated. Please hit save!`, false);
 
     };
 
