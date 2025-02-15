@@ -174,3 +174,43 @@ func TestSetGroupTrackerConfig_EntriesAreFiltered(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expectedGoodData, tkr.cfgGroups, "expected group tracker config to be saved")
 }
+
+func TestSetGroupTrackerConfig_InvalidGroup(t *testing.T) {
+	t.Cleanup(func() {
+		restoreFunctions()
+	})
+
+	testFile, _ := os.CreateTemp("", "group-tracker-config-*.yaml")
+	t.Cleanup(func() {
+		_ = os.Remove(testFile.Name())
+	})
+
+	existingGroupTrackerConfig := models.MapGroupTrackerConfig{
+		"existingGroup": &models.TrackerConfig{Granularity: time.Minute},
+	}
+
+	defaultGroupTrackerConfigFilePath = testFile.Name()
+	config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(path string) (string, error) {
+		return testFile.Name(), nil
+	}
+
+	config.FnSafeWriteViaTemp = func(filePath string, content string) error {
+		return nil
+	}
+
+	tkr := &Tracker{
+		logger:    config.MustGetLogger(),
+		mu:        &sync.Mutex{},
+		cfgGroups: existingGroupTrackerConfig,
+	}
+
+	testGroup := "groupName/WithSlash"
+	cleanGroup := models.Group(models.NewGroup(testGroup))
+	groupData := models.MapGroupTrackerConfig{"groupName/WithSlash": nil}
+	err := setGroupTrackerConfig(tkr, groupData)
+	assert.NoError(t, err)
+	_, ok := tkr.cfgGroups[cleanGroup]
+	assert.True(t, ok, "expected clean group to be present")
+	_, ok = tkr.cfgGroups[models.Group(testGroup)]
+	assert.False(t, ok,  "expected test group to be replaced by cleanGroup")
+}

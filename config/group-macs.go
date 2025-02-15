@@ -130,7 +130,7 @@ func (g *groupMACs) GetAllGroupMACs(logger *zap.SugaredLogger) ([]FlatGroupMAC, 
 		if !re.MatchString(arpMAC) { // if the MAC address is invalid...
 			continue
 		}
-		arpMAC = models.NewMAC(arpMAC) // sanitise the MAC
+		arpMAC = models.NewMAC(arpMAC)      // sanitise the MAC
 		if _, seen := macs[arpMAC]; !seen { // if we don't already have config for this MAC...
 			// Add the MAC to the list.
 			allGroupMACs = append(allGroupMACs, FlatGroupMAC{
@@ -156,7 +156,7 @@ func (g *groupMACs) SaveGroupMACs(logger *zap.SugaredLogger, flatGroupMACs []Fla
 
 	for _, flatGroupMAC := range flatGroupMACs {
 		if flatGroupMAC.Group != "" && flatGroupMAC.MAC != "" { // if the group is worth saving...
-			flatGroupMAC.Group = getCleanGroupName(flatGroupMAC.Group)
+			flatGroupMAC.Group = models.NewGroup(flatGroupMAC.Group)
 
 			// Create the group if it doesn't already exist.
 			group := models.Group(flatGroupMAC.Group)
@@ -191,8 +191,4 @@ func (g *groupMACs) SaveGroupMACs(logger *zap.SugaredLogger, flatGroupMACs []Fla
 	}
 
 	return nil
-}
-
-func getCleanGroupName(group string) string {
-	return strings.Replace(group, "/", "", -1)
 }

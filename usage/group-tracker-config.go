@@ -77,6 +77,12 @@ func setGroupTrackerConfig(t *Tracker, m models.MapGroupTrackerConfig) error {
 				v.StartDuration = config.AppCfg.TrackerConfig.StartDuration
 			}
 		}
+		// Remove bad characters from the map by replacing the keys.
+		cleanGroup := models.Group(models.NewGroup(string(k)))
+		if k != cleanGroup {
+			m[cleanGroup] = v
+			delete(m, k)
+		}
 	}
 	if len(m) == 0 {
 		return fmt.Errorf("group tracker config not set: no valid groups or tracker config was found")
