@@ -650,7 +650,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 group.threshold = thresholdDuration;
                 group.startDay = startDay;
                 group.startDuration = startDuration;
-                showNotification(`Tracker ${group.name} updated. Please save config`, false);
+                showNotification(`Tracker ${group.name} updated. Please hit save or reload the page to undo!`, false);
             }
         }
         showSaveButton();
@@ -671,7 +671,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderDevices();
         renderGroups();
         showSaveButton();
-        showNotification(`Group ${group.name} updated. Please hit save!`, false);
+        showNotification(`Group ${group.name} updated. Please hit save or reload the page to undo!`, false);
 
     };
 
