@@ -29,8 +29,9 @@ func init() {
 }
 
 type AppConfig struct {
-	LogLevel              string                `envconfig:"LOG_LEVEL" default:"info"`
-	DebugConfig           DebugConfig           `envconfig:"DEBUG"`
+	LogLevel    string      `envconfig:"LOG_LEVEL" default:"info"`
+	DelayStart  bool        `envconfig:"DELAY_START" default:"true"`
+	DebugConfig DebugConfig `envconfig:"DEBUG"`
 	FilterConfig          FilterConfig          `envconfig:"FILTER"`
 	WebConfig             WebConfig             `envconfig:"WEB"`
 	MonitorConfig         MonitorConfig         `envconfig:"MONITOR"`

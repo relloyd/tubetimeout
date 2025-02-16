@@ -31,10 +31,17 @@ import (
 
 type cleanupFunc func() error
 
+func handleDelayedStart(logger *zap.SugaredLogger, appConfig *config.AppConfig) {
+	if appConfig.DelayStart && !appConfig.DebugConfig.DebugEnabled { // if we should delay startup and we're not in debug mode...
+		delay := time.Second * 30
+		logger.Infof("Delaying startup for %v seconds", delay)
+		time.Sleep(delay)
+	}
+}
+
 func handleDebugging(logger *zap.SugaredLogger, appCfg *config.DebugConfig) {
 	if appCfg.DebugEnabled {
-		// Allow debug connection timeout.
-		tc := time.After(appCfg.DebugTime)
+		tc := time.After(appCfg.DebugTime) // sleep to help debugger connections
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs, syscall.SIGINT)
 		logger.Info("Waiting for debug time or CTRL-C signal...")
@@ -58,6 +65,9 @@ func main() {
 		_ = logger.Sync()
 	}(logger)
 
+	logger.Infof("Build version %v", config.BuildVersion)
+
+	handleDelayedStart(logger, &config.AppCfg)
 	handleDebugging(logger, &config.AppCfg.DebugConfig)
 
 	// NFT rules to send traffic to NFQueue.

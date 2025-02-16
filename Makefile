@@ -29,7 +29,7 @@ debug-test:
 	DEBUG_ENABLED=true LOG_LEVEL=debug dlv test --headless --listen=:56268 --api-version=2 $(PACKAGE_TO_TEST) -- -test.run=$(FUNC_TO_TEST)
 
 run: build
-	LOG_LEVEL=debug $(APP_SHORT)
+	LOG_LEVEL=debug DELAY_START=false $(APP_SHORT)
 
 install: build-release
 	@echo "Installing $(APP) with timestamp $(INSTALL_TIMESTAMP)..."
