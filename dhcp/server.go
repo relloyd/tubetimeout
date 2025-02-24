@@ -150,7 +150,7 @@ func (h *myDHCPHandler) ServeDHCP(pkt dhcp4.Packet, msgType dhcp4.MessageType, o
 			log.Printf("No available IP for MAC %s", mac)
 			return nil
 		}
-		reply := dhcp4.ReplyPacket(pkt, dhcp4.Offer, ip, net.IPv4(192, 168, 1, 1), 2*time.Hour, nil)
+		reply := dhcp4.ReplyPacket(pkt, dhcp4.Offer, net.IPv4(192, 168, 1, 55), ip, 2*time.Hour, nil)
 		addCommonOptions(reply, mac)
 		return reply
 
@@ -161,36 +161,31 @@ func (h *myDHCPHandler) ServeDHCP(pkt dhcp4.Packet, msgType dhcp4.MessageType, o
 			log.Printf("No available IP for MAC %s", mac)
 			return nil
 		}
-		reply := dhcp4.ReplyPacket(pkt, dhcp4.ACK, ip, net.IPv4(192, 168, 1, 1), 2*time.Hour, nil)
+		reply := dhcp4.ReplyPacket(pkt, dhcp4.ACK, net.IPv4(192, 168, 1, 55), ip, 2*time.Hour, nil)
 		addCommonOptions(reply, mac)
 		return reply
 
 	case dhcp4.Decline:
-		// Client declines the offered IP; release the IP.
 		log.Printf("Received Decline from %s; releasing any allocated IP", mac)
 		ipPool.Release(mac)
-		// Typically no reply is sent.
 		return nil
 
 	case dhcp4.Release:
-		// Client is releasing its IP.
 		log.Printf("Received Release from %s; releasing allocated IP", mac)
 		ipPool.Release(mac)
 		return nil
 
 	case dhcp4.Inform:
-		// Client requests configuration parameters without IP assignment.
-		// For Inform, we reply with an ACK that contains options.
+		// For Inform, reply with an ACK containing configuration options.
 		ciaddr := pkt.CIAddr()
 		if ciaddr.Equal(net.IPv4zero) {
-			// If ciaddr is not set, we could use the allocated IP if available.
+			// If the client IP is not set, try to allocate one.
 			ip := ipPool.Allocate(mac)
 			if ip != nil {
 				ciaddr = ip
 			}
 		}
-		reply := dhcp4.ReplyPacket(pkt, dhcp4.ACK, ciaddr, net.IPv4(192, 168, 1, 1), 0, nil)
-		// For DHCP Inform, we only supply configuration options.
+		reply := dhcp4.ReplyPacket(pkt, dhcp4.ACK, net.IPv4(192, 168, 1, 55), ciaddr, 0, nil)
 		addCommonOptions(reply, mac)
 		return reply
 
@@ -231,7 +226,6 @@ func main() {
 	handler := &myDHCPHandler{}
 
 	// Create a UDP listener bound to your network interface on port 67.
-	// Replace "eth0" with your interface name.
 	l, err := conn.NewUDP4FilterListener("eth0", ":67")
 	if err != nil {
 		log.Fatalf("Failed to create listener: %v", err)
