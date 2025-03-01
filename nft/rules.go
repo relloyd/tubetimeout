@@ -153,7 +153,7 @@ func NewNFTRules(logger *zap.SugaredLogger, cfg *config.FilterConfig) (*Rules, e
 		return nil, fmt.Errorf("failed to create remote IP set")
 	}
 
-	rules.dropUDPPorts() // drop UDP to/from the local IP set.
+	rules.dropUDPFromToLocalIPs() // drop UDP to/from the local IP set.
 
 	// Create NFTables rules for src-dest and dest-src combinations.
 	err = rules.addNFTablesRuleForSets(cfg.OutboundQueueNumber, rules.nameSetLocal, rules.nameSetRemote)
@@ -177,12 +177,12 @@ func NewNFTRules(logger *zap.SugaredLogger, cfg *config.FilterConfig) (*Rules, e
 // TODO: test that UDP packets are dropped from local IPs.
 func (q *Rules) dropUDPPorts() {
 	// Define a set for UDP ports to match
-	set := &nftables.Set{
+	udpPortSet := &nftables.Set{
 		Table:   q.table,
 		Name:    "udp_ports",
 		KeyType: nftables.TypeInetService, // Port number type
 	}
-	err := q.conn.AddSet(set, nil)
+	err := q.conn.AddSet(udpPortSet, nil)
 	if err != nil {
 		q.logger.Fatalf("Failed to create set of UDP ports: %v", err)
 	}
@@ -193,7 +193,7 @@ func (q *Rules) dropUDPPorts() {
 		{Key: []byte{0x11, 0x94}}, // Port 4500 NAT-T
 		{Key: []byte{0x01, 0xBB}}, // Port 443
 	}
-	if err := q.conn.SetAddElements(set, elements); err != nil {
+	if err := q.conn.SetAddElements(udpPortSet, elements); err != nil {
 		log.Fatalf("Failed to add elements to set: %v", err)
 	}
 
@@ -221,7 +221,7 @@ func (q *Rules) dropUDPPorts() {
 			},
 			&expr.Lookup{
 				SourceRegister: 2,
-				SetName:        set.Name,
+				SetName:        udpPortSet.Name,
 			},
 			// Drop the packet
 			&expr.Verdict{
@@ -233,6 +233,28 @@ func (q *Rules) dropUDPPorts() {
 
 func (q *Rules) dropUDPFromToLocalIPs() {
 	directions := []uint32{12, 16} // 12 for source IP; 16 for destination IP
+
+	// Define a set for UDP ports to match
+	udpPortSet := &nftables.Set{
+		Table:   q.table,
+		Name:    "udp_ports",
+		KeyType: nftables.TypeInetService, // Port number type
+	}
+	err := q.conn.AddSet(udpPortSet, nil)
+	if err != nil {
+		q.logger.Fatalf("Failed to create set of UDP ports: %v", err)
+	}
+
+	// Add elements to the set (UDP ports to block)
+	elements := []nftables.SetElement{
+		{Key: []byte{0x01, 0xf4}}, // Port 500 NAT-T
+		{Key: []byte{0x11, 0x94}}, // Port 4500 NAT-T
+		{Key: []byte{0x01, 0xBB}}, // Port 443
+	}
+	if err := q.conn.SetAddElements(udpPortSet, elements); err != nil {
+		log.Fatalf("Failed to add elements to set: %v", err)
+	}
+
 	// Drop UDP
 	for _, direction := range directions {
 		rule := &nftables.Rule{
@@ -240,9 +262,8 @@ func (q *Rules) dropUDPFromToLocalIPs() {
 			Chain: q.chain,
 			Exprs: []expr.Any{
 				// Match source IP in the set
-				// Extract the source IP address into register 1
 				&expr.Payload{
-					DestRegister: 1,                             // Store in register 1
+					DestRegister: 1,                             // Extract the source IP address into register 1
 					Base:         expr.PayloadBaseNetworkHeader, // Network header
 					Offset:       direction,                     // Offset 12 for IPv4 source IP
 					Len:          4,                             // Length: 4 bytes for IPv4 address
@@ -252,6 +273,7 @@ func (q *Rules) dropUDPFromToLocalIPs() {
 					SourceRegister: 1,
 					SetName:        q.nameSetLocal, // drop UDP to/from the local IPs.
 				},
+
 				// Match UDP protocol
 				&expr.Payload{
 					DestRegister: 2,                             // Store in register 2
@@ -262,20 +284,34 @@ func (q *Rules) dropUDPFromToLocalIPs() {
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
 					Register: 2,
-					Data:     []byte{17}, // 17 = UDP
+					Data:     []byte{unix.IPPROTO_UDP}, // 17 = UDP
 				},
-				// Match UDP destination port range (0-65535)
+
+				// Match destination port in set
 				&expr.Payload{
 					DestRegister: 3,
 					Base:         expr.PayloadBaseTransportHeader,
-					Offset:       2, // UDP header - Destination Port (2 bytes at offset 2)
-					Len:          2, // Match 2 bytes (16-bit port)
+					Offset:       2, // UDP header destination port offset
+					Len:          2, // Length of port
 				},
-				&expr.Range{
-					Register: 3,
-					FromData: []byte{0x00, 0x00}, // Port 0
-					ToData:   []byte{0xFF, 0xFF}, // Port 65535
+				&expr.Lookup{
+					SourceRegister: 3,
+					SetName:        udpPortSet.Name,
 				},
+
+				// Match UDP destination port range (0-65535)
+				// &expr.Payload{
+				// 	DestRegister: 3,
+				// 	Base:         expr.PayloadBaseTransportHeader,
+				// 	Offset:       2, // UDP header - Destination Port (2 bytes at offset 2)
+				// 	Len:          2, // Match 2 bytes (16-bit port)
+				// },
+				// &expr.Range{
+				// 	Register: 3,
+				// 	FromData: []byte{0x00, 0x00}, // Port 0
+				// 	ToData:   []byte{0xFF, 0xFF}, // Port 65535
+				// },
+
 				// Drop action
 				&expr.Verdict{
 					Kind: expr.VerdictDrop,
