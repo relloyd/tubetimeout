@@ -218,7 +218,6 @@ func (h *Handler) modeHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Resume the usage tracker.
 		modeData, err := h.usageTracker.GetModeEndTime(group)
 		h.logger.Infof("Fetched mode data for group %v", group)
 		if err != nil && errors.Is(err, models.ErrGroupNotFound) {
@@ -307,13 +306,13 @@ func (h *Handler) modeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Resume the usage tracker.
-		h.logger.Infof("Pause timer reset triggered for group %v", group)
 		err := h.usageTracker.Resume(group)
 		if err != nil {
 			h.logger.Errorf("Error resetting group block/allow timer: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
+		h.logger.Infof("Pause timer reset triggered for group %v", group)
 
 		// Respond.
 		w.WriteHeader(http.StatusOK)

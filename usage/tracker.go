@@ -410,7 +410,7 @@ func (t *Tracker) Resume(id string) error {
 	dd.config.ModeEndTime = time.Time{}
 	dd.config.Mode = models.ModeMonitor
 
-	return nil
+	return nil // TODO: update the tracker config after resuming the monitoring as trackers get stuck in various modes!
 }
 
 // GetConfig returns the group tracker config for all groups.
