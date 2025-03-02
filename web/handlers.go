@@ -173,6 +173,7 @@ func (h *Handler) trackerConfigHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(&flatConfig)
 	} else if r.Method == http.MethodPost {
+		// Save Usage Tracker Config.
 		var flatConfig []models.FlatTrackerConfig
 		if err := json.NewDecoder(r.Body).Decode(&flatConfig); err != nil {
 			h.logger.Errorf("Failed to unmarshall tracker config: %v", err)

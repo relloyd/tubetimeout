@@ -371,7 +371,7 @@ func (t *Tracker) SetMode(id string, d time.Duration, mode models.UsageTrackerMo
 	dd.config.Mode = mode
 	dd.config.ModeEndTime = t.nowFunc().Add(d)
 
-	// Save the new tracker config to file.
+	// Load the global usage tracker data for the group, and save the new tracker mode to the config file.
 	grp, ok := t.cfgGroups[models.Group(id)]
 	if !ok {
 		t.logger.Errorf("group %v not found while setting a allow/block mode", id)
