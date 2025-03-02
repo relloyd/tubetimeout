@@ -139,7 +139,7 @@ func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) (models.MapIpGrou
 		managerModeMatchAllSourceIps = true
 	} else if err != nil {
 		logger.Errorf("Source IPs will be tracked individually. Unexpected error loading MAC-Groups: %v", err)
-		managerModeMatchAllSourceIps = true
+		managerModeMatchAllSourceIps = true // TODO: turn off auto match all IPs when none are registered as we don't want things not explicitly included to be impacted by NFT rules.
 	} else {
 		managerModeMatchAllSourceIps = false
 	}
@@ -188,8 +188,17 @@ func scanNetwork(logger *zap.SugaredLogger, arpCmd arpCommand) (models.MapIpGrou
 			for group, macs := range gm.Groups {
 				for _, gmac := range macs {
 					if gmac.MAC == arpMAC {
-						groups := mig[models.Ip(arpIp)]               // retrieve existing groups for the IP.
-						mig[models.Ip(arpIp)] = append(groups, group) // append the new group to the existing groups.
+						existingGroups := mig[models.Ip(arpIp)] // retrieve existing groups for the IP.
+						exists := false
+						// Check if we saved the group already.
+						for _, existingGroup := range existingGroups {
+							if existingGroup == group {
+								exists = true
+							}
+						}
+						if !exists { // if the group has not yet been saved...
+							mig[models.Ip(arpIp)] = append(existingGroups, group) // append the new group to the existing groups.
+						}
 					}
 				}
 			}

@@ -25,12 +25,14 @@ func TestScanNetwork(t *testing.T) {
 		}, nil
 	}
 
-	// Define a mock ARP command that returns a fixed output
+	// Define a mock ARP command that returns a fixed output.
+	// Include duplicates across multiple adapters.
 	mockARPCommand := func() (string, error) {
 		return `
 ? (192.168.1.10) at 00:11:22:33:44:55
 ? (192.168.1.11) at 66:77:88:99:AA:BB
-? (192.168.1.12) at CC:DD:EE:FF:00:11
+? (192.168.1.12) at CC:DD:EE:FF:00:11 on wlan0
+? (192.168.1.12) at CC:DD:EE:FF:00:11 on eth0
 `, nil
 	}
 
@@ -53,6 +55,7 @@ func TestScanNetwork(t *testing.T) {
 			t.Errorf("Ip %s: expected %v, got %v", ip, expectedGroups, groups)
 		}
 	}
+
 	// Validate the IP MACs.
 	expectedMim := models.MapIpMACs{
 		"192.168.1.10": "00-11-22-33-44-55",
