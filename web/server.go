@@ -29,7 +29,6 @@ type UsageTracker interface {
 	GetSummary() map[string]*models.TrackerSummary
 	SetMode(id string, d time.Duration, mode models.UsageTrackerMode) error
 	GetModeEndTime(id string) (models.TrackerMode, error)
-	Resume(id string) error
 	Reset(id string)
 	GetConfig() (models.MapGroupTrackerConfig, error)
 	SetConfig(m models.MapGroupTrackerConfig) error

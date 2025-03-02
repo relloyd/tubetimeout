@@ -307,7 +307,7 @@ func (h *Handler) modeHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Resume the usage tracker.
-		err := h.usageTracker.Resume(group)
+		err := h.usageTracker.SetMode(group, 0, models.ModeMonitor)
 		if err != nil {
 			h.logger.Errorf("Error resetting group block/allow timer: %v", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)

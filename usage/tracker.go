@@ -396,23 +396,6 @@ func (t *Tracker) GetModeEndTime(id string) (models.TrackerMode, error) {
 	return models.TrackerMode{Mode: dd.config.Mode, ModeEndTime: dd.config.ModeEndTime}, nil
 }
 
-// Resume resumes the tracker for the given device.
-func (t *Tracker) Resume(id string) error {
-	data, ok := t.devices.Load(id)
-	if !ok {
-		return fmt.Errorf("device %v not found", id)
-	}
-	dd := data.(*deviceData)
-
-	dd.mu.Lock()
-	defer dd.mu.Unlock()
-
-	dd.config.ModeEndTime = time.Time{}
-	dd.config.Mode = models.ModeMonitor
-
-	return nil // TODO: update the tracker config after resuming the monitoring as trackers get stuck in various modes!
-}
-
 // GetConfig returns the group tracker config for all groups.
 func (t *Tracker) GetConfig() (models.MapGroupTrackerConfig, error) {
 	return getGroupTrackerConfig(t)
