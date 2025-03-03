@@ -153,7 +153,7 @@ func NewNFTRules(logger *zap.SugaredLogger, cfg *config.FilterConfig) (*Rules, e
 		return nil, fmt.Errorf("failed to create remote IP set")
 	}
 
-	rules.dropUDPFromToLocalIPs() // drop UDP to/from the local IP set.
+	rules.dropUDPFromToLocalIPs(cfg.OutboundQueueNumber, cfg.InboundQueueNumber) // drop UDP to/from the local IP set.
 
 	// Create NFTables rules for src-dest and dest-src combinations.
 	err = rules.addNFTablesRuleForSets(cfg.OutboundQueueNumber, rules.nameSetLocal, rules.nameSetRemote)
@@ -231,8 +231,14 @@ func (q *Rules) dropUDPPorts() {
 	})
 }
 
-func (q *Rules) dropUDPFromToLocalIPs() {
-	directions := []uint32{12, 16} // 12 for source IP; 16 for destination IP
+func (q *Rules) dropUDPFromToLocalIPs(outboundQueueNumber uint16, inboundQueueNumber uint16) {
+	data := []struct {
+		direction   uint32
+		queueNumber uint16
+	}{
+		{12, inboundQueueNumber},  // 12 for source IP
+		{16, outboundQueueNumber}, // 16 for destination IP
+	}
 
 	// Define a set for UDP ports to match
 	udpPortSet := &nftables.Set{
@@ -256,7 +262,7 @@ func (q *Rules) dropUDPFromToLocalIPs() {
 	}
 
 	// Drop UDP
-	for _, direction := range directions {
+	for _, direction := range data {
 		rule := &nftables.Rule{
 			Table: q.table,
 			Chain: q.chain,
@@ -265,7 +271,7 @@ func (q *Rules) dropUDPFromToLocalIPs() {
 				&expr.Payload{
 					DestRegister: 1,                             // Extract the source IP address into register 1
 					Base:         expr.PayloadBaseNetworkHeader, // Network header
-					Offset:       direction,                     // Offset 12 for IPv4 source IP
+					Offset:       direction.direction,           // Offset based on direction
 					Len:          4,                             // Length: 4 bytes for IPv4 address
 				},
 				// Check if the source IP is in the YouTube IP set
@@ -313,8 +319,14 @@ func (q *Rules) dropUDPFromToLocalIPs() {
 				// },
 
 				// Drop action
-				&expr.Verdict{
-					Kind: expr.VerdictDrop,
+				// &expr.Verdict{
+				// 	Kind: expr.VerdictDrop,
+				// },
+
+				&expr.Queue{
+					Num:   direction.queueNumber,
+					Total: 1,
+					Flag:  0, // 0 = block; use expr.QueueFlagBypass (1) to bypass if the net filter is not running or if the queue is full
 				},
 			},
 		}
