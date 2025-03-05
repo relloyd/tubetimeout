@@ -50,7 +50,7 @@ func (g *groupMACs) GetConfig(logger *zap.SugaredLogger) (GroupMACsConfig, error
 
 	if !groupMACsFileUpdated {
 		var err error
-		defaultGroupMacFilePath, err = DefaultCreateAppHomeDirAndGetConfigFilePathFunc(defaultGroupMacFilePath)
+		defaultGroupMacFilePath, err = FnDefaultCreateAppHomeDirAndGetConfigFilePath(defaultGroupMacFilePath)
 		if err != nil {
 			return GroupMACsConfig{}, fmt.Errorf("failed to create home directory for group-macs config file: %w", err)
 		} else {
@@ -61,7 +61,7 @@ func (g *groupMACs) GetConfig(logger *zap.SugaredLogger) (GroupMACsConfig, error
 	yamlFile, err := os.ReadFile(defaultGroupMacFilePath)
 	if err != nil && os.IsNotExist(err) { // if the file needs creating...
 		// Create the file with zero data.
-		err = FnSafeWriteViaTemp(defaultGroupMacFilePath, "")
+		err = FnDefaultSafeWriteViaTemp(defaultGroupMacFilePath, "")
 		if err != nil {
 			return GroupMACsConfig{}, fmt.Errorf("failed to create group-macs file: %w", err)
 		}
@@ -185,7 +185,7 @@ func (g *groupMACs) SaveGroupMACs(logger *zap.SugaredLogger, flatGroupMACs []Fla
 		return fmt.Errorf("failed to marshal group-macs to YAML: %w", err)
 	}
 
-	err = FnSafeWriteViaTemp(defaultGroupMacFilePath, string(yamlBytes))
+	err = FnDefaultSafeWriteViaTemp(defaultGroupMacFilePath, string(yamlBytes))
 	if err != nil {
 		return fmt.Errorf("failed to write group-macs to file: %w", err)
 	}

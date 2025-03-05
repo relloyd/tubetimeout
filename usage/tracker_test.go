@@ -29,7 +29,7 @@ func restoreFunctions() {
 	fnGetTrackerSamplesFile = originalFnGetTrackerSamplesFile
 	fnGetGroupTrackerConfig = originalFnGetGroupTrackerConfig
 	fnSaveSamplesPeriodically = originalFnSaveSamplesPeriodically
-	config.FnSafeWriteViaTemp = config.DefaultSafeWriteViaTemp
+	config.FnDefaultSafeWriteViaTemp = config.SafeWriteViaTemp
 }
 
 type mockTrafficCounter struct {
@@ -62,7 +62,7 @@ func TestNewTracker(t *testing.T) {
 		SampleFileSaveInterval: 50 * time.Millisecond,
 	}
 
-	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+	fnGetGroupTrackerConfig = func(mu *sync.Mutex, configPath string, _ func() models.MapGroupTrackerConfig) (models.MapGroupTrackerConfig, error) {
 		return models.MapGroupTrackerConfig{
 			"GroupA": {
 				Granularity:   1 * time.Minute,
@@ -648,7 +648,7 @@ func TestNewTracker_GetGroupConfig(t *testing.T) {
 	}
 
 	// Mock getGroupTrackerConfig so it returns an error.
-	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+	fnGetGroupTrackerConfig = func(mu *sync.Mutex, configPath string, _ func() models.MapGroupTrackerConfig) (models.MapGroupTrackerConfig, error) {
 		return nil, errors.New("mocked error for getGroupTrackerConfig")
 	}
 	tracker, err := NewTracker(ctx, logger, cfg)
@@ -656,7 +656,7 @@ func TestNewTracker_GetGroupConfig(t *testing.T) {
 	assert.Nil(t, tracker, "Tracker should be nil")
 
 	// Mock the fnGetGroupTrackerConfig so it does not error.
-	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+	fnGetGroupTrackerConfig = func(mu *sync.Mutex, configPath string, _ func() models.MapGroupTrackerConfig) (models.MapGroupTrackerConfig, error) {
 		return models.MapGroupTrackerConfig{}, nil
 	}
 	tracker, err = NewTracker(ctx, logger, cfg)
@@ -687,7 +687,7 @@ func TestNewTracker_SampleFilePathInvalid(t *testing.T) {
 	}
 
 	// Mock the fnGetGroupTrackerConfig to be a noop.
-	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+	fnGetGroupTrackerConfig = func(mu *sync.Mutex, configPath string, _ func() models.MapGroupTrackerConfig) (models.MapGroupTrackerConfig, error) {
 		return nil, nil
 	}
 
@@ -714,7 +714,7 @@ func TestNewTracker_LoadSamples(t *testing.T) {
 	}
 
 	// Mock the fnGetGroupTrackerConfig to be a noop.
-	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+	fnGetGroupTrackerConfig = func(mu *sync.Mutex, configPath string, _ func() models.MapGroupTrackerConfig) (models.MapGroupTrackerConfig, error) {
 		return nil, nil
 	}
 
@@ -747,7 +747,7 @@ func TestNewTracker_HandlesEmptySampleFilePath(t *testing.T) {
 	}
 
 	// Mock the fnGetGroupTrackerConfig to be a noop.
-	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+	fnGetGroupTrackerConfig = func(mu *sync.Mutex, configPath string, _ func() models.MapGroupTrackerConfig) (models.MapGroupTrackerConfig, error) {
 		return nil, nil
 	}
 
@@ -776,7 +776,7 @@ func TestTracker_SetMode(t *testing.T) {
 		SampleFileSaveInterval: 50 * time.Millisecond,
 	}
 
-	fnGetGroupTrackerConfig = func(t *Tracker) (models.MapGroupTrackerConfig, error) {
+	fnGetGroupTrackerConfig = func(mu *sync.Mutex, configPath string, _ func() models.MapGroupTrackerConfig) (models.MapGroupTrackerConfig, error) {
 		return models.MapGroupTrackerConfig{
 			"GroupA": {
 				Granularity:   1 * time.Minute,
@@ -792,14 +792,14 @@ func TestTracker_SetMode(t *testing.T) {
 	}
 
 	configWasSaved := false
-	config.FnSafeWriteViaTemp = func(filePath string, data string) error {
+	config.FnDefaultSafeWriteViaTemp = func(filePath string, data string) error {
 		configWasSaved = true
 		return nil
 	}
 
 	t.Cleanup(func() {
-		config.FnSafeWriteViaTemp = config.DefaultSafeWriteViaTemp // restore the file writer func
-		fnGetGroupTrackerConfig = getGroupTrackerConfig
+		config.FnDefaultSafeWriteViaTemp = config.SafeWriteViaTemp // restore the file writer func
+		fnGetGroupTrackerConfig = config.GetConfig
 	})
 
 	// Test Cases.

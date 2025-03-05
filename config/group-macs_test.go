@@ -46,17 +46,17 @@ unusedMACs:
 		t.Fatalf("Failed to close temp file: %v", err)
 	}
 
-	oldDefaultCreateAppHomeDirAndGetConfigFilePathFunc := DefaultCreateAppHomeDirAndGetConfigFilePathFunc
+	oldDefaultCreateAppHomeDirAndGetConfigFilePathFunc := FnDefaultCreateAppHomeDirAndGetConfigFilePath
 	oldDefaultGroupMacFilePath := defaultGroupMacFilePath
 	t.Cleanup(func() {
-		DefaultCreateAppHomeDirAndGetConfigFilePathFunc = oldDefaultCreateAppHomeDirAndGetConfigFilePathFunc
+		FnDefaultCreateAppHomeDirAndGetConfigFilePath = oldDefaultCreateAppHomeDirAndGetConfigFilePathFunc
 		defaultGroupMacFilePath = oldDefaultGroupMacFilePath
 		groupMACsFileUpdated = false
 	})
 
 	// Hack functions so the temp file is returned to GetConfig().
-	defaultGroupMacFilePath = tempFile.Name()                                                          // override the default file path with temp file above.
-	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(f string) (string, error) { return f, nil } // override the function that uses the home dir for config files.
+	defaultGroupMacFilePath = tempFile.Name()                                                        // override the default file path with temp file above.
+	FnDefaultCreateAppHomeDirAndGetConfigFilePath = func(f string) (string, error) { return f, nil } // override the function that uses the home dir for config files.
 }
 
 func TestGetGroupMACs(t *testing.T) {
@@ -131,19 +131,19 @@ func TestGetGroupMACsFileNotFound(t *testing.T) {
 
 	// Save values to restore later.
 	oldDefaultGroupMacFilePath := defaultGroupMacFilePath
-	oldDefaultCreateAppHomeDirAndGetConfigFilePathFunc := DefaultCreateAppHomeDirAndGetConfigFilePathFunc
+	oldDefaultCreateAppHomeDirAndGetConfigFilePathFunc := FnDefaultCreateAppHomeDirAndGetConfigFilePath
 
 	// Hack functions so the temp file is returned to GetConfig().
 	defaultGroupMacFilePath = "auto-created-file.yaml"
 	groupMACsFileUpdated = false
 	expectedConfigFilePath := path.Join(td, defaultGroupMacFilePath)
-	DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(f string) (string, error) { return expectedConfigFilePath, nil }
+	FnDefaultCreateAppHomeDirAndGetConfigFilePath = func(f string) (string, error) { return expectedConfigFilePath, nil }
 
 	// Cleanup.
 	t.Cleanup(func() {
 		_ = os.Remove(expectedConfigFilePath)
 		defaultGroupMacFilePath = oldDefaultGroupMacFilePath
-		DefaultCreateAppHomeDirAndGetConfigFilePathFunc = oldDefaultCreateAppHomeDirAndGetConfigFilePathFunc
+		FnDefaultCreateAppHomeDirAndGetConfigFilePath = oldDefaultCreateAppHomeDirAndGetConfigFilePathFunc
 		groupMACsFileUpdated = false
 	})
 

@@ -13,3 +13,7 @@ func NewMAC(mac string) string { // TODO: convert MAC string to a model.MAC and 
 func NewGroup(group string) string {
 	return strings.Replace(group, "/", "", -1)
 }
+
+func NewMapGroupTrackerConfig() MapGroupTrackerConfig {
+	return make(MapGroupTrackerConfig)
+}

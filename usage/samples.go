@@ -82,5 +82,5 @@ func saveSamples(logger *zap.SugaredLogger, path string, devices *sync.Map) erro
 	}
 
 	// Write the samples to the file.
-	return config.FnSafeWriteViaTemp(path, string(b))
+	return config.FnDefaultSafeWriteViaTemp(path, string(b))
 }

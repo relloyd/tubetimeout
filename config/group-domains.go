@@ -46,7 +46,7 @@ type GroupDomainsConfig struct {
 func LoadGroupDomains() (models.MapGroupDomains, error) {
 	if !groupMACsFileUpdated { // if we should update the file path with the app home dir...
 		var err error
-		defaultGroupDomainsFilePath, err = DefaultCreateAppHomeDirAndGetConfigFilePathFunc(defaultGroupDomainsFilePath)
+		defaultGroupDomainsFilePath, err = FnDefaultCreateAppHomeDirAndGetConfigFilePath(defaultGroupDomainsFilePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create home directory for group-domains config file: %w", err)
 		} else {

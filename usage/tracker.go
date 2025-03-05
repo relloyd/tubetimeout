@@ -16,8 +16,8 @@ import (
 var (
 	fnLoadSamples                       = loadSamples
 	fnSaveSamples                       = saveSamples
-	fnGetGroupTrackerConfig             = getGroupTrackerConfig
-	fnGetTrackerSamplesFile             = config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc
+	fnGetGroupTrackerConfig             = config.GetConfig[models.MapGroupTrackerConfig]
+	fnGetTrackerSamplesFile             = config.FnDefaultCreateAppHomeDirAndGetConfigFilePath
 	fnSaveSamplesPeriodically           = saveSamplesPeriodically
 	defaultGroupTrackerConfigFilePath   = "usage-tracker-config.yaml"
 	groupTrackerConfigFileUpdated       = false
@@ -49,9 +49,12 @@ func NewTracker(ctx context.Context, logger *zap.SugaredLogger, cfg *models.Trac
 
 	// Load groups config from file.
 	var err error
-	t.cfgGroups, err = fnGetGroupTrackerConfig(t)
+	t.cfgGroups, err = fnGetGroupTrackerConfig(t.mu, defaultGroupTrackerConfigFilePath, func() models.MapGroupTrackerConfig { return make(models.MapGroupTrackerConfig) })
 	if err != nil {
 		return nil, err
+	}
+	if t.cfgGroups == nil {
+		t.cfgGroups = make(models.MapGroupTrackerConfig)
 	}
 
 	// Load & save existing sample data.
@@ -396,12 +399,61 @@ func (t *Tracker) GetModeEndTime(id string) (models.TrackerMode, error) {
 	return models.TrackerMode{Mode: dd.config.Mode, ModeEndTime: dd.config.ModeEndTime}, nil
 }
 
+// validateGroupTrackerConfig contains the validation and sanitization logic.
+func validateGroupTrackerConfig(cfg models.MapGroupTrackerConfig) error {
+	for k, v := range cfg {
+		if k == "" || v == nil {
+			delete(cfg, k)
+		} else {
+			v.Granularity = config.AppCfg.TrackerConfig.Granularity // always keep the default granularity
+			if v.Retention == 0 {
+				v.Retention = config.AppCfg.TrackerConfig.Retention
+			}
+			if v.Threshold < 0 {
+				v.Threshold = 0
+			}
+			if v.StartDayInt == 0 {
+				v.StartDayInt = config.AppCfg.TrackerConfig.StartDayInt
+			}
+			if v.StartDuration == 0 {
+				v.StartDuration = config.AppCfg.TrackerConfig.StartDuration
+			}
+			if v.ModeEndTime.Before(time.Now().UTC()) { // if the input mode has expired...
+				// Reset it to monitoring.
+				// The usage tracker will ignore expired modes anyway.
+				v.Mode = models.ModeMonitor
+				v.ModeEndTime = time.Time{}.UTC()
+			}
+		}
+		// Remove bad characters from the map by replacing the keys.
+		cleanGroup := models.Group(models.NewGroup(string(k))) // sanitise the group name
+		if k != cleanGroup {                                   // if the sane group name doesn't match the input group...
+			cfg[cleanGroup] = v // create the new clean group with the same data and delete the badly named key.
+			delete(cfg, k)
+		}
+	}
+	if len(cfg) == 0 {
+		return fmt.Errorf("no valid tracker config found")
+	}
+	return nil
+}
+
 // GetConfig returns the group tracker config for all groups.
 func (t *Tracker) GetConfig() (models.MapGroupTrackerConfig, error) {
-	return getGroupTrackerConfig(t)
+	return config.GetConfig[models.MapGroupTrackerConfig](
+		t.mu,
+		defaultGroupTrackerConfigFilePath,
+		models.NewMapGroupTrackerConfig,
+	)
 }
 
 // SetConfig saves the supplied map of group tracker config data to disk and in the struct.
 func (t *Tracker) SetConfig(m models.MapGroupTrackerConfig) error {
-	return setGroupTrackerConfig(t, m)
+	return config.SetConfig[models.MapGroupTrackerConfig](
+		t.mu,
+		defaultGroupTrackerConfigFilePath,
+		validateGroupTrackerConfig,
+		func(v models.MapGroupTrackerConfig) { t.cfgGroups = v },
+		m,
+	)
 }

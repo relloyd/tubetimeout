@@ -25,12 +25,12 @@ func TestGetGroupTrackerConfig_FileNotExist_CreatesFile(t *testing.T) {
 	_ = os.Remove(testFile.Name()) // remove the file immediately so we have the file name only.
 
 	defaultGroupTrackerConfigFilePath = testFile.Name()
-	config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(path string) (string, error) {
+	config.FnDefaultCreateAppHomeDirAndGetConfigFilePath = func(path string) (string, error) {
 		return testFile.Name(), nil
 	}
 
 	configFileWritten := false
-	config.FnSafeWriteViaTemp = func(filePath string, data string) error {
+	config.FnDefaultSafeWriteViaTemp = func(filePath string, data string) error {
 		if filePath != testFile.Name() {
 			return errors.New("unexpected file path")
 		}
@@ -38,7 +38,7 @@ func TestGetGroupTrackerConfig_FileNotExist_CreatesFile(t *testing.T) {
 		return nil
 	}
 
-	cfg, err := getGroupTrackerConfig(tkr)
+	cfg, err := config.GetConfig[models.MapGroupTrackerConfig](tkr.mu, defaultGroupTrackerConfigFilePath, models.NewMapGroupTrackerConfig)
 	assert.NoError(t, err)
 	assert.True(t, configFileWritten, "expected file to be written")
 	assert.Nil(t, cfg, "expected config to be nil as it was only just written")
@@ -57,7 +57,7 @@ func TestGetGroupTrackerConfig_FileExists_ParsesYAML(t *testing.T) {
 	})
 
 	defaultGroupTrackerConfigFilePath = testFile.Name()
-	config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(path string) (string, error) {
+	config.FnDefaultCreateAppHomeDirAndGetConfigFilePath = func(path string) (string, error) {
 		return testFile.Name(), nil
 	}
 
@@ -69,7 +69,7 @@ func TestGetGroupTrackerConfig_FileExists_ParsesYAML(t *testing.T) {
 	err := os.WriteFile(testFile.Name(), b, 0644)
 	assert.NoError(t, err)
 
-	cfg, err := getGroupTrackerConfig(tkr)
+	cfg, err := config.GetConfig[models.MapGroupTrackerConfig](tkr.mu, defaultGroupTrackerConfigFilePath, models.NewMapGroupTrackerConfig)
 
 	assert.NoError(t, err)
 	assert.Equal(t, data, cfg)
@@ -88,18 +88,18 @@ func TestGetGroupTrackerConfig_YAMLError_ReturnsError(t *testing.T) {
 	})
 
 	defaultGroupTrackerConfigFilePath = testFile.Name()
-	config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(path string) (string, error) {
+	config.FnDefaultCreateAppHomeDirAndGetConfigFilePath = func(path string) (string, error) {
 		return testFile.Name(), nil
 	}
 
 	err := os.WriteFile(testFile.Name(), []byte("invalid_yaml"), 0644)
 	assert.NoError(t, err)
 
-	cfg, err := getGroupTrackerConfig(tkr)
+	cfg, err := config.GetConfig[models.MapGroupTrackerConfig](tkr.mu, defaultGroupTrackerConfigFilePath, models.NewMapGroupTrackerConfig)
 
 	assert.Nil(t, cfg)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "error unmarshalling YAML")
+	assert.Contains(t, err.Error(), "error unmarshalling config")
 }
 
 func TestSetGroupTrackerConfig_SuccessfulWrite(t *testing.T) {
@@ -115,7 +115,7 @@ func TestSetGroupTrackerConfig_SuccessfulWrite(t *testing.T) {
 	})
 
 	defaultGroupTrackerConfigFilePath = testFile.Name()
-	config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(path string) (string, error) {
+	config.FnDefaultCreateAppHomeDirAndGetConfigFilePath = func(path string) (string, error) {
 		return testFile.Name(), nil
 	}
 
@@ -124,12 +124,12 @@ func TestSetGroupTrackerConfig_SuccessfulWrite(t *testing.T) {
 	}
 
 	configFileWritten := false
-	config.FnSafeWriteViaTemp = func(filePath string, content string) error {
+	config.FnDefaultSafeWriteViaTemp = func(filePath string, content string) error {
 		configFileWritten = true
 		return nil
 	}
 
-	err := setGroupTrackerConfig(tkr, data)
+	err := config.SetConfig[models.MapGroupTrackerConfig](tkr.mu, defaultGroupTrackerConfigFilePath, validateGroupTrackerConfig, nil, data)
 
 	assert.NoError(t, err)
 	assert.True(t, configFileWritten, "expected file to be written")
@@ -156,21 +156,27 @@ func TestSetGroupTrackerConfig_EntriesAreFiltered(t *testing.T) {
 	}
 
 	defaultGroupTrackerConfigFilePath = testFile.Name()
-	config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(path string) (string, error) {
+	config.FnDefaultCreateAppHomeDirAndGetConfigFilePath = func(path string) (string, error) {
 		return testFile.Name(), nil
 	}
 
-	config.FnSafeWriteViaTemp = func(filePath string, content string) error {
+	config.FnDefaultSafeWriteViaTemp = func(filePath string, content string) error {
 		return nil
 	}
 
 	dataThatWillBeFiltered := models.MapGroupTrackerConfig{"": nil, "group": nil}
-	err := setGroupTrackerConfig(tkr, dataThatWillBeFiltered)
+	err := config.SetConfig[models.MapGroupTrackerConfig](tkr.mu, defaultGroupTrackerConfigFilePath, validateGroupTrackerConfig, nil, dataThatWillBeFiltered)
 	assert.Error(t, err, "expected error due to empty data supplied")
 	assert.Equal(t, existingGroupTrackerConfig, tkr.cfgGroups, "expected empty data NOT to be saved")
 
 	expectedGoodData := models.MapGroupTrackerConfig{"abc": &models.TrackerConfig{Granularity: 1 * time.Minute}}
-	err = setGroupTrackerConfig(tkr, expectedGoodData)
+	err = config.SetConfig[models.MapGroupTrackerConfig](
+		tkr.mu,
+		defaultGroupTrackerConfigFilePath,
+		validateGroupTrackerConfig,
+		func(v models.MapGroupTrackerConfig) { tkr.cfgGroups = v },
+		expectedGoodData,
+	)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedGoodData, tkr.cfgGroups, "expected group tracker config to be saved")
 }
@@ -190,11 +196,11 @@ func TestSetGroupTrackerConfig_InvalidGroup(t *testing.T) {
 	}
 
 	defaultGroupTrackerConfigFilePath = testFile.Name()
-	config.DefaultCreateAppHomeDirAndGetConfigFilePathFunc = func(path string) (string, error) {
+	config.FnDefaultCreateAppHomeDirAndGetConfigFilePath = func(path string) (string, error) {
 		return testFile.Name(), nil
 	}
 
-	config.FnSafeWriteViaTemp = func(filePath string, content string) error {
+	config.FnDefaultSafeWriteViaTemp = func(filePath string, content string) error {
 		return nil
 	}
 
@@ -207,10 +213,16 @@ func TestSetGroupTrackerConfig_InvalidGroup(t *testing.T) {
 	testGroup := "groupName/WithSlash"
 	cleanGroup := models.Group(models.NewGroup(testGroup))
 	groupData := models.MapGroupTrackerConfig{"groupName/WithSlash": nil}
-	err := setGroupTrackerConfig(tkr, groupData)
+	err := config.SetConfig[models.MapGroupTrackerConfig](
+		tkr.mu,
+		defaultGroupTrackerConfigFilePath,
+		validateGroupTrackerConfig,
+		func(v models.MapGroupTrackerConfig) { tkr.cfgGroups = v },
+		groupData,
+	)
 	assert.NoError(t, err)
 	_, ok := tkr.cfgGroups[cleanGroup]
 	assert.True(t, ok, "expected clean group to be present")
 	_, ok = tkr.cfgGroups[models.Group(testGroup)]
-	assert.False(t, ok,  "expected test group to be replaced by cleanGroup")
+	assert.False(t, ok, "expected test group to be replaced by cleanGroup")
 }
