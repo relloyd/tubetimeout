@@ -21,10 +21,13 @@ import (
 )
 
 var (
-	defaultInterfaceName = "eth0"
-	defaultLeaseDuration = "12h"
-	configFileDNSMasq    = "/etc/dnsmasq.conf"
-	dnsMasqConfig        *DNSMasqConfig // expect init to set this up
+	defaultInterfaceName     = "eth0"
+	defaultLeaseDuration     = "12h"
+	configFileDNSMasqService = "/etc/dnsmasq.conf"
+	configFileDHCPSettings   = "dhcp-config.yaml"
+	dnsMasqConfig            *DNSMasqConfig // expect init to set this up
+	routeCmd                 = defaultRouteCmd
+	routeCmdArgs             = []string{"-n"}
 )
 
 type systemctlAction string
@@ -44,7 +47,7 @@ type DNSMasqConfig struct {
 	LowerBound          net.IP   `json:"subnetRangeLowerIP"`
 	UpperBound          net.IP   `json:"subnetRangeUpperIP"`
 	AddressReservations []string `json:"addressReservations"`
-	ServiceEnabled             bool     `json:"serviceEnabled"`
+	ServiceEnabled      bool     `json:"serviceEnabled"`
 }
 
 func newDNSMasqConfig() *DNSMasqConfig {
@@ -81,8 +84,16 @@ func init() {
 	//   ✅isDNSMasqEnabledInConfig
 	//   getDHCPStatus
 	//   MaybeStartDnsmasq
+	var err error
+	dnsMasqConfig, err = GetConfig()
+	if err != nil {
+		config.MustGetLogger().Warn("Failed to load DNSMasqConfig", zap.Error(err))
+	}
+}
 
-	dnsMasqConfig, _ = GetConfig()
+func defaultRouteCmd() (string, error) {
+	output, err := exec.Command("route", routeCmdArgs...).Output() // -n: show numerical addresses, -a: show all hosts
+	return string(output), err
 }
 
 func isDNSMasqEnabledInConfig() bool {
@@ -98,7 +109,8 @@ func GetConfig() (*DNSMasqConfig, error) {
 	}
 
 	// Load from file.
-	cfg, err := config.GetConfig[*DNSMasqConfig](dnsMasqConfig.mu, configFileDNSMasq, newDNSMasqConfig)
+	mu := &sync.Mutex{}
+	cfg, err := config.GetConfig[*DNSMasqConfig](mu, configFileDHCPSettings, newDNSMasqConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dnsmasq config: %w", err)
 	}
@@ -142,7 +154,7 @@ func SetConfig(cfg *DNSMasqConfig) error {
 		cfg.mu = &sync.Mutex{}
 	}
 
-	err := config.SetConfig[*DNSMasqConfig](cfg.mu, configFileDNSMasq, nil, nil, cfg) // TODO: validate the incoming config but don't override any yet
+	err := config.SetConfig[*DNSMasqConfig](cfg.mu, configFileDHCPSettings, nil, nil, cfg) // TODO: validate the incoming config but don't override any yet
 	if err != nil {
 		return fmt.Errorf("failed to set dnsmasq config: %w", err)
 	}
@@ -248,48 +260,44 @@ func isDHCPServerRunning(mac net.HardwareAddr) (bool, error) {
 
 // getDefaultGateway reads /proc/net/route to obtain the default gateway for interface eth0.
 func getDefaultGateway() (net.IP, error) {
-	file, err := os.Open("/proc/net/route")
-	if err != nil {
-		return nil, fmt.Errorf("failed to open /proc/net/route: %v", err)
+	if runtime.GOOS == "darwin" {
+		routeCmdArgs = []string{"-n", "get", "default"}
 	}
-	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	// Skip header line.
-	if !scanner.Scan() {
-		return nil, fmt.Errorf("failed to scan /proc/net/route")
+	output, err := routeCmd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute route command: %v", err)
 	}
+
+	scanner := bufio.NewScanner(strings.NewReader(string(output)))
 	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if len(fields) < 3 {
-			continue
+		line := scanner.Text()
+		if runtime.GOOS == "darwin" && strings.HasPrefix(line, "gateway:") {
+			gateway := strings.TrimSpace(strings.TrimPrefix(line, "gateway:"))
+			ip := net.ParseIP(gateway)
+			if ip == nil {
+				return nil, fmt.Errorf("failed to parse gateway IP: %s", gateway)
+			}
+			return ip, nil
+		} else if runtime.GOOS != "darwin" {
+			fields := strings.Fields(line)
+			if len(fields) < 8 || fields[1] != "00000000" {
+				continue
+			}
+			gatewayHex := fields[2]
+			gwHex, err := strconv.ParseUint(gatewayHex, 16, 32)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse gateway: %v", err)
+			}
+			ip := net.IPv4(byte(gwHex&0xFF), byte((gwHex>>8)&0xFF), byte((gwHex>>16)&0xFF), byte((gwHex>>24)&0xFF))
+			return ip, nil
 		}
-		iface, dest, gateway := fields[0], fields[1], fields[2]
-		// Check if this line is for eth0 and if it represents the default route.
-		if iface != "eth0" || dest != "00000000" {
-			continue
-		}
-		flags, err := strconv.ParseInt(fields[3], 16, 32) // Parse flags as hex.
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse flags: %v", err)
-		}
-		// Check that both RTF_UP (0x1) and RTF_GATEWAY (0x2) bits are set.
-		if flags&0x3 != 0x3 {
-			continue
-		}
-		// Parse the gateway from a hex string.
-		gwHex, err := strconv.ParseUint(gateway, 16, 32)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse gateway: %v", err)
-		}
-		// Convert the hex value (little-endian) to an IPv4 address.
-		ip := net.IPv4(byte(gwHex&0xFF), byte((gwHex>>8)&0xFF), byte((gwHex>>16)&0xFF), byte((gwHex>>24)&0xFF))
-		return ip, nil
 	}
-	if err := scanner.Err(); err != nil {
+
+	if err = scanner.Err(); err != nil {
 		return nil, err
 	}
-	return nil, fmt.Errorf("default gateway not found for eth0")
+	return nil, fmt.Errorf("default gateway not found")
 }
 
 func getSubnetBounds(interfaceName string) (net.IP, net.IP, error) {
@@ -343,7 +351,7 @@ func compareIP(a, b net.IP) int {
 
 // ChooseIPFromBottom picks the lowest IP in the range and updates the range.
 func chooseIPFromBottom(lower, upper net.IP) (chosenIP, newLower, newUpper net.IP, err error) {
-	if len(lower) != len(upper) {
+	if len(lower) != len(upper) || (lower.To4() == nil) != (upper.To4() == nil) {
 		return nil, nil, nil, errors.New("IP versions (IPv4/IPv6) do not match")
 	}
 	if compareIP(lower, upper) > 0 {
@@ -352,7 +360,7 @@ func chooseIPFromBottom(lower, upper net.IP) (chosenIP, newLower, newUpper net.I
 	chosenIP = append(net.IP(nil), lower...)
 	newLower = incrementIP(lower)
 	if compareIP(newLower, upper) > 0 { // if the range is now empty...
-		return chosenIP, nil, nil, fmt.Errorf("range exhaused: lower IP is greater than upper IP")
+		return chosenIP, nil, nil, fmt.Errorf("range exhausted: lower IP is greater than upper IP")
 	}
 	return chosenIP, newLower, upper, nil
 }
@@ -418,7 +426,7 @@ func startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 	}
 
 	// Write the configuration.
-	if err := writeDnsmasqConfig(configFileDNSMasq, dat); err != nil {
+	if err := writeDnsmasqConfig(configFileDNSMasqService, dat); err != nil {
 		return fmt.Errorf("error writing dnsmasq config: %v", err)
 	}
 

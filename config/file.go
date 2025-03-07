@@ -150,8 +150,10 @@ func SetConfig[T any](
 	configFileCreatedMu.Unlock()
 
 	// Validate and adjust the configuration as needed.
-	if err := validate(configValue); err != nil {
-		return err
+	if validate != nil {
+		if err := validate(configValue); err != nil {
+			return err
+		}
 	}
 
 	// Marshal the configuration.
