@@ -21,7 +21,9 @@ func getNetAdapterName() string {
 }
 
 func TestCheckDHCPServer(t *testing.T) {
-	ifaceName := "eth0"
+	ifaceName, err := getPrimaryInterfaceName()
+	assert.NoError(t, err, "failed to get primary interface (check your o/s is listed)")
+
 	iface, err := net.InterfaceByName(ifaceName)
 	if err != nil {
 		t.Fatalf("Interface %s not found: %v", ifaceName, err)
@@ -32,8 +34,8 @@ func TestCheckDHCPServer(t *testing.T) {
 		t.Fatalf("No MAC address found for interface %s", ifaceName)
 	}
 
-	res, err := checkDHCPServer(mac)
-	assert.Equal(t, true, res, "checkDHCPServer() should return true", err)
+	res, err := isDHCPServerRunning(mac)
+	assert.Equal(t, true, res, "isDHCPServerRunning() should return true", err)
 }
 
 //

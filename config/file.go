@@ -94,7 +94,7 @@ func GetConfig[T any](mu *sync.Mutex, configPath string, newInstance func() T) (
 			var zero T
 			return zero, fmt.Errorf("failed to create home directory: %w", err)
 		}
-		configFileCreated[configPath] = true
+		configFileCreated[configPath] = true // TODO: the config file isn't actually created here so link it to actual creation
 	}
 	configFileCreatedMu.Unlock()
 
