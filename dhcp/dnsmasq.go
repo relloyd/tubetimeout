@@ -2,13 +2,13 @@ package main
 
 import (
 	"bufio"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -115,7 +115,7 @@ func GetConfig() (*DNSMasqConfig, error) {
 		return nil, fmt.Errorf("failed to get dnsmasq config: %w", err)
 	}
 
-	if cfg == nil { // if config is nil, make one but it shouldn't be as we supply new func above...
+	if cfg == nil { // if config is nil, make one, but it shouldn't be as we supply new func above...
 		cfg = newDNSMasqConfig()
 	}
 
@@ -129,7 +129,7 @@ func GetConfig() (*DNSMasqConfig, error) {
 	}
 
 	if cfg.LowerBound == nil || cfg.UpperBound == nil {
-		cfg.LowerBound, cfg.UpperBound, _ = getSubnetBounds(ifaceName)
+		cfg.LowerBound, cfg.UpperBound, _ = getSubnetBoundsForInterface(ifaceName)
 	}
 
 	if cfg.ThisGateway == nil { // pick a gateway address for tubetimeout, and adjust the lower subnet boundary...
@@ -269,7 +269,7 @@ func getDefaultGateway() (net.IP, error) {
 		return nil, fmt.Errorf("failed to execute route command: %v", err)
 	}
 
-	scanner := bufio.NewScanner(strings.NewReader(string(output)))
+	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
 		line := scanner.Text()
 		if runtime.GOOS == "darwin" && strings.HasPrefix(line, "gateway:") {
@@ -280,16 +280,18 @@ func getDefaultGateway() (net.IP, error) {
 			}
 			return ip, nil
 		} else if runtime.GOOS != "darwin" {
-			fields := strings.Fields(line)
-			if len(fields) < 8 || fields[1] != "00000000" {
+			// Skip the table header and focus on relevant lines
+			if strings.HasPrefix(line, "Destination") || strings.HasPrefix(line, "Kernel") {
 				continue
 			}
-			gatewayHex := fields[2]
-			gwHex, err := strconv.ParseUint(gatewayHex, 16, 32)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse gateway: %v", err)
+			fields := strings.Fields(line)
+			if len(fields) < 8 || fields[0] != "0.0.0.0" || fields[3] != "UG" {
+				continue
 			}
-			ip := net.IPv4(byte(gwHex&0xFF), byte((gwHex>>8)&0xFF), byte((gwHex>>16)&0xFF), byte((gwHex>>24)&0xFF))
+			ip := net.ParseIP(fields[1]) // Gateway is in the second column for Linux
+			if ip == nil {
+				return nil, fmt.Errorf("failed to parse gateway IP: %s", fields[1])
+			}
 			return ip, nil
 		}
 	}
@@ -300,29 +302,66 @@ func getDefaultGateway() (net.IP, error) {
 	return nil, fmt.Errorf("default gateway not found")
 }
 
-func getSubnetBounds(interfaceName string) (net.IP, net.IP, error) {
-	iface, err := net.InterfaceByName(interfaceName)
+// getSubnetBoundsForInterface queries the interface by name,
+// finds the first IPv4 address, calculates the network and broadcast addresses,
+// and returns the first usable IP (network + 1) and the last usable IP (broadcast - 1).
+func getSubnetBoundsForInterface(ifaceName string) (net.IP, net.IP, error) {
+	iface, err := net.InterfaceByName(ifaceName)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get interface: %w", err)
+		return nil, nil, fmt.Errorf("failed to get interface %s: %w", ifaceName, err)
 	}
+
 	addrs, err := iface.Addrs()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get addresses: %w", err)
+		return nil, nil, fmt.Errorf("failed to get addresses for interface %s: %w", ifaceName, err)
 	}
+
+	var ipnet *net.IPNet
 	for _, addr := range addrs {
-		ipNet, ok := addr.(*net.IPNet)
-		if !ok || ipNet.IP.To4() == nil { // ignore IPv6
-			continue
+		if tmp, ok := addr.(*net.IPNet); ok && tmp.IP.To4() != nil {
+			ipnet = tmp
+			break
 		}
-		network := ipNet.IP.Mask(ipNet.Mask) // network address (lower bound)
-		// Compute the broadcast address (upper bound)
-		broadcast := make(net.IP, len(network))
-		for i := 0; i < len(network); i++ {
-			broadcast[i] = network[i] | ^ipNet.Mask[i]
-		}
-		return network, broadcast, nil
 	}
-	return nil, nil, fmt.Errorf("no valid IPv4 address found on %s", interfaceName)
+	if ipnet == nil {
+		return nil, nil, errors.New("no IPv4 address found on interface")
+	}
+
+	// Compute the network IP by applying the mask.
+	networkIP := ipnet.IP.Mask(ipnet.Mask)
+
+	// Compute the broadcast address:
+	// broadcast = network IP OR (inverse of subnet mask)
+	broadcast := make(net.IP, len(networkIP))
+	for i := 0; i < len(networkIP); i++ {
+		broadcast[i] = networkIP[i] | ^ipnet.Mask[i]
+	}
+
+	// Convert to uint32 for simple arithmetic.
+	networkUint := ipToUint32(networkIP)
+	broadcastUint := ipToUint32(broadcast)
+
+	if broadcastUint <= networkUint+1 {
+		return nil, nil, errors.New("invalid subnet range, no usable addresses")
+	}
+
+	lowerIP := uint32ToIP(networkUint + 1)
+	upperIP := uint32ToIP(broadcastUint - 1)
+
+	return lowerIP, upperIP, nil
+}
+
+// ipToUint32 converts a net.IP (IPv4) to a uint32.
+func ipToUint32(ip net.IP) uint32 {
+	ip = ip.To4()
+	return binary.BigEndian.Uint32(ip)
+}
+
+// uint32ToIP converts a uint32 to a net.IP (IPv4).
+func uint32ToIP(n uint32) net.IP {
+	ip := make(net.IP, 4)
+	binary.BigEndian.PutUint32(ip, n)
+	return ip
 }
 
 // incrementIP returns a new IP incremented by one.

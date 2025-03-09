@@ -1,15 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
 )
 
 func getNetAdapterName() string {
@@ -24,8 +28,14 @@ func getNetAdapterName() string {
 }
 
 func TestInitLoadsConfig(t *testing.T) {
-	t.Log("Testing Init()")
-	t.Logf("dnsMasqConfig contains %+v", dnsMasqConfig)
+	// assert.NotNil(t, dnsMasqConfig, "dnsMasqConfig should not be nil")
+	// assert.NotNil(t, dnsMasqConfig.mu, "dnsMasqConfig.mu should not be nil")
+	// assert.NotNil(t, dnsMasqConfig.DefaultGateway, "dnsMasqConfig.DefaultGateway should not be nil. ")
+	// assert.NotNil(t, dnsMasqConfig.LowerBound, "dnsMasqConfig.LowerBound should not be nil")
+	// assert.NotNil(t, dnsMasqConfig.UpperBound, "dnsMasqConfig.UpperBound should not be nil")
+	// assert.NotNil(t, dnsMasqConfig.ThisGateway, "dnsMasqConfig.ThisGateway should not be nil")
+
+	t.Fatalf("dnsMasqConfig contains %+v", dnsMasqConfig)
 }
 
 func TestCheckDHCPServer(t *testing.T) {
@@ -63,10 +73,10 @@ func TestGetConfigCached(t *testing.T) {
 	assert.Equal(t, dummyCfg, cfg, "Expected cached config to be returned")
 }
 
-// TestGetConfigLoads verifies that if dnsMasqConfig is nil,
+
+
+// TestGetConfigLoads verifies that, if dnsMasqConfig is nil,
 // GetConfig attempts to load the configuration and returns a non-nil result.
-// Note: This test may interact with external dependencies. For more robust tests,
-// consider refactoring the code to allow dependency injection of external functions.
 func TestGetConfigLoads(t *testing.T) {
 	// Reset the global to force a fresh load.
 	dnsMasqConfig = nil
@@ -76,15 +86,10 @@ func TestGetConfigLoads(t *testing.T) {
 	assert.NotNil(t, cfg, "Expected non-nil config")
 
 	// Basic sanity check for fields that should be set.
-	if cfg.DefaultGateway == nil {
-		t.Log("DefaultGateway is nil; this could be valid in some environments but ensure your stubs or system state return a valid IP")
-	}
-	if cfg.LowerBound == nil || cfg.UpperBound == nil {
-		t.Log("Subnet bounds are nil; ensure getSubnetBounds works correctly or stub these values in tests")
-	}
-	if cfg.ThisGateway == nil {
-		t.Log("ThisGateway is nil; ensure chooseIPFromBottom works correctly or stub these values in tests")
-	}
+	assert.NotNil(t, cfg.DefaultGateway, "DefaultGateway is nil")
+	assert.NotNil(t, cfg.LowerBound, "LowerBound is nil")
+	assert.NotNil(t, cfg.UpperBound, "UpperBound is nil")
+	assert.NotNil(t, cfg.ThisGateway, "ThisGateway is nil")
 }
 
 func TestSetConfig_WritesToFile(t *testing.T) {
@@ -223,12 +228,13 @@ func TestGetDefaultGateway(t *testing.T) {
 		expectedIP  net.IP
 		expectError bool
 		errorMsg    string
+		isMacOS     bool
 	}{
 		{
 			name:        "Valid gateway on Linux",
-			mockOutput:  "Iface Destination Gateway Genmask Flags  Ref    Use Metric Mask\n   eth0 00000000 01010101 00000000  UG    0      0   0\n",
+			mockOutput:  "Kernel IP routing table\nDestination     Gateway         Genmask         Flags Metric Ref    Use Iface\n0.0.0.0         192.168.1.254   0.0.0.0         UG    100    0        0 eth0\n",
 			mockError:   nil,
-			expectedIP:  net.ParseIP("1.1.1.1"),
+			expectedIP:  net.ParseIP("192.168.1.254"),
 			expectError: false,
 			errorMsg:    "should correctly parse valid gateway",
 		},
@@ -239,10 +245,11 @@ func TestGetDefaultGateway(t *testing.T) {
 			expectedIP:  net.ParseIP("192.168.1.1"),
 			expectError: false,
 			errorMsg:    "should correctly parse macOS gateway",
+			isMacOS:     true,
 		},
 		{
 			name:        "Invalid gateway parsing",
-			mockOutput:  "Iface Destination Gateway Genmask Flags  Ref    Use Metric Mask\n   eth0 00000000 ZGFR1090 00000000  UG    0      0   0\n",
+			mockOutput:  "Kernel IP routing table\nDestination     Gateway         Genmask         Flags Metric Ref    Use Iface\n0.0.0.0         ZGFR1090       0.0.0.0         UG    100    0        0 eth0\n",
 			mockError:   nil,
 			expectedIP:  nil,
 			expectError: true,
@@ -258,7 +265,7 @@ func TestGetDefaultGateway(t *testing.T) {
 		},
 		{
 			name:        "Missing gateway on Linux",
-			mockOutput:  "Iface Destination Gateway Genmask Flags  Ref    Use Metric Mask\n",
+			mockOutput:  "Kernel IP routing table\nDestination     Gateway         Genmask         Flags Metric Ref    Use Iface\n",
 			mockError:   nil,
 			expectedIP:  nil,
 			expectError: true,
@@ -275,9 +282,16 @@ func TestGetDefaultGateway(t *testing.T) {
 	})
 
 	for _, tt := range tests {
+		if tt.isMacOS && runtime.GOOS != "darwin" {
+			t.Log("Skipping macOS test on non-macOS platform: ", tt.name)
+			continue
+		}
 		t.Run(tt.name, func(t *testing.T) {
 			// Mock the command execution
 			routeCmd = func() (string, error) {
+				if tt.mockError != nil {
+					return "", tt.mockError
+				}
 				return tt.mockOutput, nil
 			}
 
@@ -295,86 +309,95 @@ func TestGetDefaultGateway(t *testing.T) {
 	}
 }
 
-// TestHelperProcess provides mock output for exec.Command. DO NOT call directly.
-func TestHelperProcess(t *testing.T) {
-	args := os.Args
-	if len(args) < 3 || args[2] != "--" {
-		return
-	}
-	fmt.Print(os.Getenv("MOCK_OUTPUT"))
-	if mockError := os.Getenv("MOCK_ERROR"); mockError != "nil" {
-		os.Exit(1)
-	}
-	os.Exit(0)
+func TestGetSubnetBounds_NonexistentInterface(t *testing.T) {
+	// Provide a nonsense interface name to trigger an error.
+	_, _, err := getSubnetBoundsForInterface("non_existent_interface")
+	assert.Error(t, err, "expected error for non-existent interface")
 }
 
-//
-// func Test_generateDnsmasqConfig(t *testing.T) {
-// 	type args struct {
-// 		fnGetIfaceAddr IfaceAddrGetterFunc
-// 		namedMACs      []models.NamedMAC
-// 	}
-// 	tests := []struct {
-// 		name    string
-// 		args    args
-// 		want    string
-// 		wantErr bool
-// 	}{
-// 		{
-// 			name: "test",
-// 			args: args{fnGetIfaceAddr: getIfaceAddresses, namedMACs: []models.NamedMAC{{MAC: "", Name: "name"}}},
-// 			want: `# dnsmasq configuration generated programmatically
-// port=67
-// interface=en0
-// dhcp-range=192.168.1.5,192.168.1.250,12h
-//
-// dhcp-option=tag:customgw,option:router,192.0.0.2 # this gateway
-// dhcp-host=,set:customgw # name`,
-// 			wantErr: false,
-// 		},
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			defaultInterfaceName = getNetAdapterName()
-// 			got, err := generateDnsmasqConfig(tt.args.fnGetIfaceAddr, tt.args.namedMACs)
-// 			if (err != nil) != tt.wantErr {
-// 				t.Errorf("generateDnsmasqConfig() error = %v, wantErr %v", err, tt.wantErr)
-// 				return
-// 			}
-// 			if got != tt.want {
-// 				t.Errorf("generateDnsmasqConfig() got = %v, want %v", got, tt.want)
-// 			}
-// 		})
-// 	}
-// }
+func TestGetSubnetBounds_ValidInterface(t *testing.T) {
+	// Try common loopback interface names; adjust as necessary for your running environment.
+	candidates := []string{"lo0", "lo"}
+	var ifaceName string
 
-//
-// func Test_getSubnetBounds(t *testing.T) {
-// 	type args struct {
-// 		interfaceName string
-// 	}
-// 	tests := []struct {
-// 		name    string
-// 		args    args
-// 		want    net.IP
-// 		want1   net.IP
-// 		wantErr bool
-// 	}{
-// 		// TODO: Add test cases.
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			got, got1, err := getSubnetBounds(tt.args.interfaceName)
-// 			if (err != nil) != tt.wantErr {
-// 				t.Errorf("getSubnetBounds() error = %v, wantErr %v", err, tt.wantErr)
-// 				return
-// 			}
-// 			if !reflect.DeepEqual(got, tt.want) {
-// 				t.Errorf("getSubnetBounds() got = %v, want %v", got, tt.want)
-// 			}
-// 			if !reflect.DeepEqual(got1, tt.want1) {
-// 				t.Errorf("getSubnetBounds() got1 = %v, want %v", got1, tt.want1)
-// 			}
-// 		})
-// 	}
-// }
+	for _, name := range candidates {
+		if _, err := net.InterfaceByName(name); err == nil {
+			ifaceName = name
+			break
+		}
+	}
+
+	if ifaceName == "" {
+		t.Skip("No valid interface found for testing getSubnetBoundsForInterface")
+	}
+
+	lower, upper, err := getSubnetBoundsForInterface(ifaceName)
+	assert.NoError(t, err, "did not expect an error for a valid interface")
+	assert.NotNil(t, lower, "expected a lower bound IP")
+	assert.NotNil(t, upper, "expected an upper bound IP")
+	assert.NotNil(t, lower.To4(), "expected lower bound to be a valid IPv4 address")
+	assert.NotNil(t, upper.To4(), "expected upper bound to be a valid IPv4 address")
+
+	// For a subnet, the lower (network address) should be less than the upper (broadcast address)
+	assert.True(t, bytes.Compare(lower, upper) < 0, "expected lower bound to be less than upper bound")
+}
+
+func TestGenerateDnsmasqConfig(t *testing.T) {
+	defaultGateway := net.ParseIP("192.168.1.1")
+	thisGateway := net.ParseIP("192.168.1.2")
+	subnetLower := net.ParseIP("192.168.1.10")
+	subnetUpper := net.ParseIP("192.168.1.100")
+	reservations := []string{"192.168.1.50", "192.168.1.60"}
+	namedMACs := []models.NamedMAC{
+		{MAC: "dc:a6:32:68:47:ea", Name: "Device1"},
+		{MAC: "dc:a6:32:68:47:e9", Name: ""},
+	}
+
+	generatedConfig, err := generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper, reservations, namedMACs)
+	assert.NoError(t, err, "generateDnsmasqConfig should not return an error")
+
+	expectedLines := []string{
+		"# dnsmasq configuration generated programmatically",
+		"interface=eth0",
+		"dhcp-range=192.168.1.10,192.168.1.100,12h",
+		"dhcp-option=3,192.168.1.2",
+		"",
+		"dhcp-option=tag:customgw,option:router,192.168.1.2 # this gateway",
+		"dhcp-host=dc:a6:32:68:47:ea,set:customgw # Device1",
+		"dhcp-host=dc:a6:32:68:47:e9,set:customgw # un-named",
+		"",
+	}
+
+	expectedConfig := strings.Join(expectedLines, "\n")
+	if generatedConfig != expectedConfig {
+		t.Errorf("expected config:\n%v\ngot:\n%v", expectedConfig, generatedConfig)
+	}
+}
+
+// TestWriteDnsmasqConfig tests the writeDnsmasqConfig function.
+func TestWriteDnsmasqConfig(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		// Create a temporary directory for the test.
+		tempDir := t.TempDir()
+		configPath := filepath.Join(tempDir, "dnsmasq.conf")
+		configContent := "test content for dnsmasq configuration"
+
+		// Call the function under test.
+		err := writeDnsmasqConfig(configPath, configContent)
+		assert.NoError(t, err, "writeDnsmasqConfig should not return an error")
+
+		// Read the file to verify its content.
+		data, err := os.ReadFile(configPath)
+		assert.NoError(t, err, "readDnsmasqConfig should not return an error")
+
+		assert.Equal(t, configContent, string(data), "Content mismatch")
+	})
+
+	t.Run("failure", func(t *testing.T) {
+		// Attempt to write to an invalid path (non-existing directory).
+		invalidPath := "/non_existent_dir/dnsmasq.conf"
+		configContent := "any content"
+		err := writeDnsmasqConfig(invalidPath, configContent)
+		assert.Error(t, err, "writeDnsmasqConfig should return an error when writing to an invalid path")
+	})
+}
