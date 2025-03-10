@@ -388,6 +388,4 @@ func (h *Handler) dhcpHandler(w http.ResponseWriter, r *http.Request) {
 		// Invalid request method
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 	}
-
-	
 }

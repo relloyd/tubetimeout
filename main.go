@@ -68,16 +68,20 @@ func main() {
 
 	logger.Infof("Build version %v", config.BuildVersion)
 
+	// Cleanup functions.
+	var cleanupFuncs []cleanupFunc
+
 	// Maybe start DHCP server.
 	dhcpServer, err := dhcp.NewServer()
 	if err != nil {
-		logger.Fatal("Failed to setup DHCP server:", err)
+		logger.Fatalf("Failed to setup DHCP server: %v", err)
 	}
+	cleanupFuncs = append(cleanupFuncs, dhcpServer.Stop)
 	go func() {
 		if config.AppCfg.DHCPServerEnabled {
 			status, err2 := dhcpServer.MaybeStartDnsmasq(logger)
 			if err2 != nil {
-				logger.Warn("Failed to start DHCP server:", err)
+				logger.Errorf("Failed to start DHCP server: %v", err2)
 			} else {
 				logger.Infof("DHCP server started: %v", status)
 			}
@@ -132,8 +136,6 @@ func main() {
 	}
 	logger.Info("NFQueue listener started")
 
-	// Cleanup functions.
-	var cleanupFuncs []cleanupFunc
 	cleanupFuncs = append(cleanupFuncs, func() error {
 		// Cancel the NFQ before closing NFQ else it will block!
 		// We probably want to remove the NFT rules before closing the NFQ but NFQ will have packets in flight that it cannot Accept with error: "netlink send: sendmsg: bad file descriptor".

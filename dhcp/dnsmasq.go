@@ -33,6 +33,8 @@ var (
 	dnsMasqConfig            *DNSMasqConfig // expect NewServer() to set this up
 	routeCmd                 = defaultRouteCmd
 	routeCmdArgs             = []string{"-rn"}
+	errDHCPServerNotRunning  = errors.New("DHCP server not running")
+	fallbackDNSIPs           = []string{"1.1.1.1", "8.8.8.8"} // default DNS IPs to CloudFlare and Google
 )
 
 type Server struct{}
@@ -69,9 +71,9 @@ func (s *Server) MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
 	hwAddr, err := getIfaceHardwareAddress(ifaceName)
 	numAttempts := 5
 	running := false
-	for idx := numAttempts; idx > 0; idx-- {
+	for idx := 0; idx < numAttempts; idx++ {
 		running, err = isDHCPServerRunning(logger, hwAddr)
-		if err != nil {
+		if err != nil && !errors.Is(err, errDHCPServerNotRunning) {
 			logger.Warnf("Error while checking if DHCP server is running: %v", err)
 			continue // proceed to the next attempt
 		}
@@ -81,14 +83,20 @@ func (s *Server) MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
 		} else {
 			logger.Info("DHCP server is not running, attempting to start dnsmasq")
 			if err := startDnsmasq(logger, dnsMasqConfig); err != nil {
-				logger.Warnf("Failed to start dnsmasq on attempt %d: %v", numAttempts-idx+1, err)
-				continue // Retry in case of failure
+				// TODO: surface dnsmasq service errors back to the web client.
+
+				logger.Warnf("Failed to start dnsmasq on attempt %d: %v", numAttempts+1, err)
+				continue // retry in case of failure
 			}
 			logger.Info("Successfully started dnsmasq")
 			return true, nil
 		}
 	}
 	return false, fmt.Errorf("failed to start dnsmasq after %d attempts", numAttempts)
+}
+
+func (s *Server) Stop() error {
+	return setDnsmasqServiceState(systemctlStop)
 }
 
 type systemctlAction string
@@ -107,6 +115,7 @@ type DNSMasqConfig struct {
 	ThisGateway         net.IP   `json:"thisGateway"`
 	LowerBound          net.IP   `json:"subnetRangeLowerIP"`
 	UpperBound          net.IP   `json:"subnetRangeUpperIP"`
+	DNSIPs              []string `json:"dnsIPs"`
 	AddressReservations []string `json:"addressReservations"`
 	ServiceEnabled      bool     `json:"serviceEnabled"`
 }
@@ -164,6 +173,10 @@ func GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
 		}
 	}
 
+	if len(cfg.DNSIPs) == 0 {
+		cfg.DNSIPs = fallbackDNSIPs
+	}
+
 	// Set the package global variable to the new value.
 	dnsMasqConfig = cfg
 
@@ -193,6 +206,15 @@ func SetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 		}
 		if cfg.UpperBound == nil || cfg.UpperBound.To4() == nil {
 			return fmt.Errorf("invalid or missing UpperBound")
+		}
+		if len(cfg.DNSIPs) == 0 {
+			cfg.DNSIPs = fallbackDNSIPs
+		} else {
+			for _, dnsIP := range cfg.DNSIPs {
+				if net.ParseIP(dnsIP).To4() == nil {
+					return fmt.Errorf("invalid DNS IP: %s", dnsIP)
+				}
+			}
 		}
 		if bytes.Compare(cfg.LowerBound, cfg.UpperBound) >= 0 {
 			return fmt.Errorf("LowerBound must be less than UpperBound")
@@ -229,43 +251,6 @@ func getPrimaryInterfaceName() (string, error) {
 		return "", fmt.Errorf("unsupported OS: %s", runtime.GOOS)
 	}
 }
-
-// func getEth0IP() (net.IP, error) {
-// 	ips, err := getIfaceAddresses(defaultInterfaceName)
-// 	return ips[0], err
-// }
-//
-// func getIfaceAddresses(ifaceName string) ([]net.IP, error) {
-// 	ni, err := net.InterfaceByName(ifaceName)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-//
-// 	addrs, err := ni.Addrs()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-//
-// 	var ips []net.IP
-// 	for _, addr := range addrs {
-// 		var ip net.IP
-// 		switch v := addr.(type) {
-// 		case *net.IPNet:
-// 			ip = v.IP
-// 		case *net.IPAddr:
-// 			ip = v.IP
-// 		}
-//
-// 		if ip != nil && ip.To4() != nil {
-// 			ips = append(ips, ip)
-// 		}
-// 	}
-//
-// 	if len(ips) == 0 {
-// 		return nil, fmt.Errorf("no IPs found for interface %v", ifaceName)
-// 	}
-// 	return ips, nil
-// }
 
 // GetHardwareAddress returns the hardware (MAC) address of the given network interface.
 // If the interface cannot be found or does not have a hardware address, it returns an error.
@@ -334,7 +319,7 @@ func isDHCPServerRunning(logger *zap.SugaredLogger, mac net.HardwareAddr) (bool,
 	buf := make([]byte, 1500)
 	n, addr, err := conn.ReadFrom(buf)
 	if err != nil {
-		return false, fmt.Errorf("no DHCP server response received: %v", err)
+		return false, errDHCPServerNotRunning
 	}
 
 	// Parse the response into a DHCP message.
@@ -554,13 +539,21 @@ func chooseIPFromBottom(lower, upper net.IP) (chosenIP, newLower, newUpper net.I
 }
 
 // generateDnsmasqConfig builds the full dnsmasq configuration as a string.
-func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper net.IP, thisGatewayHardwareAddress string, reservations []string, namedMACs []models.NamedMAC) (string, error) {
+func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper net.IP, thisGatewayHardwareAddress string, dnsIPS []string, reservations []string, namedMACs []models.NamedMAC) (string, error) {
 	// Global configuration settings.
+	if len(dnsIPS) != 2 {
+		return "", fmt.Errorf("expected two DNS IPs: %v", dnsIPS)
+	}
+
 	lines := []string{
 		"# dnsmasq configuration generated programmatically",
 		fmt.Sprintf("interface=%v", defaultInterfaceName),
 		fmt.Sprintf("dhcp-range=%v,%v,%v", subnetLower, subnetUpper, defaultLeaseDuration),
-		fmt.Sprintf("dhcp-option=3,%v", thisGateway),
+		fmt.Sprintf("dhcp-option=option:router,%v", thisGateway),
+		fmt.Sprintf("dhcp-option=option:dns-server,%v", strings.Join(dnsIPS, ",")),
+		"no-resolv", // no-resolv will use server entries below as the upstream DNS servers, instead of resolv.conf.
+		fmt.Sprintf("server=%v", dnsIPS[0]),
+		fmt.Sprintf("server=%v", dnsIPS[1]),
 		"",
 	}
 
@@ -611,7 +604,7 @@ func startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 		return fmt.Errorf("error fetching hardware address for net adapter %v: %v", defaultInterfaceName, err)
 	}
 
-	dat, err := generateDnsmasqConfig(cfg.DefaultGateway, cfg.ThisGateway, cfg.LowerBound, cfg.UpperBound, hwAddr.String(), nil, nil)
+	dat, err := generateDnsmasqConfig(cfg.DefaultGateway, cfg.ThisGateway, cfg.LowerBound, cfg.UpperBound, hwAddr.String(), cfg.DNSIPs, nil, nil)
 	if err != nil {
 		return fmt.Errorf("error generating dnsmasq config: %v", err)
 	}
@@ -626,6 +619,45 @@ func startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 		return fmt.Errorf("error restarting dnsmasq: %v", err)
 	}
 
+	// TODO: surface dnsmasq service errors back to the web client.
+
 	logger.Info("dnsmasq configuration updated and service restarted successfully")
 	return nil
 }
+
+// func getEth0IP() (net.IP, error) {
+// 	ips, err := getIfaceAddresses(defaultInterfaceName)
+// 	return ips[0], err
+// }
+//
+// func getIfaceAddresses(ifaceName string) ([]net.IP, error) {
+// 	ni, err := net.InterfaceByName(ifaceName)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+//
+// 	addrs, err := ni.Addrs()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+//
+// 	var ips []net.IP
+// 	for _, addr := range addrs {
+// 		var ip net.IP
+// 		switch v := addr.(type) {
+// 		case *net.IPNet:
+// 			ip = v.IP
+// 		case *net.IPAddr:
+// 			ip = v.IP
+// 		}
+//
+// 		if ip != nil && ip.To4() != nil {
+// 			ips = append(ips, ip)
+// 		}
+// 	}
+//
+// 	if len(ips) == 0 {
+// 		return nil, fmt.Errorf("no IPs found for interface %v", ifaceName)
+// 	}
+// 	return ips, nil
+// }

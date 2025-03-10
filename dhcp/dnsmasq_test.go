@@ -159,7 +159,7 @@ func TestSetConfig_WritesToFile(t *testing.T) {
 	}
 
 	// Call SetConfig and ensure no error is returned.
-	err = SetConfig(sampleCfg)
+	err = SetConfig(config.MustGetLogger(), sampleCfg)
 	assert.NoError(t, err)
 
 	// Read back the file contents.
@@ -556,14 +556,18 @@ func TestGenerateDnsmasqConfig(t *testing.T) {
 		{MAC: "dc:a6:32:68:47:e9", Name: ""},
 	}
 
-	generatedConfig, err := generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper, thisGatewayHardwareAddr, reservations, namedMACs)
+	generatedConfig, err := generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper, thisGatewayHardwareAddr, fallbackDNSIPs, reservations, namedMACs)
 	assert.NoError(t, err, "generateDnsmasqConfig should not return an error")
 
 	expectedLines := []string{
 		"# dnsmasq configuration generated programmatically",
 		"interface=eth0",
 		"dhcp-range=192.168.1.10,192.168.1.100,12h",
-		"dhcp-option=3,192.168.1.2",
+		"dhcp-option=option:router,192.168.1.2",
+		"dhcp-option=6,1.1.1.1,8.8.8.8",
+		"no-resolv",
+		"server=1.1.1.1",
+		"server=8.8.8.8",
 		"",
 		"# static IP reservations",
 		"dhcp-host=00:00:00:00:00:00,192.168.1.2",
@@ -606,4 +610,8 @@ func TestWriteDnsmasqConfig(t *testing.T) {
 		err := writeDnsmasqConfig(invalidPath, configContent)
 		assert.Error(t, err, "writeDnsmasqConfig should return an error when writing to an invalid path")
 	})
+}
+
+func TestLenFallbackDNSIPs(t *testing.T) {
+	assert.Equal(t, 2, len(fallbackDNSIPs), "fallbackDNSIPs should have 2 IPs")
 }
