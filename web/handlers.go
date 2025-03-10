@@ -346,3 +346,7 @@ func (h *Handler) resetGroupHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(fmt.Sprintf("Reset group %v successfully", group)))
 }
+
+func (h *Handler) dhcpHandler(w http.ResponseWriter, r *http.Request) {
+
+}

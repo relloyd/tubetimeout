@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/dhcp"
 	"relloyd/tubetimeout/models"
 )
 
@@ -38,15 +39,21 @@ type Monitor interface {
 	GetTrafficLastActiveTimes() map[models.Group]map[models.MAC]time.Time
 }
 
-type Handler struct {
-	logger                *zap.SugaredLogger
-	groupMACsGetterSetter GroupMACsGroupGetterSetter
-	usageTracker          UsageTracker
-	monitor               Monitor
+type DHCPConfigGetterSetter interface {
+	GetConfig(logger *zap.SugaredLogger) (*dhcp.DNSMasqConfig, error)
+	SetConfig(logger *zap.SugaredLogger, cfg *dhcp.DNSMasqConfig) error
 }
 
-func NewServer(logger *zap.SugaredLogger, ut UsageTracker, gm GroupMACsGroupGetterSetter, m Monitor) *http.Server {
-	h := Handler{logger: logger, usageTracker: ut, groupMACsGetterSetter: gm, monitor: m}
+type Handler struct {
+	logger                 *zap.SugaredLogger
+	groupMACsGetterSetter  GroupMACsGroupGetterSetter
+	usageTracker           UsageTracker
+	monitor                Monitor
+	dhcpConfigGetterSetter DHCPConfigGetterSetter
+}
+
+func NewServer(logger *zap.SugaredLogger, ut UsageTracker, gm GroupMACsGroupGetterSetter, m Monitor, d DHCPConfigGetterSetter) *http.Server {
+	h := Handler{logger: logger, usageTracker: ut, groupMACsGetterSetter: gm, monitor: m, dhcpConfigGetterSetter: d}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", h.rootHandler)
 	mux.HandleFunc("/static/", h.staticHandler)
@@ -56,6 +63,7 @@ func NewServer(logger *zap.SugaredLogger, ut UsageTracker, gm GroupMACsGroupGett
 	mux.HandleFunc("/activity", h.activityHandler) // TODO: rename either monitor or activity to be consistent
 	mux.HandleFunc("/mode", h.modeHandler)         // TODO: move /pause to a sub context under group
 	mux.HandleFunc("/reset", h.resetGroupHandler)
+	mux.HandleFunc("/dhcp", h.dhcpHandler)
 
 	return &http.Server{
 		Addr:                         fmt.Sprintf(":%d", config.AppCfg.WebConfig.WebPort),

@@ -88,14 +88,3 @@ const (
 	DHCPModeEnabled DHCPMode = iota
 	DHCPModeDisabled
 )
-
-// DHCPConfig represents the DHCP feature flag and its config.
-type DHCPConfig struct {
-	DHCPMode             DHCPMode          `json:"mode"`
-	RangeLower           string            `json:"rangeLower"`
-	RangeUpper           string            `json:"rangeUpper"`
-	LeaseDurationMinutes int               `json:"leaseDurationMinutes"`
-	GatewayIP            string            `json:"gatewayIP"`
-	StaticReservations   map[string]string `json:"staticReservations"` // MAC -> IP
-	DNSServers           []string          `json:"dnsServers"`         // length should be 2
-}

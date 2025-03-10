@@ -12,13 +12,62 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/models"
 )
 
-func TestInitLoadsConfig(t *testing.T) {
-	t.Skip("skipping test until we can mock the config")
-	t.Fatalf("dnsMasqConfig contains %+v", dnsMasqConfig)
+func TestNewServer(t *testing.T) {
+	tests := []struct {
+		name               string
+		mockGetConfigError error
+		expectServer       bool
+		expectError        bool
+		errorMsg           string
+	}{
+		{
+			name:               "Successful server creation",
+			mockGetConfigError: nil,
+			expectServer:       true,
+			expectError:        false,
+			errorMsg:           "expected successful server creation without error",
+		},
+		{
+			name:               "Failure to load DNSMasqConfig",
+			mockGetConfigError: fmt.Errorf("failed to load configuration"),
+			expectServer:       false,
+			expectError:        true,
+			errorMsg:           "expected server creation failure",
+		},
+	}
+
+	originalGetConfig := defaultGetConfig
+	t.Cleanup(func() {
+		defaultGetConfig = originalGetConfig
+	})
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Mock GetConfig behavior
+			defaultGetConfig = func(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
+				return newDNSMasqConfig(), tt.mockGetConfigError
+			}
+
+			server, err := NewServer()
+
+			if tt.expectError {
+				assert.Error(t, err, tt.errorMsg)
+			} else {
+				assert.NoError(t, err, tt.errorMsg)
+			}
+
+			if tt.expectServer {
+				assert.NotNil(t, server, "expected a server instance to be returned")
+			} else {
+				assert.Nil(t, server, "expected no server instance to be returned")
+			}
+		})
+	}
 }
 
 func TestCheckDHCPServer(t *testing.T) {

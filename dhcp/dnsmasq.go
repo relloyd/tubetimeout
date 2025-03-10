@@ -25,12 +25,70 @@ import (
 var (
 	defaultInterfaceName     = "eth0"
 	defaultLeaseDuration     = "12h"
+	defaultGetConfig         = GetConfig
+	defaultSetConfig         = SetConfig
 	configFileDNSMasqService = "/etc/dnsmasq.conf"
 	configFileDHCPSettings   = "dhcp-config.yaml"
-	dnsMasqConfig            *DNSMasqConfig // expect init to set this up
+	dnsMasqConfig            *DNSMasqConfig // expect NewServer() to set this up
 	routeCmd                 = defaultRouteCmd
 	routeCmdArgs             = []string{"-rn"}
 )
+
+type Server struct{}
+
+func NewServer() (*Server, error) {
+	var err error
+	dnsMasqConfig, err = defaultGetConfig(config.MustGetLogger())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get dnsmasq config: %w", err)
+	}
+	return &Server{}, nil
+}
+
+func (s *Server) GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
+	return defaultGetConfig(logger)
+}
+
+func (s *Server) SetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
+	return defaultSetConfig(logger, cfg)
+}
+
+// MaybeStartDnsmasq checks if it's okay to start dnsmasq based on config.
+// If the service is config disabled then return false without an error.
+// Return true if config wants dnsmasq started and there isn't already a DHCP server on the network.
+// If there is a DHCP server on the network then return an error.
+func (s *Server) MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
+	if !isDNSMasqEnabledInConfig() {
+		return false, nil
+	}
+	ifaceName, err := getPrimaryInterfaceName()
+	if err != nil {
+		return false, fmt.Errorf("failed to get primary interface: %w", err)
+	}
+	hwAddr, err := getIfaceHardwareAddress(ifaceName)
+	numAttempts := 5
+	running := false
+	for idx := numAttempts; idx > 0; idx-- {
+		running, err = isDHCPServerRunning(logger, hwAddr)
+		if err != nil {
+			logger.Warnf("Error while checking if DHCP server is running: %v", err)
+			continue // proceed to the next attempt
+		}
+		if running {
+			logger.Info("DHCP server is running, not starting dnsmasq")
+			return false, fmt.Errorf("attempt to start dnsmasq when a DHCP server is already running")
+		} else {
+			logger.Info("DHCP server is not running, attempting to start dnsmasq")
+			if err := startDnsmasq(logger, dnsMasqConfig); err != nil {
+				logger.Warnf("Failed to start dnsmasq on attempt %d: %v", numAttempts-idx+1, err)
+				continue // Retry in case of failure
+			}
+			logger.Info("Successfully started dnsmasq")
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("failed to start dnsmasq after %d attempts", numAttempts)
+}
 
 type systemctlAction string
 
@@ -59,50 +117,9 @@ func newDNSMasqConfig() *DNSMasqConfig {
 	}
 }
 
-func init() {
-	// at startup check if dhcp is enabled on the network.
-	//   if it is then eth0 should have some defaults to get us started
-	//   grab the gateway from the default route
-	//   assume a subnet range
-	//   this way, GetConfig will return some starter values
-	// if dhcp is enabled then we don't want to start dnsmasq
-	// if dhcp isn't enabled then we check if there are enough details to start dnsmasq.
-	// assuming we have enough detail from eth0 we can persist config to load in the event that
-	// neither dhcp server somewhere else nor dnsmasq are running.
-	// we can set the IP of eth0 using config if we don't find DHCP running on the network.
-	// if dhcp isn't running elsewhere and we have nothing to go with then we do nothing and expect someone to boot strap.
-
-	// functions we need:
-	//   ✅getEth0IP
-	//   ✅getSubnetRangeFromInterface
-	//   ✅getGateway
-	//   ✅startDNSMasq
-	//   ✅stopDNSMasq
-	//   ✅restartDNSMasq
-	//   ✅writeDnsmasqConfig
-	//   ✅generateDNSMasqConfig
-	//   ✅getConfig for DNSMasq
-	//   ✅setConfig for DNSMasq
-	//   ✅isDNSMasqEnabledInConfig
-	//   getDHCPStatus
-	//   ✅MaybeStartDnsmasq
-	var err error
-	dnsMasqConfig, err = GetConfig(config.MustGetLogger())
-	if err != nil {
-		config.MustGetLogger().Warn("Failed to load DNSMasqConfig", zap.Error(err))
-	}
-}
-
 func defaultRouteCmd() (string, error) {
 	output, err := exec.Command("netstat", routeCmdArgs...).Output() // -n: show numerical addresses, -a: show all hosts
 	return string(output), err
-}
-
-func isDNSMasqEnabledInConfig() bool {
-	if dnsMasqConfig != nil && dnsMasqConfig.ServiceEnabled {
-		return true
-	}
-	return false
 }
 
 func GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
@@ -118,10 +135,7 @@ func GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
 		return nil, fmt.Errorf("failed to get dnsmasq config: %w", err)
 	}
 
-	if cfg == nil { // if config is nil, make one, but it shouldn't be as we supply new func above...
-		cfg = newDNSMasqConfig()
-	}
-
+	// Assume defaults if empty.
 	if cfg.DefaultGateway == nil {
 		cfg.DefaultGateway, err = getDefaultGateway()
 		if err != nil {
@@ -155,7 +169,7 @@ func GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
 	return cfg, nil
 }
 
-func SetConfig(cfg *DNSMasqConfig) error {
+func SetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("supplied dnsmasq config is nil")
 	}
@@ -173,6 +187,13 @@ func SetConfig(cfg *DNSMasqConfig) error {
 	dnsMasqConfig = cfg
 
 	return nil
+}
+
+func isDNSMasqEnabledInConfig() bool {
+	if dnsMasqConfig != nil && dnsMasqConfig.ServiceEnabled {
+		return true
+	}
+	return false
 }
 
 func getPrimaryInterfaceName() (string, error) {
@@ -436,8 +457,8 @@ func adjustSubnetRange(lowerIP, upperIP, gateway net.IP) (net.IP, net.IP, net.IP
 		// Split the range into two segments:
 		//  - Lower segment: [lw, gw-1]
 		//  - Upper segment: [gw+1, up]
-		segLowerSize := gw - lw      // size of the lower segment
-		segUpperSize := up - gw      // size of the upper segment
+		segLowerSize := gw - lw // size of the lower segment
+		segUpperSize := up - gw // size of the upper segment
 
 		// Choose the segment with more addresses (or the upper segment if they are equal)
 		if segUpperSize >= segLowerSize && segUpperSize > 0 {
@@ -584,41 +605,4 @@ func startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 
 	logger.Info("dnsmasq configuration updated and service restarted successfully")
 	return nil
-}
-
-// MaybeStartDnsmasq checks if it's okay to start dnsmasq based on config.
-// If the service is config disabled then return false without an error.
-// Return true if config wants dnsmasq started and there isn't already a DHCP server on the network.
-// If there is a DHCP server on the network then return an error.
-func MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
-	if !isDNSMasqEnabledInConfig() {
-		return false, nil
-	}
-	ifaceName, err := getPrimaryInterfaceName()
-	if err != nil {
-		return false, fmt.Errorf("failed to get primary interface: %w", err)
-	}
-	hwAddr, err := getIfaceHardwareAddress(ifaceName)
-	numAttempts := 5
-	running := false
-	for idx := numAttempts; idx > 0; idx-- {
-		running, err = isDHCPServerRunning(logger, hwAddr)
-		if err != nil {
-			logger.Warnf("Error while checking if DHCP server is running: %v", err)
-			continue // proceed to the next attempt
-		}
-		if running {
-			logger.Info("DHCP server is running, not starting dnsmasq")
-			return false, fmt.Errorf("attempt to start dnsmasq when a DHCP server is already running")
-		} else {
-			logger.Info("DHCP server is not running, attempting to start dnsmasq")
-			if err := startDnsmasq(logger, dnsMasqConfig); err != nil {
-				logger.Warnf("Failed to start dnsmasq on attempt %d: %v", numAttempts-idx+1, err)
-				continue // Retry in case of failure
-			}
-			logger.Info("Successfully started dnsmasq")
-			return true, nil
-		}
-	}
-	return false, fmt.Errorf("failed to start dnsmasq after %d attempts", numAttempts)
 }

@@ -33,7 +33,7 @@ import (
 type cleanupFunc func() error
 
 func handleDelayedStart(logger *zap.SugaredLogger, appConfig *config.AppConfig) {
-	if appConfig.DelayStart && !appConfig.DebugConfig.DebugEnabled { // if we should delay startup and we're not in debug mode...
+	if appConfig.DelayStart && !appConfig.DebugConfig.DebugEnabled { // if we should delay startup, and we're not in debug mode...
 		delay := time.Second * 30
 		logger.Infof("Delaying startup for %v seconds", delay)
 		time.Sleep(delay)
@@ -69,9 +69,18 @@ func main() {
 	logger.Infof("Build version %v", config.BuildVersion)
 
 	// Maybe start DHCP server.
+	dhcpServer, err := dhcp.NewServer()
+	if err != nil {
+		logger.Fatal("Failed to setup DHCP server:", err)
+	}
 	go func() {
 		if config.AppCfg.DHCPServerEnabled {
-			_, _ = dhcp.MaybeStartDnsmasq(logger)
+			status, err2 := dhcpServer.MaybeStartDnsmasq(logger)
+			if err2 != nil {
+				logger.Warn("Failed to start DHCP server:", err)
+			} else {
+				logger.Infof("DHCP server started: %v", status)
+			}
 		}
 	}()
 
@@ -145,7 +154,7 @@ func main() {
 
 	// Web server start.
 	if config.AppCfg.WebConfig.WebEnabled {
-		s := web.NewServer(logger, t, config.GroupMACs, trafficMap)
+		s := web.NewServer(logger, t, config.GroupMACs, trafficMap, dhcpServer)
 		go func() {
 			if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				logger.Fatalln("Error starting web server:", err)
