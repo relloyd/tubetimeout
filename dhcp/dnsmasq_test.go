@@ -331,6 +331,129 @@ func TestGetDefaultGateway(t *testing.T) {
 	}
 }
 
+func TestAdjustSubnetRange(t *testing.T) {
+	tests := []struct {
+		name         string
+		lower        string
+		upper        string
+		gateway      string
+		expectLower  string
+		expectUpper  string
+		expectChosen string
+		expectError  bool
+	}{
+		{
+			name:         "Gateway outside range (below)",
+			lower:        "192.168.1.1",
+			upper:        "192.168.1.254",
+			gateway:      "10.0.0.1",
+			expectLower:  "192.168.1.1",
+			expectUpper:  "192.168.1.254",
+			expectChosen: "192.168.1.254",
+			expectError:  false,
+		},
+		{
+			name:         "Gateway outside range (above)",
+			lower:        "192.168.1.1",
+			upper:        "192.168.1.254",
+			gateway:      "192.168.2.1",
+			expectLower:  "192.168.1.1",
+			expectUpper:  "192.168.1.254",
+			expectChosen: "192.168.1.254",
+			expectError:  false,
+		},
+		{
+			name:         "Gateway equals lower",
+			lower:        "192.168.1.1",
+			upper:        "192.168.1.254",
+			gateway:      "192.168.1.1",
+			expectLower:  "192.168.1.2",
+			expectUpper:  "192.168.1.254",
+			expectChosen: "192.168.1.254",
+			expectError:  false,
+		},
+		{
+			name:         "Gateway equals upper",
+			lower:        "192.168.1.1",
+			upper:        "192.168.1.254",
+			gateway:      "192.168.1.254",
+			expectLower:  "192.168.1.1",
+			expectUpper:  "192.168.1.253",
+			expectChosen: "192.168.1.253",
+			expectError:  false,
+		},
+		{
+			name:         "Gateway in middle, larger upper segment",
+			lower:        "192.168.1.1",
+			upper:        "192.168.1.254",
+			gateway:      "192.168.1.100",
+			expectLower:  "192.168.1.101",
+			expectUpper:  "192.168.1.254",
+			expectChosen: "192.168.1.254",
+			expectError:  false,
+		},
+		{
+			name:         "Gateway in middle, larger lower segment",
+			lower:        "192.168.1.50",
+			upper:        "192.168.1.200",
+			gateway:      "192.168.1.150",
+			expectLower:  "192.168.1.50",
+			expectUpper:  "192.168.1.149",
+			expectChosen: "192.168.1.149",
+			expectError:  false,
+		},
+		{
+			name:        "No usable addresses",
+			lower:       "192.168.1.1",
+			upper:       "192.168.1.1",
+			gateway:     "192.168.1.1",
+			expectError: true,
+		},
+		{
+			name:         "Tiny range with gateway equals upper",
+			lower:        "192.168.1.1",
+			upper:        "192.168.1.2",
+			gateway:      "192.168.1.2",
+			expectLower:  "192.168.1.1",
+			expectUpper:  "192.168.1.1",
+			expectChosen: "192.168.1.1",
+			expectError:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lowerIP := net.ParseIP(tt.lower)
+			upperIP := net.ParseIP(tt.upper)
+			gatewayIP := net.ParseIP(tt.gateway)
+			if lowerIP == nil || upperIP == nil || gatewayIP == nil {
+				t.Fatalf("failed to parse one of the IP addresses")
+			}
+
+			newLower, newUpper, chosenIP, err := adjustSubnetRange(lowerIP, upperIP, gatewayIP)
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("expected an error but got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			if !newLower.Equal(net.ParseIP(tt.expectLower)) {
+				t.Errorf("expected new lower %s, got %s", tt.expectLower, newLower)
+			}
+			if !newUpper.Equal(net.ParseIP(tt.expectUpper)) {
+				t.Errorf("expected new upper %s, got %s", tt.expectUpper, newUpper)
+			}
+			if !chosenIP.Equal(net.ParseIP(tt.expectChosen)) {
+				t.Errorf("expected chosen IP %s, got %s", tt.expectChosen, chosenIP)
+			}
+		})
+	}
+}
+
 func TestGetSubnetBounds_NonexistentInterface(t *testing.T) {
 	// Provide a nonsense interface name to trigger an error.
 	_, _, err := getSubnetBoundsForInterface("non_existent_interface")

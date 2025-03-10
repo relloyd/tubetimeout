@@ -345,6 +345,57 @@ func getSubnetBoundsForInterface(ifaceName string) (net.IP, net.IP, error) {
 	return lowerIP, upperIP, nil
 }
 
+// adjustSubnetRange takes a lower IP, an upper IP and the default gateway IP,
+// and returns a new subnet range that excludes the gateway IP, plus a sensible
+// local IP (at the end of the range) that does not clash with the default gateway.
+func adjustSubnetRange(lowerIP, upperIP, gateway net.IP) (net.IP, net.IP, net.IP, error) {
+	// Convert IP addresses to uint32.
+	lw := ipToUint32(lowerIP)
+	up := ipToUint32(upperIP)
+	gw := ipToUint32(gateway)
+
+	// If the gateway is not within the range, no adjustments are necessary.
+	if gw < lw || gw > up {
+		return lowerIP, upperIP, upperIP, nil
+	}
+
+	var newLower, newUpper, chosenIP uint32
+
+	// If the gateway is at the very beginning of the range, move the lower bound up.
+	if gw == lw {
+		newLower = lw + 1
+		newUpper = up
+		chosenIP = newUpper
+	} else if gw == up {
+		// If the gateway is at the end of the range, move the upper bound down.
+		newLower = lw
+		newUpper = up - 1
+		chosenIP = newUpper
+	} else {
+		// The gateway is somewhere in the middle.
+		// We'll split the range into two segments:
+		//  - Lower segment: [lw, gw-1]
+		//  - Upper segment: [gw+1, up]
+		segLowerSize := gw - lw      // size of the lower segment
+		segUpperSize := up - gw      // size of the upper segment
+
+		// Choose the segment with more addresses (or the upper segment if they are equal)
+		if segUpperSize >= segLowerSize && segUpperSize > 0 {
+			newLower = gw + 1
+			newUpper = up
+			chosenIP = newUpper // use the end of the range as the local IP
+		} else if segLowerSize > 0 {
+			newLower = lw
+			newUpper = gw - 1
+			chosenIP = newUpper // again, pick the end of the segment
+		} else {
+			return nil, nil, nil, fmt.Errorf("no usable addresses available after excluding the default gateway")
+		}
+	}
+
+	return uint32ToIP(newLower), uint32ToIP(newUpper), uint32ToIP(chosenIP), nil
+}
+
 // ipToUint32 converts a net.IP (IPv4) to a uint32.
 func ipToUint32(ip net.IP) uint32 {
 	ip = ip.To4()
