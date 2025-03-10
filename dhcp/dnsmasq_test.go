@@ -73,8 +73,6 @@ func TestGetConfigCached(t *testing.T) {
 	assert.Equal(t, dummyCfg, cfg, "Expected cached config to be returned")
 }
 
-
-
 // TestGetConfigLoads verifies that, if dnsMasqConfig is nil,
 // GetConfig attempts to load the configuration and returns a non-nil result.
 func TestGetConfigLoads(t *testing.T) {
@@ -220,74 +218,94 @@ func TestChooseIPFromBottom(t *testing.T) {
 	}
 }
 
+type whereToRunHack int
+
+const (
+	runOnLinux whereToRunHack = iota
+	runOnMacOS
+	runOnAny
+)
+
 func TestGetDefaultGateway(t *testing.T) {
 	tests := []struct {
-		name        string
-		mockOutput  string
-		mockError   error
-		expectedIP  net.IP
-		expectError bool
-		errorMsg    string
-		isMacOS     bool
+		name           string
+		mockOutput     string
+		mockError      error
+		expectedIP     net.IP
+		expectError    bool
+		errorMsg       string
+		whereToRunHack whereToRunHack // 0 = run on macOS; 1 = run on linux; 2 = run anywhere
 	}{
 		{
-			name:        "Valid gateway on Linux",
-			mockOutput:  "Kernel IP routing table\nDestination     Gateway         Genmask         Flags Metric Ref    Use Iface\n0.0.0.0         192.168.1.254   0.0.0.0         UG    100    0        0 eth0\n",
-			mockError:   nil,
-			expectedIP:  net.ParseIP("192.168.1.254"),
-			expectError: false,
-			errorMsg:    "should correctly parse valid gateway",
+			name: "Valid gateway on Linux",
+			mockOutput: "Kernel IP routing table\n" +
+				"Destination     Gateway         Genmask         Flags Metric Ref    Use Iface\n" +
+				"0.0.0.0         192.168.1.254   0.0.0.0         UG    100    0        0 eth0\n",
+			mockError:      nil,
+			expectedIP:     net.ParseIP("192.168.1.254"),
+			expectError:    false,
+			errorMsg:       "should correctly parse valid gateway",
+			whereToRunHack: runOnLinux,
 		},
 		{
-			name:        "Valid gateway on macOS",
-			mockOutput:  "gateway: 192.168.1.1\n",
-			mockError:   nil,
-			expectedIP:  net.ParseIP("192.168.1.1"),
-			expectError: false,
-			errorMsg:    "should correctly parse macOS gateway",
-			isMacOS:     true,
+			name: "Valid gateway on macOS",
+			mockOutput: "Routing tables\n" +
+				"Destination     Gateway         Flags     Refs     Use    Netif\n" +
+				"default         192.168.1.1     UGSc\n",
+			mockError:      nil,
+			expectedIP:     net.ParseIP("192.168.1.1"),
+			expectError:    false,
+			errorMsg:       "should correctly parse macOS gateway",
+			whereToRunHack: runOnMacOS,
 		},
 		{
-			name:        "Invalid gateway parsing",
-			mockOutput:  "Kernel IP routing table\nDestination     Gateway         Genmask         Flags Metric Ref    Use Iface\n0.0.0.0         ZGFR1090       0.0.0.0         UG    100    0        0 eth0\n",
-			mockError:   nil,
-			expectedIP:  nil,
-			expectError: true,
-			errorMsg:    "should return an error for unexpected gateway format",
+			name: "Invalid gateway parsing",
+			mockOutput: "Kernel IP routing table\n" +
+				"Destination     Gateway         Genmask         Flags Metric Ref    Use Iface\n" +
+				"0.0.0.0         ZGFR1090       0.0.0.0         UG    100    0        0 eth0\n",
+			mockError:      nil,
+			expectedIP:     nil,
+			expectError:    true,
+			errorMsg:       "should return an error for unexpected gateway format",
+			whereToRunHack: runOnAny,
 		},
 		{
-			name:        "Command execution error",
-			mockOutput:  "",
-			mockError:   fmt.Errorf("execution failed"),
-			expectedIP:  nil,
-			expectError: true,
-			errorMsg:    "should return an error when command execution fails",
+			name:           "Command execution error",
+			mockOutput:     "",
+			mockError:      fmt.Errorf("execution failed"),
+			expectedIP:     nil,
+			expectError:    true,
+			errorMsg:       "should return an error when command execution fails",
+			whereToRunHack: runOnAny,
 		},
 		{
-			name:        "Missing gateway on Linux",
-			mockOutput:  "Kernel IP routing table\nDestination     Gateway         Genmask         Flags Metric Ref    Use Iface\n",
-			mockError:   nil,
-			expectedIP:  nil,
-			expectError: true,
-			errorMsg:    "should return an error when no gateway found",
+			name: "Missing gateway on Linux",
+			mockOutput: "Kernel IP routing table\n" +
+				"Destination     Gateway         Genmask         Flags Metric Ref    Use Iface\n",
+			mockError:      nil,
+			expectedIP:     nil,
+			expectError:    true,
+			errorMsg:       "should return an error when no gateway found",
+			whereToRunHack: runOnAny,
 		},
 	}
 
 	originalRouteCmd := routeCmd
-	originalRouteCmdArgs := routeCmdArgs
-
 	t.Cleanup(func() {
 		routeCmd = originalRouteCmd
-		routeCmdArgs = originalRouteCmdArgs
 	})
 
 	for _, tt := range tests {
-		if tt.isMacOS && runtime.GOOS != "darwin" {
-			t.Log("Skipping macOS test on non-macOS platform: ", tt.name)
+		if tt.whereToRunHack == runOnMacOS && runtime.GOOS != "darwin" {
+			t.Log("Skipping macos test on non-macOS platform: ", tt.name)
+			continue
+		}
+		if tt.whereToRunHack == runOnLinux && runtime.GOOS != "linux" {
+			t.Log("Skipping linux test on non-linux platform: ", tt.name)
 			continue
 		}
 		t.Run(tt.name, func(t *testing.T) {
-			// Mock the command execution
+			// Mock the command execution using the new signature.
 			routeCmd = func() (string, error) {
 				if tt.mockError != nil {
 					return "", tt.mockError
@@ -295,15 +313,19 @@ func TestGetDefaultGateway(t *testing.T) {
 				return tt.mockOutput, nil
 			}
 
-			// Execute the function under test
 			ip, err := getDefaultGateway()
 
-			// Validate the result against expectations
 			if tt.expectError {
-				assert.Error(t, err, tt.errorMsg)
+				if err == nil {
+					t.Errorf("Expected error but got none. %s", tt.errorMsg)
+				}
 			} else {
-				assert.NoError(t, err, tt.errorMsg)
-				assert.Equal(t, tt.expectedIP, ip, tt.errorMsg)
+				if err != nil {
+					t.Errorf("Did not expect error but got: %v. %s", err, tt.errorMsg)
+				}
+				if !ip.Equal(tt.expectedIP) {
+					t.Errorf("Expected IP %v, got %v. %s", tt.expectedIP, ip, tt.errorMsg)
+				}
 			}
 		})
 	}

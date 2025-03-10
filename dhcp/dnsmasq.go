@@ -27,7 +27,7 @@ var (
 	configFileDHCPSettings   = "dhcp-config.yaml"
 	dnsMasqConfig            *DNSMasqConfig // expect init to set this up
 	routeCmd                 = defaultRouteCmd
-	routeCmdArgs             = []string{"-n"}
+	routeCmdArgs             = []string{"-rn"}
 )
 
 type systemctlAction string
@@ -260,35 +260,29 @@ func isDHCPServerRunning(mac net.HardwareAddr) (bool, error) {
 
 // getDefaultGateway reads /proc/net/route to obtain the default gateway for interface eth0.
 func getDefaultGateway() (net.IP, error) {
-	if runtime.GOOS == "darwin" {
-		routeCmdArgs = []string{"-n", "get", "default"}
-	}
-
+	// Use "netstat -rn" for both macOS and Linux.
+	// Assume routeCmd now takes the command name and its arguments.
 	output, err := routeCmd()
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute route command: %v", err)
+		return nil, fmt.Errorf("failed to execute netstat command: %v", err)
 	}
 
 	scanner := bufio.NewScanner(strings.NewReader(output))
 	for scanner.Scan() {
 		line := scanner.Text()
-		if runtime.GOOS == "darwin" && strings.HasPrefix(line, "gateway:") {
-			gateway := strings.TrimSpace(strings.TrimPrefix(line, "gateway:"))
-			ip := net.ParseIP(gateway)
-			if ip == nil {
-				return nil, fmt.Errorf("failed to parse gateway IP: %s", gateway)
-			}
-			return ip, nil
-		} else if runtime.GOOS != "darwin" {
-			// Skip the table header and focus on relevant lines
-			if strings.HasPrefix(line, "Destination") || strings.HasPrefix(line, "Kernel") {
-				continue
-			}
-			fields := strings.Fields(line)
-			if len(fields) < 8 || fields[0] != "0.0.0.0" || fields[3] != "UG" {
-				continue
-			}
-			ip := net.ParseIP(fields[1]) // Gateway is in the second column for Linux
+		// Skip header lines and empty lines.
+		if strings.HasPrefix(line, "Destination") || strings.HasPrefix(line, "Kernel") || line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		// On macOS, the default route is marked as "default"
+		// On Linux, it is usually marked as "0.0.0.0"
+		if (runtime.GOOS == "darwin" && fields[0] == "default") ||
+			(runtime.GOOS != "darwin" && fields[0] == "0.0.0.0") {
+			ip := net.ParseIP(fields[1])
 			if ip == nil {
 				return nil, fmt.Errorf("failed to parse gateway IP: %s", fields[1])
 			}
