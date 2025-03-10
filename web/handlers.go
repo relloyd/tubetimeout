@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/dhcp"
 	"relloyd/tubetimeout/models"
 )
 
@@ -348,5 +349,45 @@ func (h *Handler) resetGroupHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) dhcpHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		// Handle GET request: Retrieve DHCP configuration
+		dhcpConfig, err := h.dhcpConfigGetterSetter.GetConfig(h.logger)
+		if err != nil {
+			h.logger.Errorf("Error retrieving DHCP configuration: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
 
+		// Return DHCP configuration as JSON
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(dhcpConfig); err != nil {
+			h.logger.Errorf("Error encoding DHCP configuration response: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	} else if r.Method == http.MethodPost {
+		// Handle POST request: Update DHCP configuration
+		var dhcpConfig dhcp.DNSMasqConfig
+		if err := json.NewDecoder(r.Body).Decode(&dhcpConfig); err != nil {
+			h.logger.Errorf("Failed to parse DHCP configuration payload: %v", err)
+			http.Error(w, "Invalid request payload", http.StatusBadRequest)
+			return
+		}
+
+		// Save DHCP configuration
+		err := h.dhcpConfigGetterSetter.SetConfig(h.logger, &dhcpConfig)
+		if err != nil {
+			h.logger.Errorf("Error saving DHCP configuration: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		// Respond with success message
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"message": "DHCP configuration updated successfully"}`))
+	} else {
+		// Invalid request method
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+	}
+
+	
 }

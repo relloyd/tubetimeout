@@ -2,6 +2,7 @@ package dhcp
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -174,17 +175,39 @@ func SetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 		return fmt.Errorf("supplied dnsmasq config is nil")
 	}
 
-	if cfg.mu == nil {
-		cfg.mu = &sync.Mutex{}
+	fnValidate := func(cfg *DNSMasqConfig) error {
+		if cfg == nil {
+			return fmt.Errorf("DNSMasqConfig is nil")
+		}
+		if cfg.mu == nil {
+			cfg.mu = &sync.Mutex{}
+		}
+		if cfg.DefaultGateway == nil || cfg.DefaultGateway.To4() == nil {
+			return fmt.Errorf("invalid or missing DefaultGateway")
+		}
+		if cfg.ThisGateway == nil || cfg.ThisGateway.To4() == nil {
+			return fmt.Errorf("invalid or missing ThisGateway")
+		}
+		if cfg.LowerBound == nil || cfg.LowerBound.To4() == nil {
+			return fmt.Errorf("invalid or missing LowerBound")
+		}
+		if cfg.UpperBound == nil || cfg.UpperBound.To4() == nil {
+			return fmt.Errorf("invalid or missing UpperBound")
+		}
+		if bytes.Compare(cfg.LowerBound, cfg.UpperBound) >= 0 {
+			return fmt.Errorf("LowerBound must be less than UpperBound")
+		}
+		return nil
 	}
 
-	err := config.SetConfig[*DNSMasqConfig](cfg.mu, configFileDHCPSettings, nil, nil, cfg) // TODO: validate the incoming config but don't override any yet
+	fnUpdateInMem := func(cfg *DNSMasqConfig) {
+		dnsMasqConfig = cfg
+	}
+
+	err := config.SetConfig[*DNSMasqConfig](dnsMasqConfig.mu, configFileDHCPSettings, fnValidate, fnUpdateInMem, cfg) // TODO: validate the incoming config but don't override any yet
 	if err != nil {
 		return fmt.Errorf("failed to set dnsmasq config: %w", err)
 	}
-
-	// Set the package global variable to the new value.
-	dnsMasqConfig = cfg
 
 	return nil
 }
