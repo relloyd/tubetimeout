@@ -1,4 +1,4 @@
-package main
+package dhcp
 
 import (
 	"bufio"
@@ -83,7 +83,7 @@ func init() {
 	//   ✅setConfig for DNSMasq
 	//   ✅isDNSMasqEnabledInConfig
 	//   getDHCPStatus
-	//   MaybeStartDnsmasq
+	//   ✅MaybeStartDnsmasq
 	var err error
 	dnsMasqConfig, err = GetConfig(config.MustGetLogger())
 	if err != nil {
@@ -173,11 +173,6 @@ func SetConfig(cfg *DNSMasqConfig) error {
 	return nil
 }
 
-func getEth0IP() (net.IP, error) {
-	ips, err := getIfaceAddresses(defaultInterfaceName)
-	return ips[0], err
-}
-
 func getPrimaryInterfaceName() (string, error) {
 	switch runtime.GOOS {
 	case "linux":
@@ -189,40 +184,60 @@ func getPrimaryInterfaceName() (string, error) {
 	}
 }
 
-func getIfaceAddresses(ifaceName string) ([]net.IP, error) {
-	ni, err := net.InterfaceByName(ifaceName)
+// func getEth0IP() (net.IP, error) {
+// 	ips, err := getIfaceAddresses(defaultInterfaceName)
+// 	return ips[0], err
+// }
+//
+// func getIfaceAddresses(ifaceName string) ([]net.IP, error) {
+// 	ni, err := net.InterfaceByName(ifaceName)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+//
+// 	addrs, err := ni.Addrs()
+// 	if err != nil {
+// 		return nil, err
+// 	}
+//
+// 	var ips []net.IP
+// 	for _, addr := range addrs {
+// 		var ip net.IP
+// 		switch v := addr.(type) {
+// 		case *net.IPNet:
+// 			ip = v.IP
+// 		case *net.IPAddr:
+// 			ip = v.IP
+// 		}
+//
+// 		if ip != nil && ip.To4() != nil {
+// 			ips = append(ips, ip)
+// 		}
+// 	}
+//
+// 	if len(ips) == 0 {
+// 		return nil, fmt.Errorf("no IPs found for interface %v", ifaceName)
+// 	}
+// 	return ips, nil
+// }
+
+// GetHardwareAddress returns the hardware (MAC) address of the given network interface.
+// If the interface cannot be found or does not have a hardware address, it returns an error.
+func getIfaceHardwareAddress(ifaceName string) (net.HardwareAddr, error) {
+	iface, err := net.InterfaceByName(ifaceName)
 	if err != nil {
 		return nil, err
 	}
-
-	addrs, err := ni.Addrs()
-	if err != nil {
-		return nil, err
+	if len(iface.HardwareAddr) == 0 {
+		return nil, errors.New("interface does not have a hardware address")
 	}
-
-	var ips []net.IP
-	for _, addr := range addrs {
-		var ip net.IP
-		switch v := addr.(type) {
-		case *net.IPNet:
-			ip = v.IP
-		case *net.IPAddr:
-			ip = v.IP
-		}
-
-		if ip != nil && ip.To4() != nil {
-			ips = append(ips, ip)
-		}
-	}
-
-	if len(ips) == 0 {
-		return nil, fmt.Errorf("no IPs found for interface %v", ifaceName)
-	}
-	return ips, nil
+	return iface.HardwareAddr, nil
 }
 
 // isDHCPServerRunning sends a DHCP DISCOVER message and waits for a DHCP OFFER.
 func isDHCPServerRunning(mac net.HardwareAddr) (bool, error) {
+	waitDuration := 5 * time.Second
+
 	// Bind to UDP port 68 (DHCP client port)
 	conn, err := net.ListenPacket("udp4", ":68")
 	if err != nil {
@@ -244,7 +259,7 @@ func isDHCPServerRunning(mac net.HardwareAddr) (bool, error) {
 	}
 
 	// Set a deadline to wait for a response.
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	conn.SetDeadline(time.Now().Add(waitDuration))
 	buf := make([]byte, 1500)
 	n, addr, err := conn.ReadFrom(buf)
 	if err != nil {
@@ -458,7 +473,7 @@ func chooseIPFromBottom(lower, upper net.IP) (chosenIP, newLower, newUpper net.I
 }
 
 // generateDnsmasqConfig builds the full dnsmasq configuration as a string.
-func generateDnsmasqConfig(defaultGateway, thisGateway net.IP, subnetLower, subnetUpper net.IP, reservations []string, namedMACs []models.NamedMAC) (string, error) {
+func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper net.IP, thisGatewayHardwareAddress string, reservations []string, namedMACs []models.NamedMAC) (string, error) {
 	// Global configuration settings.
 	lines := []string{
 		"# dnsmasq configuration generated programmatically",
@@ -468,13 +483,19 @@ func generateDnsmasqConfig(defaultGateway, thisGateway net.IP, subnetLower, subn
 		"",
 	}
 
-	// # Static IP reservations
+	// # Static IP reservations take the form:
 	// dhcp-host=dc:a6:32:68:47:ea,192.168.1.52
 	// dhcp-host=dc:a6:32:68:47:e9,192.168.1.53
 	// dhcp-host=2c:cf:67:b6:37:7e,192.168.1.54
 	// dhcp-host=58:ef:68:e5:f5:8c,192.168.1.55
 
-	// Append custom host entries for each supplied known MAC; assign a tag and set a custom router.
+	// Reserve an IP for thisGateway.
+	lines = append(lines, "# static IP reservations")
+	lines = append(lines, fmt.Sprintf("dhcp-host=%v,%v", thisGatewayHardwareAddress, thisGateway))
+	lines = append(lines, "")
+
+	// Configure a tag to use for custom host entries for each supplied known MAC; assign a tag and set a custom router.
+	// TODO: consider given the real gateway to MACs not explicitly configured to use tubetimeout.
 	lines = append(lines, fmt.Sprintf("dhcp-option=tag:customgw,option:router,%s # this gateway", thisGateway))
 	for _, v := range namedMACs {
 		name := v.Name
@@ -504,15 +525,12 @@ func setDnsmasqServiceState(action systemctlAction) error {
 // Aim is that supplied MACs will be assigned a custom gateway, while anything else
 // gets the default gateway that the device running this code has.
 func startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
-	// Figure out the current IP address for the interface, to use it as the gateway.
-	ips, err := getIfaceAddresses(defaultInterfaceName)
+	hwAddr, err := getIfaceHardwareAddress(defaultInterfaceName)
 	if err != nil {
-		return fmt.Errorf("error fetching IPs for net adapter %v: %v", defaultInterfaceName, err)
+		return fmt.Errorf("error fetching hardware address for net adapter %v: %v", defaultInterfaceName, err)
 	}
 
-	// Find lower/upper bounds for dhcp server.
-
-	dat, err := generateDnsmasqConfig(ips[0], cfg.ThisGateway, cfg.LowerBound, cfg.UpperBound, nil, nil)
+	dat, err := generateDnsmasqConfig(cfg.DefaultGateway, cfg.ThisGateway, cfg.LowerBound, cfg.UpperBound, hwAddr.String(), nil, nil)
 	if err != nil {
 		return fmt.Errorf("error generating dnsmasq config: %v", err)
 	}
@@ -528,6 +546,42 @@ func startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 	}
 
 	logger.Info("dnsmasq configuration updated and service restarted successfully")
-
 	return nil
+}
+
+// MaybeStartDnsmasq checks if it's okay to start dnsmasq based on config.
+// If the service is config disabled then return false without an error.
+// Return true if config wants dnsmasq started and there isn't already a DHCP server on the network.
+// If there is a DHCP server on the network then return an error.
+func MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
+	if !isDNSMasqEnabledInConfig() {
+		return false, nil
+	}
+	ifaceName, err := getPrimaryInterfaceName()
+	if err != nil {
+		return false, fmt.Errorf("failed to get primary interface: %w", err)
+	}
+	hwAddr, err := getIfaceHardwareAddress(ifaceName)
+	numAttempts := 5
+	running := false
+	for idx := numAttempts; idx > 0; idx-- {
+		running, err = isDHCPServerRunning(hwAddr)
+		if err != nil {
+			logger.Warnf("Error while checking if DHCP server is running: %v", err)
+			continue // proceed to the next attempt
+		}
+		if running {
+			logger.Info("DHCP server is running, not starting dnsmasq")
+			return false, fmt.Errorf("attempt to start dnsmasq when a DHCP server is already running")
+		} else {
+			logger.Info("DHCP server is not running, attempting to start dnsmasq")
+			if err := startDnsmasq(logger, dnsMasqConfig); err != nil {
+				logger.Warnf("Failed to start dnsmasq on attempt %d: %v", numAttempts-idx+1, err)
+				continue // Retry in case of failure
+			}
+			logger.Info("Successfully started dnsmasq")
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("failed to start dnsmasq after %d attempts", numAttempts)
 }

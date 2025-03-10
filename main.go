@@ -12,6 +12,7 @@ import (
 
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/dhcp"
 	"relloyd/tubetimeout/group"
 	"relloyd/tubetimeout/monitor"
 	"relloyd/tubetimeout/nfq"
@@ -66,6 +67,13 @@ func main() {
 	}(logger)
 
 	logger.Infof("Build version %v", config.BuildVersion)
+
+	// Maybe start DHCP server.
+	go func() {
+		if config.AppCfg.DHCPServerEnabled {
+			_, _ = dhcp.MaybeStartDnsmasq(logger)
+		}
+	}()
 
 	handleDelayedStart(logger, &config.AppCfg)
 	handleDebugging(logger, &config.AppCfg.DebugConfig)
