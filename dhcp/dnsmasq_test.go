@@ -35,7 +35,7 @@ func TestCheckDHCPServer(t *testing.T) {
 		t.Fatalf("No MAC address found for interface %s", ifaceName)
 	}
 
-	res, err := isDHCPServerRunning(mac)
+	res, err := isDHCPServerRunning(config.MustGetLogger(), mac)
 	assert.Equal(t, true, res, "isDHCPServerRunning() should return true", err)
 }
 

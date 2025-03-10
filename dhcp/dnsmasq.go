@@ -2,6 +2,7 @@ package dhcp
 
 import (
 	"bufio"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"go.uber.org/zap"
@@ -235,11 +237,36 @@ func getIfaceHardwareAddress(ifaceName string) (net.HardwareAddr, error) {
 }
 
 // isDHCPServerRunning sends a DHCP DISCOVER message and waits for a DHCP OFFER.
-func isDHCPServerRunning(mac net.HardwareAddr) (bool, error) {
+func isDHCPServerRunning(logger *zap.SugaredLogger, mac net.HardwareAddr) (bool, error) {
 	waitDuration := 5 * time.Second
 
+	// Use ListenConfig with a Control function to set SO_REUSEADDR.
+	lc := net.ListenConfig{
+		Control: func(network, address string, c syscall.RawConn) error {
+			var controlErr error
+			err := c.Control(func(fd uintptr) {
+				if err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1); err != nil {
+					controlErr = fmt.Errorf("failed to set SO_REUSEADDR: %v", err)
+					return
+				}
+				// Optionally, if your OS supports it, you can also enable SO_REUSEPORT.
+				// Uncomment the following lines if desired:
+				/*
+					if err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEPORT, 1); err != nil {
+						controlErr = fmt.Errorf("failed to set SO_REUSEPORT: %v", err)
+						return
+					}
+				*/
+			})
+			if err != nil {
+				return err
+			}
+			return controlErr
+		},
+	}
+
 	// Bind to UDP port 68 (DHCP client port)
-	conn, err := net.ListenPacket("udp4", ":68")
+	conn, err := lc.ListenPacket(context.Background(), "udp4", ":68")
 	if err != nil {
 		return false, fmt.Errorf("failed to bind to UDP port 68: %v", err)
 	}
@@ -274,7 +301,7 @@ func isDHCPServerRunning(mac net.HardwareAddr) (bool, error) {
 
 	// Check that the response is a DHCP OFFER.
 	if msgType := resp.MessageType(); msgType == dhcpv4.MessageTypeOffer {
-		fmt.Printf("Received DHCPOFFER from DHCP server at %v\n", addr)
+		logger.Infof("Received DHCPOFFER from DHCP server at %v", addr)
 		return true, nil
 	}
 
@@ -377,6 +404,11 @@ func adjustSubnetRange(lowerIP, upperIP, gateway net.IP) (net.IP, net.IP, net.IP
 	up := ipToUint32(upperIP)
 	gw := ipToUint32(gateway)
 
+	// Ensure that the range is valid.
+	if lw >= up {
+		return nil, nil, nil, fmt.Errorf("invalid range: lower IP must be less than upper IP")
+	}
+
 	// If the gateway is not within the range, no adjustments are necessary.
 	if gw < lw || gw > up {
 		return lowerIP, upperIP, upperIP, nil
@@ -384,35 +416,40 @@ func adjustSubnetRange(lowerIP, upperIP, gateway net.IP) (net.IP, net.IP, net.IP
 
 	var newLower, newUpper, chosenIP uint32
 
-	// If the gateway is at the very beginning of the range, move the lower bound up.
+	// Handle cases when the gateway is at the very beginning or end.
 	if gw == lw {
+		if lw+1 > up {
+			return nil, nil, nil, fmt.Errorf("no usable addresses available after excluding the gateway")
+		}
 		newLower = lw + 1
 		newUpper = up
 		chosenIP = newUpper
 	} else if gw == up {
-		// If the gateway is at the end of the range, move the upper bound down.
+		if up-1 < lw {
+			return nil, nil, nil, fmt.Errorf("no usable addresses available after excluding the gateway")
+		}
 		newLower = lw
 		newUpper = up - 1
 		chosenIP = newUpper
 	} else {
 		// The gateway is somewhere in the middle.
-		// We'll split the range into two segments:
+		// Split the range into two segments:
 		//  - Lower segment: [lw, gw-1]
 		//  - Upper segment: [gw+1, up]
-		segLowerSize := gw - lw // size of the lower segment
-		segUpperSize := up - gw // size of the upper segment
+		segLowerSize := gw - lw      // size of the lower segment
+		segUpperSize := up - gw      // size of the upper segment
 
 		// Choose the segment with more addresses (or the upper segment if they are equal)
 		if segUpperSize >= segLowerSize && segUpperSize > 0 {
 			newLower = gw + 1
 			newUpper = up
-			chosenIP = newUpper // use the end of the range as the local IP
+			chosenIP = newUpper
 		} else if segLowerSize > 0 {
 			newLower = lw
 			newUpper = gw - 1
-			chosenIP = newUpper // again, pick the end of the segment
+			chosenIP = newUpper
 		} else {
-			return nil, nil, nil, fmt.Errorf("no usable addresses available after excluding the default gateway")
+			return nil, nil, nil, fmt.Errorf("no usable addresses available after excluding the gateway")
 		}
 	}
 
@@ -565,7 +602,7 @@ func MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
 	numAttempts := 5
 	running := false
 	for idx := numAttempts; idx > 0; idx-- {
-		running, err = isDHCPServerRunning(hwAddr)
+		running, err = isDHCPServerRunning(logger, hwAddr)
 		if err != nil {
 			logger.Warnf("Error while checking if DHCP server is running: %v", err)
 			continue // proceed to the next attempt
