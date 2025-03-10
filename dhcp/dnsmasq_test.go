@@ -68,7 +68,7 @@ func TestGetConfigCached(t *testing.T) {
 	dnsMasqConfig = dummyCfg
 
 	// Call GetConfig. In this case, the function should simply return our dummyCfg.
-	cfg, err := GetConfig()
+	cfg, err := GetConfig(config.MustGetLogger())
 	assert.NoError(t, err, "GetConfig should not return an error when a config is cached")
 	assert.Equal(t, dummyCfg, cfg, "Expected cached config to be returned")
 }
@@ -79,7 +79,7 @@ func TestGetConfigLoads(t *testing.T) {
 	// Reset the global to force a fresh load.
 	dnsMasqConfig = nil
 
-	cfg, err := GetConfig()
+	cfg, err := GetConfig(config.MustGetLogger())
 	assert.NoError(t, err, "Expected no error when loading config")
 	assert.NotNil(t, cfg, "Expected non-nil config")
 

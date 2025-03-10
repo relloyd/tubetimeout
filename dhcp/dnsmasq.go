@@ -85,14 +85,14 @@ func init() {
 	//   getDHCPStatus
 	//   MaybeStartDnsmasq
 	var err error
-	dnsMasqConfig, err = GetConfig()
+	dnsMasqConfig, err = GetConfig(config.MustGetLogger())
 	if err != nil {
 		config.MustGetLogger().Warn("Failed to load DNSMasqConfig", zap.Error(err))
 	}
 }
 
 func defaultRouteCmd() (string, error) {
-	output, err := exec.Command("route", routeCmdArgs...).Output() // -n: show numerical addresses, -a: show all hosts
+	output, err := exec.Command("netstat", routeCmdArgs...).Output() // -n: show numerical addresses, -a: show all hosts
 	return string(output), err
 }
 
@@ -103,7 +103,7 @@ func isDNSMasqEnabledInConfig() bool {
 	return false
 }
 
-func GetConfig() (*DNSMasqConfig, error) {
+func GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
 	if dnsMasqConfig != nil { // if dns config is already loaded...
 		return dnsMasqConfig, nil
 	}
@@ -112,6 +112,7 @@ func GetConfig() (*DNSMasqConfig, error) {
 	mu := &sync.Mutex{}
 	cfg, err := config.GetConfig[*DNSMasqConfig](mu, configFileDHCPSettings, newDNSMasqConfig)
 	if err != nil {
+		logger.Warnf("Failed to get dnsmasq config: %v", err)
 		return nil, fmt.Errorf("failed to get dnsmasq config: %w", err)
 	}
 
@@ -120,22 +121,29 @@ func GetConfig() (*DNSMasqConfig, error) {
 	}
 
 	if cfg.DefaultGateway == nil {
-		cfg.DefaultGateway, _ = getDefaultGateway()
+		cfg.DefaultGateway, err = getDefaultGateway()
+		if err != nil {
+			logger.Warnf("Failed to get default gateway: %v", err)
+			return nil, fmt.Errorf("failed to get default gateway: %w", err)
+		}
 	}
 
 	ifaceName, err := getPrimaryInterfaceName()
 	if err != nil {
+		logger.Warnf("Failed to get primary interface (check your o/s is listed): %v", err)
 		return nil, fmt.Errorf("failed to get primary interface (check your o/s is listed): %w", err)
 	}
 
-	if cfg.LowerBound == nil || cfg.UpperBound == nil {
-		cfg.LowerBound, cfg.UpperBound, _ = getSubnetBoundsForInterface(ifaceName)
-	}
-
-	if cfg.ThisGateway == nil { // pick a gateway address for tubetimeout, and adjust the lower subnet boundary...
-		cfg.ThisGateway, cfg.LowerBound, cfg.UpperBound, err = chooseIPFromBottom(cfg.LowerBound, cfg.UpperBound)
+	if cfg.LowerBound == nil || cfg.UpperBound == nil || cfg.ThisGateway == nil {
+		lowerBound, upperBound, err := getSubnetBoundsForInterface(ifaceName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to choose this gateway IP from the bottom of subnet range: %w", err)
+			logger.Warnf("Failed to get subnet range for interface %s: %v", ifaceName, err)
+			return nil, fmt.Errorf("failed to get subnet range for interface %s: %w", ifaceName, err)
+		}
+		cfg.LowerBound, cfg.UpperBound, cfg.ThisGateway, err = adjustSubnetRange(lowerBound, upperBound, cfg.DefaultGateway)
+		if err != nil {
+			logger.Warnf("Failed to adjust subnet range for interface %s: %v", ifaceName, err)
+			return nil, fmt.Errorf("failed to adjust subnet range for interface %s: %w", ifaceName, err)
 		}
 	}
 
@@ -376,8 +384,8 @@ func adjustSubnetRange(lowerIP, upperIP, gateway net.IP) (net.IP, net.IP, net.IP
 		// We'll split the range into two segments:
 		//  - Lower segment: [lw, gw-1]
 		//  - Upper segment: [gw+1, up]
-		segLowerSize := gw - lw      // size of the lower segment
-		segUpperSize := up - gw      // size of the upper segment
+		segLowerSize := gw - lw // size of the lower segment
+		segUpperSize := up - gw // size of the upper segment
 
 		// Choose the segment with more addresses (or the upper segment if they are equal)
 		if segUpperSize >= segLowerSize && segUpperSize > 0 {
