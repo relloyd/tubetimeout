@@ -615,3 +615,39 @@ func TestWriteDnsmasqConfig(t *testing.T) {
 func TestLenFallbackDNSIPs(t *testing.T) {
 	assert.Equal(t, 2, len(fallbackDNSIPs), "fallbackDNSIPs should have 2 IPs")
 }
+
+func TestFindSmallestSingleCIDR(t *testing.T) {
+	tests := []struct {
+		startIP  string
+		endIP    string
+		expected string
+	}{
+		{
+			startIP:  "192.168.1.10",
+			endIP:    "192.168.1.100",
+			expected: "192.168.1.0/25",
+		},
+		{
+			startIP:  "10.0.0.1",
+			endIP:    "10.0.0.15",
+			expected: "10.0.0.0/28",
+		},
+		{
+			startIP:  "192.168.2.0",
+			endIP:    "192.168.2.255",
+			expected: "192.168.2.0/24",
+		},
+	}
+
+	for _, test := range tests {
+		startIP := net.ParseIP(test.startIP)
+		endIP := net.ParseIP(test.endIP)
+		result, block := findSmallestSingleCIDR(startIP, endIP)
+		b := strings.Split(result, "/")
+		if len(b) != 2 {
+			t.Fatalf("findSmallestSingleCIDR bad block in result: %v", block)
+		}
+		assert.Equal(t, test.expected, result, "findSmallestSingleCIDR %v - %v failed", test.startIP, test.endIP)
+		assert.Equal(t, block, b[1], "findSmallestSingleCIDR %v - %v failed with bad block", test.startIP, test.endIP)
+	}
+}

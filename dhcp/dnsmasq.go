@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/big"
 	"net"
 	"os"
 	"os/exec"
@@ -624,6 +625,57 @@ func startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 	logger.Info("dnsmasq configuration updated and service restarted successfully")
 	return nil
 }
+
+// ipToBigInt converts an IP to a big.Int
+func ipToBigInt(ip net.IP) *big.Int {
+	ip = ip.To16() // Ensure IPv6 representation (even for IPv4)
+	return new(big.Int).SetBytes(ip)
+}
+
+// bigIntToIP converts a big.Int to an IP address
+func bigIntToIP(ipInt *big.Int) net.IP {
+	bytes := ipInt.Bytes()
+	if len(bytes) < 16 {
+		// Pad to 16 bytes for IPv6
+		padded := make([]byte, 16)
+		copy(padded[16-len(bytes):], bytes)
+		bytes = padded
+	}
+	return net.IP(bytes)
+}
+
+// findSmallestSingleCIDR finds the smallest CIDR block that fully covers the given range
+func findSmallestSingleCIDR(startIP, endIP net.IP) (string, string) {
+	start := ipToBigInt(startIP)
+	end := ipToBigInt(endIP)
+
+	maxSize := 32 // Assume IPv4 (modify for IPv6 if needed)
+	if startIP.To4() == nil {
+		maxSize = 128
+	}
+
+	// Determine the smallest (i.e. minimal covering) CIDR block by checking from longest prefix
+	block := ""
+	for prefixLen := maxSize; prefixLen >= 0; prefixLen-- {
+		mask := net.CIDRMask(prefixLen, maxSize)
+		maskedIP := startIP.Mask(mask)
+		maskedInt := ipToBigInt(maskedIP)
+		blockSize := new(big.Int).Lsh(big.NewInt(1), uint(maxSize-prefixLen))
+		upperBound := new(big.Int).Add(maskedInt, blockSize)
+		upperBound.Sub(upperBound, big.NewInt(1))
+
+		if maskedInt.Cmp(start) <= 0 && upperBound.Cmp(end) >= 0 {
+			block = fmt.Sprintf("%d", prefixLen)
+			return fmt.Sprintf("%v/%v", maskedIP.String(), block), block
+		}
+	}
+
+	return "", ""
+}
+
+// func setStaticIP(logger *zap.SugaredLogger, ) error {
+// 	output, err := exec.Command("netstat", routeCmdArgs...).Output()
+// }
 
 // func getEth0IP() (net.IP, error) {
 // 	ips, err := getIfaceAddresses(defaultInterfaceName)
