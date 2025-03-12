@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -83,12 +84,18 @@ func (s *Server) MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
 			return false, fmt.Errorf("attempt to start dnsmasq when a DHCP server is already running")
 		} else {
 			logger.Info("DHCP server is not running, attempting to start dnsmasq")
+			// Set a static IP for this gateway.
+			if err := setStaticIP(logger, ifaceName, dnsMasqConfig.DefaultGateway, ); err != nil {
+				logger.Warnf("Failed to set static IP on interface %s on attempt %d: %v", numAttempts+1, ifaceName, err)
+				continue
+			}
 			if err := startDnsmasq(logger, dnsMasqConfig); err != nil {
 				// TODO: surface dnsmasq service errors back to the web client.
-
+				unsetStaticIP(logger, ifaceName)
 				logger.Warnf("Failed to start dnsmasq on attempt %d: %v", numAttempts+1, err)
 				continue // retry in case of failure
 			}
+
 			logger.Info("Successfully started dnsmasq")
 			return true, nil
 		}
@@ -644,7 +651,8 @@ func bigIntToIP(ipInt *big.Int) net.IP {
 	return net.IP(bytes)
 }
 
-// findSmallestSingleCIDR finds the smallest CIDR block that fully covers the given range
+// findSmallestSingleCIDR finds the smallest CIDR block that fully covers the given range.
+// It returns the "<IP>/<CIDR>" and the "<CIDR>".
 func findSmallestSingleCIDR(startIP, endIP net.IP) (string, string) {
 	start := ipToBigInt(startIP)
 	end := ipToBigInt(endIP)
@@ -673,9 +681,39 @@ func findSmallestSingleCIDR(startIP, endIP net.IP) (string, string) {
 	return "", ""
 }
 
-// func setStaticIP(logger *zap.SugaredLogger, ) error {
-// 	output, err := exec.Command("netstat", routeCmdArgs...).Output()
-// }
+func setStaticIP(logger *zap.SugaredLogger, ifaceName string, gateway, thisIp net.IP, cidrBlock int, dns []string) error {
+	// nmcli dev mod eth0 ipv4.method manual ipv4.gateway "192.168.1.254" ipv4.addr "192.168.1.230/24" ipv4.dns "8.8.8.8 1.1.1.1"
+	cmd := "nmcli"
+	args := []string{"dev", "mod", ifaceName,
+		"ipv4.method", "manual",
+		"ipv4.gateway", gateway.To4().String(),
+		"ipv4.addr", thisIp.To4().String() + "/" + strconv.Itoa(cidrBlock),
+		"ipv4.dns", strings.Join(dns, " "),
+	}
+	output, err := exec.Command(cmd, args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error setting static IP: %v: %v", output, err)
+	}
+	logger.Infof("static IP for %v set successfully: %v", ifaceName, output)
+	return nil
+}
+
+func unsetStaticIP(logger *zap.SugaredLogger, ifaceName string) error {
+	// nmcli dev mod eth0 ipv4.method auto ipv4.gateway "" ipv4.addr "" ipv4.dns ""
+	cmd := "nmcli"
+	args := []string{"dev", "mod", ifaceName,
+		"ipv4.method", "auto",
+		"ipv4.gateway", "",
+		"ipv4.addr", "",
+		"ipv4.dns", "",
+	}
+	output, err := exec.Command(cmd, args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error unsetting static IP: %v: %v", output, err)
+	}
+	logger.Infof("static IP for %v unset successfully: %v", ifaceName, output)
+	return nil
+}
 
 // func getEth0IP() (net.IP, error) {
 // 	ips, err := getIfaceAddresses(defaultInterfaceName)
