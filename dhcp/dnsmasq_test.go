@@ -564,7 +564,7 @@ func TestGenerateDnsmasqConfig(t *testing.T) {
 		"interface=eth0",
 		"dhcp-range=192.168.1.10,192.168.1.100,12h",
 		"dhcp-option=option:router,192.168.1.2",
-		"dhcp-option=6,1.1.1.1,8.8.8.8",
+		"dhcp-option=option:dns-server,1.1.1.1,8.8.8.8",
 		"no-resolv",
 		"server=1.1.1.1",
 		"server=8.8.8.8",
@@ -651,4 +651,3 @@ func TestFindSmallestSingleCIDR(t *testing.T) {
 		assert.Equal(t, block, b[1], "findSmallestSingleCIDR %v - %v failed with bad block", test.startIP, test.endIP)
 	}
 }
-
