@@ -78,8 +78,13 @@ func (s *Server) MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
 		return false, fmt.Errorf("failed to get primary interface: %w", err)
 	}
 	hwAddr, err := getIfaceHardwareAddress(ifaceName)
+	if err != nil {
+		return false, fmt.Errorf("failed to get hardware address for interface %s: %w", ifaceName, err)
+	}
+
 	numAttempts := 5
 	running := false
+
 	for idx := 0; idx < numAttempts; idx++ {
 		running, err = isDHCPServerRunning(logger, hwAddr)
 		if err != nil && !errors.Is(err, errDHCPServerNotRunning) {
@@ -93,12 +98,11 @@ func (s *Server) MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
 			logger.Info("DHCP server is not running, attempting to start dnsmasq")
 			// Set a static IP for this gateway.
 			if err := setStaticIP(logger, ifaceName, dnsMasqConfig, findSmallestSingleCIDR); err != nil {
-				logger.Warnf("Failed to set static IP on interface %s on attempt %d: %v", numAttempts+1, ifaceName, err)
+				logger.Warnf("Failed to set static IP on interface %s on attempt %d: %v", ifaceName, numAttempts+1, err)
 				continue
 			}
 			if err := startDnsmasq(logger, dnsMasqConfig); err != nil {
 				logger.Warnf("Failed to start dnsmasq on attempt %d: %v", numAttempts+1, err)
-
 				// TODO: surface dnsmasq service errors back to the web client.
 				err := unsetStaticIP(logger, ifaceName)
 				if err != nil {
