@@ -651,3 +651,4 @@ func TestFindSmallestSingleCIDR(t *testing.T) {
 		assert.Equal(t, block, b[1], "findSmallestSingleCIDR %v - %v failed with bad block", test.startIP, test.endIP)
 	}
 }
+

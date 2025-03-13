@@ -3,9 +3,7 @@ package group
 import (
 	"context"
 	"errors"
-	"fmt"
 	"maps"
-	"os/exec"
 	"regexp"
 	"slices"
 	"strings"
@@ -22,19 +20,11 @@ const (
 )
 
 func init() {
-	err := checkARPAvailability()
+	cmd := "arp"
+	err := config.CheckCmdAvailability(cmd)
 	if err != nil {
-		config.MustGetLogger().Fatalf("Error: %v. Please ensure the 'arp' command is installed and available on your PATH.", err)
+		config.MustGetLogger().Fatalf("Error: %v. Please ensure the '%v' command is installed and available on your PATH.", cmd, err)
 	}
-}
-
-func checkARPAvailability() error {
-	// Check if the `arp` command is available
-	_, err := exec.LookPath("arp")
-	if err != nil {
-		return fmt.Errorf("arp command not found on the system: %w", err)
-	}
-	return nil
 }
 
 // arpCommand is a function type for executing the ARP command

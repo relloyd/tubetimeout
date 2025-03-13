@@ -7,8 +7,8 @@ APP_SHORT=tt
 INSTALL_DEST := /usr/local/bin
 INSTALL_TIMESTAMP := $(shell date +"%Y%m%dT%H%M%S")
 
-PACKAGE_TO_TEST=./nft
-FUNC_TO_TEST=Test_New
+PACKAGE_TO_TEST=./dhcp
+FUNC_TO_TEST=TestSetStaticIP
 
 LD_FLAGS=-ldflags "-X relloyd/tubetimeout/config.BuildTime=$$(date -u +%Y-%m-%dT%H:%M:%SZ) -X relloyd/tubetimeout/config.BuildVersion=$$(git describe --tags --always --dirty)"
 

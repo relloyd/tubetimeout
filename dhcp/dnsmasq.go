@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -38,6 +37,14 @@ var (
 	errDHCPServerNotRunning  = errors.New("DHCP server not running")
 	fallbackDNSIPs           = []string{"1.1.1.1", "8.8.8.8"} // default DNS IPs to CloudFlare and Google
 )
+
+func init() {
+	cmd := "nmcli"
+	err := config.CheckCmdAvailability(cmd)
+	if err != nil {
+		config.MustGetLogger().Fatalf("Error: %v. Please ensure the '%v' command is installed and available on your PATH.", cmd, err)
+	}
+}
 
 type Server struct{}
 
@@ -85,14 +92,18 @@ func (s *Server) MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
 		} else {
 			logger.Info("DHCP server is not running, attempting to start dnsmasq")
 			// Set a static IP for this gateway.
-			if err := setStaticIP(logger, ifaceName, dnsMasqConfig.DefaultGateway, ); err != nil {
+			if err := setStaticIP(logger, ifaceName, dnsMasqConfig, findSmallestSingleCIDR); err != nil {
 				logger.Warnf("Failed to set static IP on interface %s on attempt %d: %v", numAttempts+1, ifaceName, err)
 				continue
 			}
 			if err := startDnsmasq(logger, dnsMasqConfig); err != nil {
-				// TODO: surface dnsmasq service errors back to the web client.
-				unsetStaticIP(logger, ifaceName)
 				logger.Warnf("Failed to start dnsmasq on attempt %d: %v", numAttempts+1, err)
+
+				// TODO: surface dnsmasq service errors back to the web client.
+				err := unsetStaticIP(logger, ifaceName)
+				if err != nil {
+					logger.Warnf("Failed to unset static IP on interface %s on attempt %d: %v", ifaceName, numAttempts+1, err)
+				}
 				continue // retry in case of failure
 			}
 
@@ -651,6 +662,8 @@ func bigIntToIP(ipInt *big.Int) net.IP {
 	return net.IP(bytes)
 }
 
+type cidrFinderFunc func(startIP, endIP net.IP) (string, string)
+
 // findSmallestSingleCIDR finds the smallest CIDR block that fully covers the given range.
 // It returns the "<IP>/<CIDR>" and the "<CIDR>".
 func findSmallestSingleCIDR(startIP, endIP net.IP) (string, string) {
@@ -681,37 +694,57 @@ func findSmallestSingleCIDR(startIP, endIP net.IP) (string, string) {
 	return "", ""
 }
 
-func setStaticIP(logger *zap.SugaredLogger, ifaceName string, gateway, thisIp net.IP, cidrBlock int, dns []string) error {
+func setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig, fnFinder cidrFinderFunc) error {
 	// nmcli dev mod eth0 ipv4.method manual ipv4.gateway "192.168.1.254" ipv4.addr "192.168.1.230/24" ipv4.dns "8.8.8.8 1.1.1.1"
+	if cfg == nil {
+		return fmt.Errorf("no config provided")
+	}
+
+	_, cidr := fnFinder(cfg.LowerBound, cfg.UpperBound)
+
 	cmd := "nmcli"
 	args := []string{"dev", "mod", ifaceName,
 		"ipv4.method", "manual",
-		"ipv4.gateway", gateway.To4().String(),
-		"ipv4.addr", thisIp.To4().String() + "/" + strconv.Itoa(cidrBlock),
-		"ipv4.dns", strings.Join(dns, " "),
+		"ipv4.gateway", cfg.DefaultGateway.To4().String(),
+		"ipv4.addr", cfg.ThisGateway.To4().String() + "/" + cidr,
+		"ipv4.dns", strings.Join(cfg.DNSIPs, " "),
 	}
 	output, err := exec.Command(cmd, args...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("error setting static IP: %v: %v", output, err)
+		return fmt.Errorf("error setting static IP: %v: %v", string(output), err)
 	}
-	logger.Infof("static IP for %v set successfully: %v", ifaceName, output)
+	logger.Infof("static IP set: %v", string(output))
 	return nil
 }
 
 func unsetStaticIP(logger *zap.SugaredLogger, ifaceName string) error {
-	// nmcli dev mod eth0 ipv4.method auto ipv4.gateway "" ipv4.addr "" ipv4.dns ""
 	cmd := "nmcli"
-	args := []string{"dev", "mod", ifaceName,
+
+	// Cleanup
+	// nmcli dev mod eth0 ipv4.method auto ipv4.gateway "" ipv4.addr "" ipv4.dns ""
+	argsCleanup := []string{"dev", "mod", ifaceName,
 		"ipv4.method", "auto",
 		"ipv4.gateway", "",
 		"ipv4.addr", "",
 		"ipv4.dns", "",
+
 	}
-	output, err := exec.Command(cmd, args...).CombinedOutput()
+	output, err := exec.Command(cmd, argsCleanup...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("error unsetting static IP: %v: %v", output, err)
+		return fmt.Errorf("error unsetting static IP: %v: %v", string(output), err)
 	}
-	logger.Infof("static IP for %v unset successfully: %v", ifaceName, output)
+
+	// Apply
+	// nmcli dev up eth0
+	argsUp := []string{
+		"dev", "up", ifaceName,
+	}
+	output, err = exec.Command(cmd, argsUp...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error unsetting static IP: %v: %v", string(output), err)
+	}
+
+	logger.Infof("static IP unset: %v", string(output))
 	return nil
 }
 
