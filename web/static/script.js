@@ -406,13 +406,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // List the devices in the group.
             const macList = document.createElement('ul');
-            grouped[groupName].forEach(({ mac, name }) => {
+            grouped[groupName].forEach(({mac, name}) => {
                 const listItem = document.createElement('li');
                 const label = document.createElement('span');
                 label.textContent = `${mac.replace(/^:/g, '')} - ${name}`;
+                label.style.paddingRight = '10px'; // add space before the button
                 const lastActiveTimestamp = usage.activity && usage.activity[mac];
                 if (lastActiveTimestamp) {
-                    label.textContent += ` active ${formatTimeSince(lastActiveTimestamp)}`;
+                    const activeTimeSpan = document.createElement('span');
+                    activeTimeSpan.classList.add('group-config-info');
+                    activeTimeSpan.textContent = ` active ${formatTimeSince(lastActiveTimestamp)}`;
+                    label.appendChild(activeTimeSpan);
                 }
                 const removeBtn = document.createElement('button');
                 removeBtn.textContent = 'Remove';

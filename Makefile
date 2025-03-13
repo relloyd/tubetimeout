@@ -41,7 +41,7 @@ install-and-restart: stop install start
 	@echo Done.
 
 sync:
-	rsync -auv --delete-after ./ root@tubetimeout:tubetimeout/
+	rsync -auv --delete-after ./ root@tubetimeout.local:tubetimeout/
 
 docker:
 	# Build docker image for local testing of nftables which is not available on MacOS
