@@ -10,4 +10,5 @@ func CheckCmdAvailability(cmd string) error {
 	if err != nil {
 		return fmt.Errorf("%v command not found on the system: %w", cmd, err)
 	}
+	return nil
 }
