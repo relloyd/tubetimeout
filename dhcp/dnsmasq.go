@@ -52,6 +52,10 @@ func (m *MACAddress) UnmarshalText(text []byte) error {
 	return nil
 }
 
+func (m *MACAddress) String() string {
+	return net.HardwareAddr(*m).String()
+}
+
 type Server struct{}
 
 type systemctlAction string
@@ -610,7 +614,7 @@ func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper
 	lines = append(lines, "# static IP reservations")
 	lines = append(lines, fmt.Sprintf(reservationsPattern, thisGatewayHardwareAddress, thisGateway, "this gateway"))
 	for _, r := range reservations {
-		lines = append(lines, fmt.Sprintf(reservationsPattern, r.MacAddr, r.IpAddr, r.Name))
+		lines = append(lines, fmt.Sprintf(reservationsPattern, r.MacAddr.String(), r.IpAddr, r.Name))
 	}
 
 	// Custom exclusions to use the default gw:
