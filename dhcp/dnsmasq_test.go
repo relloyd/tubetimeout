@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
-	"relloyd/tubetimeout/models"
 )
 
 func TestNewServer(t *testing.T) {
@@ -149,13 +148,15 @@ func TestSetConfig_WritesToFile(t *testing.T) {
 
 	// Create a sample config with a known value.
 	sampleCfg := &DNSMasqConfig{
-		mu:                  &sync.Mutex{},
-		DefaultGateway:      net.ParseIP("192.168.1.1"),
-		ThisGateway:         net.ParseIP("192.168.1.2"),
-		LowerBound:          net.ParseIP("192.168.1.3"),
-		UpperBound:          net.ParseIP("192.168.1.254"),
-		AddressReservations: []string{"192.168.1.10"},
-		ServiceEnabled:      true,
+		mu:             &sync.Mutex{},
+		DefaultGateway: net.ParseIP("192.168.1.1"),
+		ThisGateway:    net.ParseIP("192.168.1.2"),
+		LowerBound:     net.ParseIP("192.168.1.3"),
+		UpperBound:     net.ParseIP("192.168.1.254"),
+		AddressReservations: []Reservation{
+			{MacAddr: []byte{}, IpAddr: net.ParseIP("192.168.1.10")},
+		},
+		ServiceEnabled: true,
 	}
 
 	// Call SetConfig and ensure no error is returned.
@@ -163,9 +164,9 @@ func TestSetConfig_WritesToFile(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Read back the file contents.
-	bytes, err := os.ReadFile(tmpFile.Name())
+	b, err := os.ReadFile(tmpFile.Name())
 	assert.NoError(t, err)
-	content := string(bytes)
+	content := string(b)
 
 	// Check that the content has at least one known value from the config.
 	// (For example, our DefaultGateway should be present.)
@@ -550,13 +551,17 @@ func TestGenerateDnsmasqConfig(t *testing.T) {
 	subnetLower := net.ParseIP("192.168.1.10")
 	subnetUpper := net.ParseIP("192.168.1.100")
 	thisGatewayHardwareAddr := net.HardwareAddr{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}.String()
-	reservations := []string{"192.168.1.50", "192.168.1.60"}
-	namedMACs := []models.NamedMAC{
-		{MAC: "dc:a6:32:68:47:ea", Name: "Device1"},
-		{MAC: "dc:a6:32:68:47:e9", Name: ""},
+	reservations := []Reservation{
+		{MacAddr: MACAddress{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, IpAddr: net.ParseIP("192.168.1.50"), Name: "test1"},
+		{MacAddr: MACAddress{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, IpAddr: net.ParseIP("192.168.1.60"), Name: "test2"},
 	}
 
-	generatedConfig, err := generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper, thisGatewayHardwareAddr, fallbackDNSIPs, reservations, namedMACs)
+	// namedMACs := []models.NamedMAC{
+	// 	{MAC: "dc:a6:32:68:47:ea", Name: "Device1"},
+	// 	{MAC: "dc:a6:32:68:47:e9", Name: ""},
+	// }
+
+	generatedConfig, err := generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper, thisGatewayHardwareAddr, fallbackDNSIPs, reservations)
 	assert.NoError(t, err, "generateDnsmasqConfig should not return an error")
 
 	expectedLines := []string{
@@ -570,13 +575,15 @@ func TestGenerateDnsmasqConfig(t *testing.T) {
 		"server=8.8.8.8",
 		"",
 		"# static IP reservations",
-		"dhcp-host=00:00:00:00:00:00,192.168.1.2",
-		"",
-		"dhcp-option=tag:customgw,option:router,192.168.1.2 # this gateway",
-		"dhcp-host=dc:a6:32:68:47:ea,set:customgw # Device1",
-		"dhcp-host=dc:a6:32:68:47:e9,set:customgw # un-named",
-		"",
+		"dhcp-host=00:00:00:00:00:00,192.168.1.2 # this gateway",
+		"dhcp-host=00:00:00:00:00:00,192.168.1.50 # test1",
+		"dhcp-host=00:00:00:00:00:00,192.168.1.60 # test2",
 	}
+
+	// "dhcp-option=tag:customgw,option:router,192.168.1.2 # this gateway",
+	// 	"dhcp-host=dc:a6:32:68:47:ea,set:customgw # Device1",
+	// 	"dhcp-host=dc:a6:32:68:47:e9,set:customgw # un-named",
+	// 	"",
 
 	expectedConfig := strings.Join(expectedLines, "\n")
 	if generatedConfig != expectedConfig {

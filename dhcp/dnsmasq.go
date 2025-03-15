@@ -17,11 +17,49 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/insomniacslk/dhcp/dhcpv4"
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
-	"relloyd/tubetimeout/models"
+)
 
-	"github.com/insomniacslk/dhcp/dhcpv4"
+type DNSMasqConfig struct {
+	mu                  *sync.Mutex
+	DefaultGateway      net.IP        `yaml:"defaultGateway"`
+	ThisGateway         net.IP        `yaml:"thisGateway"`
+	LowerBound          net.IP        `yaml:"lowerBound"`
+	UpperBound          net.IP        `yaml:"upperBound"`
+	DnsIPs              []string      `yaml:"dnsIPs"`
+	AddressReservations []Reservation `yaml:"addressReservations"`
+	ServiceEnabled      bool          `yaml:"serviceEnabled"`
+}
+
+type Reservation struct {
+	MacAddr MACAddress `yaml:"macAddr"`
+	IpAddr  net.IP           `yaml:"ipAddr"`
+	Name    string           `yaml:"name"`
+}
+
+// MACAddress is a wrapper around net.HardwareAddr to support custom YAML unmarshalling.
+type MACAddress net.HardwareAddr
+
+// UnmarshalText implements the encoding.TextUnmarshaler interface.
+func (m *MACAddress) UnmarshalText(text []byte) error {
+	addr, err := net.ParseMAC(string(text))
+	if err != nil {
+		return fmt.Errorf("failed to parse MAC address %q: %w", text, err)
+	}
+	*m = MACAddress(addr)
+	return nil
+}
+
+type Server struct{}
+
+type systemctlAction string
+
+const (
+	systemctlStop    = "stop"
+	systemctlStart   = "start"
+	systemctlRestart = "restart"
 )
 
 var (
@@ -39,14 +77,21 @@ var (
 )
 
 func init() {
-	cmd := "nmcli"
-	err := config.CheckCmdAvailability(cmd)
-	if err != nil {
-		config.MustGetLogger().Fatalf("Error: %v. Please ensure the '%v' command is installed and available on your PATH.", cmd, err)
+	if runtime.GOOS == "linux" {
+		cmd := "nmcli"
+		err := config.CheckCmdAvailability(cmd)
+		if err != nil {
+			config.MustGetLogger().Fatalf("Error: %v. Please ensure the '%v' command is installed and available on your PATH.", cmd, err)
+		}
 	}
 }
 
-type Server struct{}
+func newDNSMasqConfig() *DNSMasqConfig {
+	return &DNSMasqConfig{
+		mu:                  &sync.Mutex{},
+		AddressReservations: make([]Reservation, 0),
+	}
+}
 
 func NewServer() (*Server, error) {
 	var err error
@@ -122,34 +167,6 @@ func (s *Server) Stop() error {
 	return setDnsmasqServiceState(systemctlStop)
 }
 
-type systemctlAction string
-
-const (
-	systemctlStop    = "stop"
-	systemctlStart   = "start"
-	systemctlRestart = "restart"
-)
-
-// type IfaceAddrGetterFunc func(ifaceName string) (net.IP, error)
-
-type DNSMasqConfig struct {
-	mu                  *sync.Mutex
-	DefaultGateway      net.IP   `json:"defaultGateway"`
-	ThisGateway         net.IP   `json:"thisGateway"`
-	LowerBound          net.IP   `json:"subnetRangeLowerIP"`
-	UpperBound          net.IP   `json:"subnetRangeUpperIP"`
-	DNSIPs              []string `json:"dnsIPs"`
-	AddressReservations []string `json:"addressReservations"`
-	ServiceEnabled      bool     `json:"serviceEnabled"`
-}
-
-func newDNSMasqConfig() *DNSMasqConfig {
-	return &DNSMasqConfig{
-		mu:                  &sync.Mutex{},
-		AddressReservations: make([]string, 0),
-	}
-}
-
 func defaultRouteCmd() (string, error) {
 	output, err := exec.Command("netstat", routeCmdArgs...).Output() // -n: show numerical addresses, -a: show all hosts
 	return string(output), err
@@ -196,8 +213,8 @@ func GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
 		}
 	}
 
-	if len(cfg.DNSIPs) == 0 {
-		cfg.DNSIPs = fallbackDNSIPs
+	if len(cfg.DnsIPs) == 0 {
+		cfg.DnsIPs = fallbackDNSIPs
 	}
 
 	// Set the package global variable to the new value.
@@ -230,10 +247,10 @@ func SetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 		if cfg.UpperBound == nil || cfg.UpperBound.To4() == nil {
 			return fmt.Errorf("invalid or missing UpperBound")
 		}
-		if len(cfg.DNSIPs) == 0 {
-			cfg.DNSIPs = fallbackDNSIPs
+		if len(cfg.DnsIPs) == 0 {
+			cfg.DnsIPs = fallbackDNSIPs
 		} else {
-			for _, dnsIP := range cfg.DNSIPs {
+			for _, dnsIP := range cfg.DnsIPs {
 				if net.ParseIP(dnsIP).To4() == nil {
 					return fmt.Errorf("invalid DNS IP: %s", dnsIP)
 				}
@@ -322,7 +339,9 @@ func isDHCPServerRunning(logger *zap.SugaredLogger, mac net.HardwareAddr) (bool,
 	if err != nil {
 		return false, fmt.Errorf("failed to bind to UDP port 68: %v", err)
 	}
-	defer conn.Close()
+	defer func(conn net.PacketConn) {
+		_ = conn.Close()
+	}(conn)
 
 	// Create a DHCP DISCOVER message with broadcast option.
 	msg, err := dhcpv4.NewDiscovery(mac, dhcpv4.WithBroadcast(true))
@@ -562,7 +581,7 @@ func chooseIPFromBottom(lower, upper net.IP) (chosenIP, newLower, newUpper net.I
 }
 
 // generateDnsmasqConfig builds the full dnsmasq configuration as a string.
-func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper net.IP, thisGatewayHardwareAddress string, dnsIPS []string, reservations []string, namedMACs []models.NamedMAC) (string, error) {
+func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper net.IP, thisGatewayHardwareAddress string, dnsIPS []string, reservations []Reservation) (string, error) {
 	// Global configuration settings.
 	if len(dnsIPS) != 2 {
 		return "", fmt.Errorf("expected two DNS IPs: %v", dnsIPS)
@@ -587,22 +606,25 @@ func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper
 	// dhcp-host=58:ef:68:e5:f5:8c,192.168.1.55
 
 	// Reserve an IP for thisGateway.
+	reservationsPattern := "dhcp-host=%v,%v # %v"
 	lines = append(lines, "# static IP reservations")
-	lines = append(lines, fmt.Sprintf("dhcp-host=%v,%v", thisGatewayHardwareAddress, thisGateway))
-	lines = append(lines, "")
-
-	// Configure a tag to use for custom host entries for each supplied known MAC; assign a tag and set a custom router.
-	// TODO: consider given the real gateway to MACs not explicitly configured to use tubetimeout.
-	lines = append(lines, fmt.Sprintf("dhcp-option=tag:customgw,option:router,%s # this gateway", thisGateway))
-	for _, v := range namedMACs {
-		name := v.Name
-		if name == "" {
-			name = "un-named"
-		}
-		lines = append(lines, fmt.Sprintf("dhcp-host=%s,set:customgw # %v", v.MAC, name))
+	lines = append(lines, fmt.Sprintf(reservationsPattern, thisGatewayHardwareAddress, thisGateway, "this gateway"))
+	for _, r := range reservations {
+		lines = append(lines, fmt.Sprintf(reservationsPattern, r.MacAddr, r.IpAddr, r.Name))
 	}
 
-	lines = append(lines, "")
+	// Custom exclusions to use the default gw:
+	// TODO: consider given the real gateway to MACs not explicitly configured to use tubetimeout.
+	// Configure a tag to use for custom host entries for each supplied known MAC; assign a tag and set a custom router.
+	// lines = append(lines, fmt.Sprintf("dhcp-option=tag:customgw,option:router,%s # this gateway", thisGateway))
+	// for _, v := range namedMACs {
+	// 	name := v.Name
+	// 	if name == "" {
+	// 		name = "un-named"
+	// 	}
+	// 	lines = append(lines, fmt.Sprintf("dhcp-host=%s,set:customgw # %v", v.MAC, name))
+	// }
+	// lines = append(lines, "")
 
 	return strings.Join(lines, "\n"), nil
 }
@@ -627,7 +649,7 @@ func startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 		return fmt.Errorf("error fetching hardware address for net adapter %v: %v", defaultInterfaceName, err)
 	}
 
-	dat, err := generateDnsmasqConfig(cfg.DefaultGateway, cfg.ThisGateway, cfg.LowerBound, cfg.UpperBound, hwAddr.String(), cfg.DNSIPs, nil, nil)
+	dat, err := generateDnsmasqConfig(cfg.DefaultGateway, cfg.ThisGateway, cfg.LowerBound, cfg.UpperBound, hwAddr.String(), cfg.DnsIPs, cfg.AddressReservations)
 	if err != nil {
 		return fmt.Errorf("error generating dnsmasq config: %v", err)
 	}
@@ -656,14 +678,14 @@ func ipToBigInt(ip net.IP) *big.Int {
 
 // bigIntToIP converts a big.Int to an IP address
 func bigIntToIP(ipInt *big.Int) net.IP {
-	bytes := ipInt.Bytes()
-	if len(bytes) < 16 {
+	b := ipInt.Bytes()
+	if len(b) < 16 {
 		// Pad to 16 bytes for IPv6
 		padded := make([]byte, 16)
-		copy(padded[16-len(bytes):], bytes)
-		bytes = padded
+		copy(padded[16-len(b):], b)
+		b = padded
 	}
-	return net.IP(bytes)
+	return net.IP(b)
 }
 
 type cidrFinderFunc func(startIP, endIP net.IP) (string, string)
@@ -711,7 +733,7 @@ func setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig
 		"ipv4.method", "manual",
 		"ipv4.gateway", cfg.DefaultGateway.To4().String(),
 		"ipv4.addr", cfg.ThisGateway.To4().String() + "/" + cidr,
-		"ipv4.dns", strings.Join(cfg.DNSIPs, " "),
+		"ipv4.dns", strings.Join(cfg.DnsIPs, " "),
 	}
 	output, err := exec.Command(cmd, args...).CombinedOutput()
 	if err != nil {
@@ -731,7 +753,6 @@ func unsetStaticIP(logger *zap.SugaredLogger, ifaceName string) error {
 		"ipv4.gateway", "",
 		"ipv4.addr", "",
 		"ipv4.dns", "",
-
 	}
 	output, err := exec.Command(cmd, argsCleanup...).CombinedOutput()
 	if err != nil {
