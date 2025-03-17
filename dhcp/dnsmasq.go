@@ -35,8 +35,8 @@ type DNSMasqConfig struct {
 
 type Reservation struct {
 	MacAddr MACAddress `yaml:"macAddr"`
-	IpAddr  net.IP           `yaml:"ipAddr"`
-	Name    string           `yaml:"name"`
+	IpAddr  net.IP     `yaml:"ipAddr"`
+	Name    string     `yaml:"name"`
 }
 
 // MACAddress is a wrapper around net.HardwareAddr to support custom YAML unmarshalling.
@@ -725,6 +725,8 @@ func findSmallestSingleCIDR(startIP, endIP net.IP) (string, string) {
 }
 
 func setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig, fnFinder cidrFinderFunc) error {
+	logger = logger.With("mode", "setting static IP")
+
 	// nmcli dev mod eth0 ipv4.method manual ipv4.gateway "192.168.1.254" ipv4.addr "192.168.1.230/24" ipv4.dns "8.8.8.8 1.1.1.1"
 	if cfg == nil {
 		return fmt.Errorf("no config provided")
@@ -739,41 +741,45 @@ func setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig
 		"ipv4.addr", cfg.ThisGateway.To4().String() + "/" + cidr,
 		"ipv4.dns", strings.Join(cfg.DnsIPs, " "),
 	}
+	logger.Info("configuring device: ", cmd, strings.Join(args, ""))
 	output, err := exec.Command(cmd, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("error setting static IP: %v: %v", string(output), err)
 	}
-	logger.Infof("static IP set: %v", string(output))
+	logger.Infof("command output: %v", string(output))
 	return nil
 }
 
 func unsetStaticIP(logger *zap.SugaredLogger, ifaceName string) error {
+	logger = logger.With("mode", "unsetting static IP")
 	cmd := "nmcli"
 
 	// Cleanup
 	// nmcli dev mod eth0 ipv4.method auto ipv4.gateway "" ipv4.addr "" ipv4.dns ""
-	argsCleanup := []string{"dev", "mod", ifaceName,
+	args := []string{"dev", "mod", ifaceName,
 		"ipv4.method", "auto",
 		"ipv4.gateway", "",
 		"ipv4.addr", "",
 		"ipv4.dns", "",
 	}
-	output, err := exec.Command(cmd, argsCleanup...).CombinedOutput()
+	logger.Info("configuring device: ", cmd, strings.Join(args, ""))
+	output, err := exec.Command(cmd, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("error unsetting static IP: %v: %v", string(output), err)
 	}
 
 	// Apply
 	// nmcli dev up eth0
-	argsUp := []string{
+	args = []string{
 		"dev", "up", ifaceName,
 	}
-	output, err = exec.Command(cmd, argsUp...).CombinedOutput()
+	logger.Info("upping device: ", cmd, strings.Join(args, ""))
+	output, err = exec.Command(cmd, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("error unsetting static IP: %v: %v", string(output), err)
 	}
 
-	logger.Infof("static IP unset: %v", string(output))
+	logger.Infof("command output: %v", string(output))
 	return nil
 }
 
