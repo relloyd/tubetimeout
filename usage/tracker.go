@@ -129,6 +129,7 @@ func getDefaultGroupTrackerConfig(t *models.TrackerConfig) *models.TrackerConfig
 }
 
 func newDeviceData(now time.Time, cfg *models.TrackerConfig) *deviceData {
+	// TODO: support more that 7*24h retention windows!
 	if cfg.Retention > 7*24*time.Hour {
 		cfg.Retention = 7 * 24 * time.Hour
 	}
@@ -147,8 +148,10 @@ func newDeviceData(now time.Time, cfg *models.TrackerConfig) *deviceData {
 
 	cfg.SampleSize = getSampleSize(cfg)
 
+	cfgCopy := *cfg
+
 	dd := &deviceData{
-		config:  cfg,
+		config:  &cfgCopy,
 		mu:      &sync.Mutex{},
 		samples: make([]bool, cfg.SampleSize),
 		// windowStartTime is set below
@@ -189,10 +192,17 @@ func (t *Tracker) AddSample(id string, active bool) {
 
 	if loaded {
 		// Ensure the config is up to date.
-		dd.config = cfg
 		if dd.config.SampleSize != cfg.SampleSize { // if the tracker size has changed...
+			// Reset the samples to zero usage.
 			t.logger.Info("Tracker sample size changed for group %v, resetting now", id)
-			dd.samples = make([]bool, cfg.SampleSize) // reset the samples to zero usage.
+			mode := dd.config.Mode // preserve values
+			modeEnd := dd.config.ModeEndTime
+			dd = newDeviceData(now, cfg)
+			dd.config.Mode = mode
+			dd.config.ModeEndTime = modeEnd
+			t.devices.Store(id, dd)
+			dd.mu.Lock()
+			defer dd.mu.Unlock()
 		}
 		// TODO: test that latest config is set.
 		// TODO: test that samples are reset when the tracker config changes.

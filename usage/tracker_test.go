@@ -292,6 +292,65 @@ func TestAddSample_GroupDefaults(t *testing.T) {
 	assert.Equal(t, cfg.Retention, dd.config.Retention, "AddSample did not use the default retention")
 }
 
+func TestAddSample_ChangeSampleSize(t *testing.T) {
+	ctx := context.Background()
+	logger := config.MustGetLogger()
+
+	fnGetGroupTrackerConfig = func(mu *sync.Mutex, configPath string, _ func() models.MapGroupTrackerConfig) (models.MapGroupTrackerConfig, error) {
+		return models.MapGroupTrackerConfig{}, nil
+	}
+
+	mockDeviceID := "test-device"
+	savedTime := time.Now().Add(1 * time.Hour)
+
+	// Setup defaults.
+	cfg := &models.TrackerConfig{
+		Retention:   2 * time.Minute, // use a different Retention value to cfgGroups so we can check that defaults are used.
+		Granularity: 1 * time.Minute,
+		Threshold:   1 * time.Minute,
+		Mode:        models.ModeMonitor,
+	}
+
+	tracker, err := NewTracker(ctx, logger, cfg)
+	assert.NoError(t, err, "NewTracker failed")
+
+	// Setup groups so we can test regeneration of samples.
+	tracker.cfgGroups = models.MapGroupTrackerConfig{
+		models.Group(mockDeviceID): &models.TrackerConfig{
+			Retention:   3 * time.Hour, // pick a large number that's easy to debug
+			Granularity: 1 * time.Minute,
+			Threshold:   1 * time.Minute,
+			Mode:        models.ModeMonitor,
+		},
+	}
+
+	// Add a sample to store newDeviceData.
+	tracker.AddSample(mockDeviceID, true)
+
+	// Get the sample size.
+	d, ok := tracker.devices.Load(mockDeviceID)
+	assert.True(t, ok, "AddSample found the deviceData")
+	dd := d.(*deviceData)
+	savedSampleSize := len(dd.samples)
+
+	// Reduce the retention for mockDeviceID to check the device data and samples are remade.
+	tracker.cfgGroups[models.Group(mockDeviceID)].Retention = 5 * time.Minute  // pick a smaller number that's easy to debug
+	dd.config.Mode = models.ModeAllow
+	dd.config.ModeEndTime = savedTime
+
+	// Add a sample and expect samples to be remade with correct size.
+	tracker.AddSample(mockDeviceID, true)
+
+	// Compare sample sizes.
+	d, ok = tracker.devices.Load(mockDeviceID)
+	assert.True(t, ok, "AddSample found the deviceData")
+	dd = d.(*deviceData)
+	assert.NotEqual(t, savedSampleSize, len(dd.samples), "AddSample did not regenerate samples")
+	assert.Equal(t, getSampleSize(tracker.cfgGroups[models.Group(mockDeviceID)]), len(dd.samples), "AddSample did not recreate samples at the correct length")
+	assert.Equal(t, models.ModeAllow, dd.config.Mode, "AddSample did not retain the mode correctly")
+	assert.Equal(t, savedTime, dd.config.ModeEndTime, "AddSample did not retain the mode end time correctly")
+}
+
 func TestAddSample_SamplesAreSaved(t *testing.T) {
 	ctx := context.Background()
 
