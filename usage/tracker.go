@@ -205,7 +205,6 @@ func (t *Tracker) AddSample(id string, active bool) {
 			defer dd.mu.Unlock()
 		}
 		// TODO: test that latest config is set.
-		// TODO: test that samples are reset when the tracker config changes.
 	}
 
 	if active && dd.config.Mode == models.ModeMonitor { // if the group is active and the tracker is not paused...
