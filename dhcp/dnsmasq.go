@@ -741,7 +741,7 @@ func setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig
 		"ipv4.addr", cfg.ThisGateway.To4().String() + "/" + cidr,
 		"ipv4.dns", strings.Join(cfg.DnsIPs, " "),
 	}
-	logger.Info("configuring device: ", cmd, strings.Join(args, ""))
+	logger.Info("configuring device: ", cmd, strings.Join(args, " "))
 	output, err := exec.Command(cmd, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("error setting static IP: %v: %v", string(output), err)
@@ -762,7 +762,7 @@ func unsetStaticIP(logger *zap.SugaredLogger, ifaceName string) error {
 		"ipv4.addr", "",
 		"ipv4.dns", "",
 	}
-	logger.Info("configuring device: ", cmd, strings.Join(args, ""))
+	logger.Info("configuring device: ", cmd, strings.Join(args, " "))
 	output, err := exec.Command(cmd, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("error unsetting static IP: %v: %v", string(output), err)

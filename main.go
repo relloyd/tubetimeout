@@ -78,8 +78,8 @@ func main() {
 
 	logger.Infof("Build version %v", config.BuildVersion)
 
-	// Recovery
-	defer recoverFunc(logger)
+	// Recovery.
+	defer recoverFunc(logger.Desugar())
 
 	// Cleanup functions.
 	var cleanupFuncs []cleanupFunc
