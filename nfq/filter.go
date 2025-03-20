@@ -36,7 +36,7 @@ type NFQueueFilter struct {
 // If the packets are destined for any of the injected Ips then filtering happens based on
 // <LOGIC-TBC>
 // TODO: unit test captuing two NFQs to ensure they are both created and running.
-func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *config.FilterConfig, ut models.TrackerI, gm group.ManagerI, tc monitor.TrafficCounter) (*NFQueueFilter, error) {
+func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *config.FilterConfig, ut models.TrackerI, gm group.ManagerI, tc monitor.TrafficCounter, fnRecover func(logger *zap.Logger)) (*NFQueueFilter, error) {
 	var err error
 
 	if cfg.PacketDropPercentage < 0 || cfg.PacketDropPercentage > 1 {
@@ -61,12 +61,12 @@ func NewNFQueueFilter(ctx context.Context, logger *zap.SugaredLogger, cfg *confi
 	f.ut = ut
 	f.tc = tc
 
-	nfq1, err := f.startNFQueueFilter(ctx, cfg, cfg.OutboundQueueNumber, models.Egress)
+	nfq1, err := f.startNFQueueFilter(ctx, cfg, cfg.OutboundQueueNumber, models.Egress, fnRecover)
 	if err != nil {
 		return nil, err
 	}
 
-	nfq2, err := f.startNFQueueFilter(ctx, cfg, cfg.InboundQueueNumber, models.Ingress)
+	nfq2, err := f.startNFQueueFilter(ctx, cfg, cfg.InboundQueueNumber, models.Ingress, fnRecover)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func acceptPacket(logger *zap.Logger, nf *nfqueue.Nfqueue, id uint32) {
 	}
 }
 
-func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.FilterConfig, queueNumber uint16, direction models.Direction) (*nfqueue.Nfqueue, error) {
+func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.FilterConfig, queueNumber uint16, direction models.Direction, fnRecover func(logger *zap.Logger)) (*nfqueue.Nfqueue, error) {
 	// Open a new NFQueue
 	nf, err := nfqueue.Open(&nfqueue.Config{
 		NetNS:        0,
@@ -110,6 +110,8 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 	}
 
 	fnPacketHandler := func(a nfqueue.Attribute) int {
+		defer fnRecover(f.logger)
+
 		var retval = 0 // 0 to continue the loop; 1 to exit cleanly; -1 to stop receiving messages
 
 		id := *a.PacketID

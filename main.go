@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 	"time"
 
@@ -56,6 +57,15 @@ func handleDebugging(logger *zap.SugaredLogger, appCfg *config.DebugConfig) {
 	}
 }
 
+func recoverFunc(logger *zap.Logger) {
+	if r := recover(); r != nil {
+		logger.Error("Recovered from panic",
+			zap.Any("message", r),
+			zap.String("stack", string(debug.Stack())),
+		)
+	}
+}
+
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -67,6 +77,9 @@ func main() {
 	}(logger)
 
 	logger.Infof("Build version %v", config.BuildVersion)
+
+	// Recovery
+	defer recoverFunc(logger)
 
 	// Cleanup functions.
 	var cleanupFuncs []cleanupFunc
@@ -130,7 +143,7 @@ func main() {
 	logger.Info("Destinations mapped")
 
 	// NFQueue to process packets in user space.
-	q, err := nfq.NewNFQueueFilter(ctx, logger, &config.AppCfg.FilterConfig, t, mgr, trafficMap)
+	q, err := nfq.NewNFQueueFilter(ctx, logger, &config.AppCfg.FilterConfig, t, mgr, trafficMap, recoverFunc)
 	if err != nil {
 		logger.Fatalln("Failed to setup NFQueue filter:", err)
 	}

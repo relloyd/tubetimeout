@@ -40,6 +40,7 @@ func loadSamples(path string) (*sync.Map, error) {
 				Threshold:     config.AppCfg.TrackerConfig.Threshold,
 				StartDayInt:   config.AppCfg.TrackerConfig.StartDayInt,
 				StartDuration: config.AppCfg.TrackerConfig.StartDuration,
+				SampleSize:    getSampleSize(&config.AppCfg.TrackerConfig),
 				Mode:          models.ModeMonitor,
 				ModeEndTime:   time.Time{},
 			} // set starter values.
