@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/group"
 	"relloyd/tubetimeout/models"
@@ -40,7 +41,11 @@ func TestNewNFQueueFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewNFQueueFilter(context.Background(), config.MustGetLogger(), tt.args.cfg, tt.args.t, tt.args.m, tt.args.c)
+			_, err := NewNFQueueFilter(context.Background(), config.MustGetLogger(), tt.args.cfg, tt.args.t, tt.args.m, tt.args.c,
+				func(*zap.Logger) {
+					return
+				},
+			)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewNFQueueFilter() error = %v, wantErr %v", err, tt.wantErr)
 				return
