@@ -18,6 +18,7 @@ var embeddedFiles embed.FS
 type TemplateData struct {
 	BuildTime    string
 	BuildVersion string
+	StartTime    string
 }
 
 type GroupMACsGroupGetterSetter interface {
@@ -46,6 +47,7 @@ type DHCPConfigGetterSetter interface {
 
 type Handler struct {
 	logger                 *zap.SugaredLogger
+	startTime              time.Time
 	groupMACsGetterSetter  GroupMACsGroupGetterSetter
 	usageTracker           UsageTracker
 	monitor                Monitor
@@ -53,7 +55,7 @@ type Handler struct {
 }
 
 func NewServer(logger *zap.SugaredLogger, ut UsageTracker, gm GroupMACsGroupGetterSetter, m Monitor, d DHCPConfigGetterSetter) *http.Server {
-	h := Handler{logger: logger, usageTracker: ut, groupMACsGetterSetter: gm, monitor: m, dhcpConfigGetterSetter: d}
+	h := Handler{logger: logger, startTime: time.Now(), usageTracker: ut, groupMACsGetterSetter: gm, monitor: m, dhcpConfigGetterSetter: d}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", h.rootHandler)
 	mux.HandleFunc("/static/", h.staticHandler)

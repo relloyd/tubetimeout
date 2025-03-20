@@ -27,6 +27,7 @@ func (h *Handler) rootHandler(w http.ResponseWriter, r *http.Request) {
 	td := TemplateData{
 		BuildTime:    config.BuildTime,
 		BuildVersion: config.BuildVersion,
+		StartTime:    h.startTime.Format(time.RFC822),
 	}
 
 	tmpl.Option("missingkey=default") // TODO: fix the error when keys are missing.
