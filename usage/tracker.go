@@ -411,7 +411,7 @@ func (t *Tracker) GetModeEndTime(id string) (models.TrackerMode, error) {
 // validateGroupTrackerConfig contains the validation and sanitization logic.
 func validateGroupTrackerConfig(cfg models.MapGroupTrackerConfig) error {
 	for k, v := range cfg {
-		if k == "" || v == nil {
+		if k == "" || v == nil { // if there is a bad key...
 			delete(cfg, k)
 		} else {
 			v.Granularity = config.AppCfg.TrackerConfig.Granularity // always keep the default granularity
@@ -433,6 +433,7 @@ func validateGroupTrackerConfig(cfg models.MapGroupTrackerConfig) error {
 				v.Mode = models.ModeMonitor
 				v.ModeEndTime = time.Time{}.UTC()
 			}
+			v.SampleSize = getSampleSize(v)
 		}
 		// Remove bad characters from the map by replacing the keys.
 		cleanGroup := models.Group(models.NewGroup(string(k))) // sanitise the group name
@@ -442,7 +443,7 @@ func validateGroupTrackerConfig(cfg models.MapGroupTrackerConfig) error {
 		}
 	}
 	if len(cfg) == 0 {
-		return fmt.Errorf("no valid tracker config found")
+		return fmt.Errorf("group tracker config is empty")
 	}
 	return nil
 }

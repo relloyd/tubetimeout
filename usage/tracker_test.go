@@ -334,7 +334,7 @@ func TestAddSample_ChangeSampleSize(t *testing.T) {
 	savedSampleSize := len(dd.samples)
 
 	// Reduce the retention for mockDeviceID to check the device data and samples are remade.
-	tracker.cfgGroups[models.Group(mockDeviceID)].Retention = 5 * time.Minute  // pick a smaller number that's easy to debug
+	tracker.cfgGroups[models.Group(mockDeviceID)].Retention = 5 * time.Minute // pick a smaller number that's easy to debug
 	dd.config.Mode = models.ModeAllow
 	dd.config.ModeEndTime = savedTime
 
@@ -890,4 +890,34 @@ func TestTracker_SetMode(t *testing.T) {
 	assert.Equal(t, dd.config.Mode, groupData.Mode, "expected central group data mode to match the mode we set")
 	assert.Equal(t, dd.config.ModeEndTime, groupData.ModeEndTime, "expected mode end time to be set in the central group data")
 	assert.True(t, configWasSaved, "expected central group config to be saved")
+}
+
+// TestValidateGroupTrackerConfig_SampleSize ensures that validateGroupTrackerConfig
+// correctly sets the SampleSize value for each valid group.
+func TestValidateGroupTrackerConfig_SampleSize(t *testing.T) {
+	// Create a dummy TrackerConfig for the test group.
+	dummyConfig := &models.TrackerConfig{
+		Granularity:   5 * time.Minute,  // this is overridden to 1min
+		Retention:     60 * time.Minute,
+		Threshold:     1 * time.Minute,
+		StartDayInt:   1,
+		StartDuration: 0,
+		ModeEndTime:   time.Now().UTC().Add(time.Hour), // expires in one hour.
+		Mode:          models.ModeMonitor,
+		// SampleSize is expected to be set by validateGroupTrackerConfig.
+	}
+
+	// Create a map with one group entry.
+	cfg := models.MapGroupTrackerConfig{
+		"test-group": dummyConfig,
+	}
+
+	// Call validateGroupTrackerConfig.
+	err := validateGroupTrackerConfig(cfg)
+	assert.NoError(t, err)
+
+	// Assert that SampleSize has been set to the value returned by the test stub.
+	assert.Equal(t, 60, cfg["test-group"].SampleSize, "SampleSize should be set correctly by getSampleSize")
+
+	// TODO: test more of the validateGroupTrackerConfig() mutations.
 }

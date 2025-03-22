@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"time"
 
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
-	"relloyd/tubetimeout/models"
 )
 
 func loadSamples(path string) (*sync.Map, error) {
@@ -34,16 +32,7 @@ func loadSamples(path string) (*sync.Map, error) {
 	m := &sync.Map{}
 	for k, v := range loadedData {
 		if v.Config == nil { // if the samples file doesn't have tracker config persisted...
-			v.Config = &models.TrackerConfig{
-				Granularity:   config.AppCfg.TrackerConfig.Granularity,
-				Retention:     config.AppCfg.TrackerConfig.Retention,
-				Threshold:     config.AppCfg.TrackerConfig.Threshold,
-				StartDayInt:   config.AppCfg.TrackerConfig.StartDayInt,
-				StartDuration: config.AppCfg.TrackerConfig.StartDuration,
-				SampleSize:    getSampleSize(&config.AppCfg.TrackerConfig),
-				Mode:          models.ModeMonitor,
-				ModeEndTime:   time.Time{},
-			} // set starter values.
+			v.Config = getDefaultGroupTrackerConfig(&config.AppCfg.TrackerConfig) // set starter values.
 			// TODO: test for default TrackerConfig being set when loading samples files if it's not present. It's needed for window synchronisation.
 			//   TrackerConfig data will be set by the web interface eventually and should come before or at the same time as groupMAC data.
 			//   Remember that the web interface writes groupMAC data back to the API and tracker config data back to the API separately.
