@@ -192,7 +192,7 @@ func (t *Tracker) AddSample(id string, active bool) {
 
 	if loaded {
 		// Ensure the config is up to date.
-		if dd.config.SampleSize != cfg.SampleSize { // if the tracker size has changed...
+		if dd.config.SampleSize != cfg.SampleSize || dd.config.Threshold != cfg.Threshold { // if the tracker size or threshold has changed...
 			// Reset the samples to zero usage.
 			t.logger.Info("Tracker sample size changed for group %v, resetting now", id)
 			mode := dd.config.Mode // preserve values
@@ -345,6 +345,8 @@ func (t *Tracker) GetSummary() map[string]*models.TrackerSummary {
 			}
 			total++
 		}
+
+		t.logger.Debugf("Usage tracker summary for %v: %v samples seen (threshold %v)", k, count, dd.config.Threshold.Minutes())
 
 		usagePercent := int(float64(count) / dd.config.Threshold.Minutes() * 100) // TODO: test that summary data uses the local device data config not global config.AppCfg.
 		if usagePercent > 100 {

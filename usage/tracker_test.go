@@ -301,6 +301,7 @@ func TestAddSample_ChangeSampleSize(t *testing.T) {
 	}
 
 	mockDeviceID := "test-device"
+	mockDeviceIDThreshold := "test-device2"
 	savedTime := time.Now().Add(1 * time.Hour)
 
 	// Setup defaults.
@@ -349,6 +350,46 @@ func TestAddSample_ChangeSampleSize(t *testing.T) {
 	assert.Equal(t, getSampleSize(tracker.cfgGroups[models.Group(mockDeviceID)]), len(dd.samples), "AddSample did not recreate samples at the correct length")
 	assert.Equal(t, models.ModeAllow, dd.config.Mode, "AddSample did not retain the mode correctly")
 	assert.Equal(t, savedTime, dd.config.ModeEndTime, "AddSample did not retain the mode end time correctly")
+
+	// Change the threshold to check the samples are remade.
+	idx := 0
+	now := time.Now()
+	tracker.nowFunc = func() time.Time {
+		idx++
+		return now.Add(time.Duration(idx) * time.Minute)
+	}
+	// Setup groups so we can test regeneration of samples.
+	tracker.cfgGroups = models.MapGroupTrackerConfig{
+		models.Group(mockDeviceIDThreshold): &models.TrackerConfig{
+			Retention:   3 * time.Hour, // pick a large number that's easy to debug
+			Granularity: 1 * time.Minute,
+			Threshold:   1 * time.Minute,
+			Mode:        models.ModeMonitor,
+		},
+	}
+	tracker.AddSample(mockDeviceIDThreshold, true)
+	tracker.AddSample(mockDeviceIDThreshold, true)
+	count := countSamples(t, tracker, mockDeviceIDThreshold)
+	assert.Equal(t, 2, count, "AddSample did not regenerate samples")
+	// Cause config to be remade.
+	tracker.cfgGroups[models.Group(mockDeviceIDThreshold)].Threshold = 5 * time.Minute
+	tracker.AddSample(mockDeviceIDThreshold, true)
+	count = countSamples(t, tracker, mockDeviceIDThreshold)
+	assert.Equal(t, 1, count, "AddSample did not regenerate samples")
+
+}
+
+func countSamples(t *testing.T, tracker *Tracker, deviceID string) int {
+	d, ok := tracker.devices.Load(deviceID)
+	assert.True(t, ok, "could not load the deviceData")
+	dd := d.(*deviceData)
+	count := 0
+	for _, seen := range dd.samples {
+		if seen {
+			count++
+		}
+	}
+	return count
 }
 
 func TestAddSample_SamplesAreSaved(t *testing.T) {
@@ -897,7 +938,7 @@ func TestTracker_SetMode(t *testing.T) {
 func TestValidateGroupTrackerConfig_SampleSize(t *testing.T) {
 	// Create a dummy TrackerConfig for the test group.
 	dummyConfig := &models.TrackerConfig{
-		Granularity:   5 * time.Minute,  // this is overridden to 1min
+		Granularity:   5 * time.Minute, // this is overridden to 1min
 		Retention:     60 * time.Minute,
 		Threshold:     1 * time.Minute,
 		StartDayInt:   1,
