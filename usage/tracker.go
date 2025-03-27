@@ -204,7 +204,12 @@ func (t *Tracker) AddSample(id string, active bool) {
 			dd.mu.Lock()
 			defer dd.mu.Unlock()
 		}
+		// Update other attributes that don't affect retention or thresholds.
 		// TODO: test that latest config is set.
+		if cfg.StartDuration != dd.config.StartDuration || cfg.StartDayInt != dd.config.StartDayInt {
+			dd.config.StartDuration = cfg.StartDuration
+			dd.config.StartDayInt = cfg.StartDayInt
+		}
 	}
 
 	if active && dd.config.Mode == models.ModeMonitor { // if the group is active and the tracker is not paused...

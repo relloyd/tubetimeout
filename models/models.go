@@ -54,7 +54,7 @@ type TrackerConfig struct {
 	// StartDayInt is the day of the week to start the window.
 	StartDayInt int `yaml:"startDay" envconfig:"START_DAY" default:"5"` // Friday
 	// StartDuration is the duration past midnight to start the window.
-	StartDuration time.Duration `yaml:"startTime" envconfig:"START_TIME" default:"12h"` // 12 PM
+	StartDuration time.Duration `yaml:"startTime" envconfig:"START_TIME" default:"0h"` // 12 am
 	// SampleFilePath is the path to the file to save/read the device ID samples from.
 	SampleFilePath string `yaml:"-" envconfig:"FILE_PATH" default:"samples.json"`
 	// SampleFileSaveInterval is the interval at which the samples are saved to the file.
