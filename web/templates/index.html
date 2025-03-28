@@ -23,6 +23,37 @@
       <h1>Usage Trackers</h1>
       <div class="form-card">
         <div class="form-field">
+          <label for="default-gateway">Default Gateway</label>
+          <input id="default-gateway" type="text" placeholder="IP address" required>
+        </div>
+        <div class="form-field">
+          <label for="this-gateway">This Gateway</label>
+          <input id="this-gateway" type="text" placeholder="IP address" required>
+        </div>
+        <div class="form-field">
+          <label for="lower-bound">IP Range: Lower Address</label>
+          <input id="lower-bound" type="text" placeholder="IP address" required>
+        </div>
+        <div class="form-field">
+          <label for="upper-bound">IP Range: Upper Address </label>
+          <input id="upper-bound" type="text" placeholder="IP address" required>
+        </div>
+        <div class="form-field">
+          <label for="dns-ip1">DNS IP Address (Primary)</label>
+          <input id="dns-ip1" type="text" placeholder="IP address" required>
+        </div>
+        <div class="form-field">
+          <label for="dns-ip2">DNS IP Address (Secondary)</label>
+          <input id="dns-ip2" type="text" placeholder="IP address" required>
+        </div>
+        <div id="dhcp-address-reservations">
+        </div>
+      </div>
+    </div>
+    <div class="form-container">
+      <h1>Usage Trackers</h1>
+      <div class="form-card">
+        <div class="form-field">
           <label for="group-select">Tracker</label>
           <select id="group-select">
             <option value="">-- New Tracker --</option>
