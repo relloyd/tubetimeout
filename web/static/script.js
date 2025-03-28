@@ -18,6 +18,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let usageData = {};
     let availableMACs = [];
 
+    // Hide group-start-day select box when group-retention is set to 1 day.
+    const groupRetentionSelect = document.getElementById('group-retention');
+    const groupStartDayField = document.querySelector('label[for="group-start-day"]').parentElement;
+
     // ---------- Helper functions for AJAX requests ----------
     async function postData(url, data) {
         try {
@@ -192,8 +196,17 @@ document.addEventListener('DOMContentLoaded', () => {
         renderGroups();
         updateGroupSelect();
         updateDeviceGroupDropdown();
+        updateStartDayVisibility();
 
         updateAllGroupModes();
+    }
+
+    function updateStartDayVisibility() {
+        if (groupRetentionSelect.value === '1') {
+            groupStartDayField.style.display = 'none';
+        } else {
+            groupStartDayField.style.display = '';
+        }
     }
 
     // Fetch tracker configuration – ensure data is an array.
@@ -381,11 +394,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const retention = humaniseDuration(groupConfig.retention);
                 const threshold = humaniseDuration(groupConfig.threshold);
                 const startDurationHHMM = formatMinutes(durationToMinutes(groupConfig.startDuration));
-                configInfo.textContent = `Block group after ${threshold} usage.`
+                configInfo.textContent = `Block group after ${threshold} usage. `
                 if (groupConfig.retention >= daysToDuration(7)) {
                     configInfo.textContent += `Next reset on ${getDayName(groupConfig.startDay)} ${startDurationHHMM}`;
                 } else if (groupConfig.retention >= daysToDuration(1)){
-                    configInfo.textContent += `Next reset at ${startDurationHHMM}`;
+                    configInfo.textContent += `Reset daily at ${startDurationHHMM}`;
                 }
                 groupDiv.appendChild(configInfo);
             }
@@ -630,6 +643,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 startTimeInput.value = durationToTimeString(group.startDuration);
             }
         }
+        updateStartDayVisibility();
     });
 
     document.getElementById('save-tracker-btn').addEventListener('click', () => {
@@ -689,6 +703,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     };
 
+    groupRetentionSelect.addEventListener('change', updateStartDayVisibility);
     saveButton.addEventListener('click', saveConfig);
+
     fetchConfigAndRender();
 });
