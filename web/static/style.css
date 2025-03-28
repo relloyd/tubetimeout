@@ -348,6 +348,7 @@ button:hover {
 }
 
 .button-container-end {
+    padding: 15px 0 0 0;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;

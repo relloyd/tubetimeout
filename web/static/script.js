@@ -381,7 +381,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const retention = humaniseDuration(groupConfig.retention);
                 const threshold = humaniseDuration(groupConfig.threshold);
                 const startDurationHHMM = formatMinutes(durationToMinutes(groupConfig.startDuration));
-                configInfo.textContent = `Block group after ${threshold} usage. Next reset on ${getDayName(groupConfig.startDay)} ${startDurationHHMM}`;
+                configInfo.textContent = `Block group after ${threshold} usage.`
+                if (groupConfig.retention >= daysToDuration(7)) {
+                    configInfo.textContent += `Next reset on ${getDayName(groupConfig.startDay)} ${startDurationHHMM}`;
+                } else if (groupConfig.retention >= daysToDuration(1)){
+                    configInfo.textContent += `Next reset at ${startDurationHHMM}`;
+                }
                 groupDiv.appendChild(configInfo);
             }
 
