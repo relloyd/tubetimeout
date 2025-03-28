@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -24,36 +25,75 @@ import (
 
 type DNSMasqConfig struct {
 	mu                  *sync.Mutex
-	DefaultGateway      net.IP        `yaml:"defaultGateway"`
-	ThisGateway         net.IP        `yaml:"thisGateway"`
-	LowerBound          net.IP        `yaml:"lowerBound"`
-	UpperBound          net.IP        `yaml:"upperBound"`
-	DnsIPs              []string      `yaml:"dnsIPs"`
-	AddressReservations []Reservation `yaml:"addressReservations"`
-	ServiceEnabled      bool          `yaml:"serviceEnabled"`
+	DefaultGateway      net.IP        `yaml:"defaultGateway" json:"defaultGateway"`
+	ThisGateway         net.IP        `yaml:"thisGateway" json:"thisGateway"`
+	LowerBound          net.IP        `yaml:"lowerBound" json:"lowerBound"`
+	UpperBound          net.IP        `yaml:"upperBound" json:"upperBound"`
+	DnsIPs              []string      `yaml:"dnsIPs" json:"dnsIPs"`
+	AddressReservations []Reservation `yaml:"addressReservations" json:"addressReservations"`
+	ServiceEnabled      bool          `yaml:"serviceEnabled" json:"serviceEnabled"`
 }
 
 type Reservation struct {
-	MacAddr MACAddress `yaml:"macAddr"`
-	IpAddr  net.IP     `yaml:"ipAddr"`
-	Name    string     `yaml:"name"`
+	MacAddr MACAddress `yaml:"macAddr" json:"macAddr"`
+	IpAddr  net.IP     `yaml:"ipAddr" json:"ipAddr"`
+	Name    string     `yaml:"name" json:"name"`
 }
 
-// MACAddress is a wrapper around net.HardwareAddr to support custom YAML unmarshalling.
+// MACAddress is a wrapper around net.HardwareAddr to support custom marshalling.
 type MACAddress net.HardwareAddr
 
+func (m *MACAddress) String() string {
+	return strings.ToUpper(strings.ReplaceAll(net.HardwareAddr(*m).String(), ":", "-"))
+}
+
+// MarshalText implements the encoding.TextMarshaller interface.
+func (m *MACAddress) MarshalText() ([]byte, error) {
+	return []byte(m.String()), nil
+}
+
 // UnmarshalText implements the encoding.TextUnmarshaler interface.
+// Accepts MAC addresses with hyphens or colons.
 func (m *MACAddress) UnmarshalText(text []byte) error {
-	addr, err := net.ParseMAC(string(text))
+	s := strings.ReplaceAll(string(text), "-", ":")
+	addr, err := net.ParseMAC(s)
 	if err != nil {
-		return fmt.Errorf("failed to parse MAC address %q: %w", text, err)
+		return fmt.Errorf("invalid MAC address %q: %w", text, err)
 	}
 	*m = MACAddress(addr)
 	return nil
 }
 
-func (m *MACAddress) String() string {
-	return net.HardwareAddr(*m).String()
+// MarshalYAML uses the MarshalText output.
+func (m *MACAddress) MarshalYAML() (interface{}, error) {
+	return m.String(), nil
+}
+
+// UnmarshalYAML uses UnmarshalText under the hood.
+func (m *MACAddress) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var s string
+	if err := unmarshal(&s); err != nil {
+		return err
+	}
+	return m.UnmarshalText([]byte(s))
+}
+
+// MarshalJSON uses the MarshalText output.
+func (m *MACAddress) MarshalJSON() ([]byte, error) {
+	text, err := m.MarshalText()
+	if err != nil {
+		return nil, err
+	}
+	return []byte(fmt.Sprintf(`"%s"`, text)), nil
+}
+
+// UnmarshalJSON loads json into the MACAddress.
+func (m *MACAddress) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	return m.UnmarshalText([]byte(s))
 }
 
 type Server struct{}
