@@ -40,36 +40,38 @@ type Reservation struct {
 	Name    string     `yaml:"name" json:"name"`
 }
 
-// MACAddress is a wrapper around net.HardwareAddr to support custom marshalling.
-type MACAddress net.HardwareAddr
+type MACAddress struct {
+	HW net.HardwareAddr  // TODO: undo putting this nested net.HardwareAddr here, as we only tried it to see if we could get MACs written in yaml as a single string!
+}
 
 func (m *MACAddress) String() string {
-	return strings.ToUpper(strings.ReplaceAll(net.HardwareAddr(*m).String(), ":", "-"))
+	if m == nil || m.HW == nil {
+		return ""
+	}
+	return strings.ToUpper(m.HW.String())
 }
 
-// MarshalText implements the encoding.TextMarshaller interface.
-func (m *MACAddress) MarshalText() ([]byte, error) {
-	return []byte(m.String()), nil
-}
-
-// UnmarshalText implements the encoding.TextUnmarshaler interface.
-// Accepts MAC addresses with hyphens or colons.
 func (m *MACAddress) UnmarshalText(text []byte) error {
+	if len(text) == 0 {
+		m.HW = nil
+		return nil
+	}
 	s := strings.ReplaceAll(string(text), "-", ":")
 	addr, err := net.ParseMAC(s)
 	if err != nil {
 		return fmt.Errorf("invalid MAC address %q: %w", text, err)
 	}
-	*m = MACAddress(addr)
+	m.HW = addr
 	return nil
 }
 
-// MarshalYAML uses the MarshalText output.
 func (m *MACAddress) MarshalYAML() (interface{}, error) {
-	return m.String(), nil
+	if m == nil || m.HW == nil {
+		return "", nil
+	}
+	return strings.ToUpper(strings.ReplaceAll(m.HW.String(), ":", "-")), nil
 }
 
-// UnmarshalYAML uses UnmarshalText under the hood.
 func (m *MACAddress) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var s string
 	if err := unmarshal(&s); err != nil {
@@ -78,17 +80,16 @@ func (m *MACAddress) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return m.UnmarshalText([]byte(s))
 }
 
-// MarshalJSON uses the MarshalText output.
 func (m *MACAddress) MarshalJSON() ([]byte, error) {
-	text, err := m.MarshalText()
-	if err != nil {
-		return nil, err
-	}
+	text := strings.ToUpper(strings.ReplaceAll(m.HW.String(), ":", "-"))
 	return []byte(fmt.Sprintf(`"%s"`, text)), nil
 }
 
-// UnmarshalJSON loads json into the MACAddress.
 func (m *MACAddress) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" { // Handle JSON "null" explicitly.
+		m.HW = nil
+		return nil
+	}
 	var s string
 	if err := json.Unmarshal(data, &s); err != nil {
 		return err

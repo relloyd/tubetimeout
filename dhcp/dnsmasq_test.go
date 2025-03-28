@@ -85,6 +85,7 @@ func TestCheckDHCPServer(t *testing.T) {
 	}
 
 	res, err := isDHCPServerRunning(config.MustGetLogger(), mac)
+	assert.NoError(t, err, "isDHCPServerRunning() should not return an error")
 	assert.Equal(t, true, res, "isDHCPServerRunning() should return true", err)
 }
 
@@ -111,7 +112,50 @@ func TestGetConfigLoads(t *testing.T) {
 	// Reset the global to force a fresh load.
 	dnsMasqConfig = nil
 
+	// Create a temporary file for the dummy config
+	tmpFile, err := os.CreateTemp("", "dnsmasq-config-*.yaml")
+	assert.NoError(t, err, "Failed to create temporary file for config")
+	defer os.Remove(tmpFile.Name()) // Clean up the temp file when done
+
+	// Write dummy config data to the temporary file
+	dummyConfigContent := `defaultGateway: "192.168.1.1"
+thisGateway: "192.168.1.2"
+lowerBound: "192.168.1.3"
+upperBound: "192.168.1.254"
+dnsIPs:
+  - "8.8.8.8"
+  - "8.8.4.4"
+addressReservations:
+  - macAddr: "00-00-00-00-00-00"
+    ipAddr: "192.168.1.10"
+    name: "test"
+serviceEnabled: true
+`
+	_, err = tmpFile.WriteString(dummyConfigContent)
+	assert.NoError(t, err, "Failed to write to temporary config file")
+
+	// Override the global `configFileDHCPSettings` to use the temp file
+	originalFile := configFileDHCPSettings
+	configFileDHCPSettings = tmpFile.Name()
+	defer func() {
+		configFileDHCPSettings = originalFile // Restore the original value
+	}()
+	config.FnDefaultCreateAppHomeDirAndGetConfigFilePath = func(fileName string) (string, error) {
+		return tmpFile.Name(), nil
+	}
+
 	cfg, err := GetConfig(config.MustGetLogger())
+	assert.NoError(t, err, "Expected no error when loading config")
+	assert.NotNil(t, cfg, "Expected non-nil config")
+
+	// Basic sanity check for fields that should be set.
+	assert.Equal(t, net.ParseIP("192.168.1.1"), cfg.DefaultGateway, "DefaultGateway didn't match the expected value")
+	assert.Equal(t, net.ParseIP("192.168.1.3"), cfg.LowerBound, "LowerBound didn't match the expected value")
+	assert.Equal(t, net.ParseIP("192.168.1.254"), cfg.UpperBound, "UpperBound didn't match the expected value")
+	assert.Equal(t, net.ParseIP("192.168.1.2"), cfg.ThisGateway, "ThisGateway didn't match the expected value")
+	assert.Equal(t, []string{"8.8.8.8", "8.8.4.4"}, cfg.DnsIPs, "DNS IPs didn't match the expected value")
+	assert.True(t, cfg.ServiceEnabled, "ServiceEnabled should be true")
+
 	assert.NoError(t, err, "Expected no error when loading config")
 	assert.NotNil(t, cfg, "Expected non-nil config")
 
@@ -154,8 +198,9 @@ func TestSetConfig_WritesToFile(t *testing.T) {
 		ThisGateway:    net.ParseIP("192.168.1.2"),
 		LowerBound:     net.ParseIP("192.168.1.3"),
 		UpperBound:     net.ParseIP("192.168.1.254"),
+		DnsIPs:         []string{"8.8.8.8", "8.8.4.4"},
 		AddressReservations: []Reservation{
-			{MacAddr: []byte{}, IpAddr: net.ParseIP("192.168.1.10")},
+			{MacAddr: MACAddress{net.HardwareAddr{0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E}}, IpAddr: net.ParseIP("192.168.1.10")},
 		},
 		ServiceEnabled: true,
 	}
@@ -553,8 +598,8 @@ func TestGenerateDnsmasqConfig(t *testing.T) {
 	subnetUpper := net.ParseIP("192.168.1.100")
 	thisGatewayHardwareAddr := net.HardwareAddr{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}.String()
 	reservations := []Reservation{
-		{MacAddr: MACAddress{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, IpAddr: net.ParseIP("192.168.1.50"), Name: "test1"},
-		{MacAddr: MACAddress{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, IpAddr: net.ParseIP("192.168.1.60"), Name: "test2"},
+		{MacAddr: MACAddress{[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, IpAddr: net.ParseIP("192.168.1.50"), Name: "test1"},
+		{MacAddr: MACAddress{[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, IpAddr: net.ParseIP("192.168.1.60"), Name: "test2"},
 	}
 
 	// namedMACs := []models.NamedMAC{
@@ -670,19 +715,19 @@ func TestMarshalJSON_MACAddress(t *testing.T) {
 	}{
 		{
 			name:           "Valid MAC address",
-			inputMAC:       MACAddress(net.HardwareAddr{0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E}),
+			inputMAC:       MACAddress{net.HardwareAddr{0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E}},
 			expectedOutput: `"00-1A-2B-3C-4D-5E"`,
 			expectError:    false,
 		},
 		{
 			name:           "Empty MAC address",
-			inputMAC:       MACAddress(net.HardwareAddr{}),
+			inputMAC:       MACAddress{net.HardwareAddr{}},
 			expectedOutput: `""`,
 			expectError:    false,
 		},
 		{
 			name:           "Single byte MAC address (is there a point)",
-			inputMAC:       MACAddress(net.HardwareAddr{0xAA}),
+			inputMAC:       MACAddress{net.HardwareAddr{0xAA}},
 			expectedOutput: `"AA"`,
 			expectError:    false,
 		},
@@ -758,15 +803,11 @@ func TestMACAddress_UnmarshalYAML_Valid(t *testing.T) {
 	}
 
 	err := mac.UnmarshalYAML(unmarshalFunc)
-	if err != nil {
-		t.Fatalf("Expected no error, got: %v", err)
-	}
+	assert.NoError(t, err)
 
 	// The String() method converts the MAC address to an upper-case, hyphen-separated string.
-	expected := "AA-BB-CC-DD-EE-FF"
-	if mac.String() != expected {
-		t.Errorf("Expected %q, got %q", expected, mac.String())
-	}
+	expected := "AA:BB:CC:DD:EE:FF"
+	assert.Equal(t, expected, mac.String(), "MAC address string does not match expected value")
 
 	// Also test that providing a string with colon separators is handled correctly.
 	var mac2 MACAddress
@@ -779,10 +820,6 @@ func TestMACAddress_UnmarshalYAML_Valid(t *testing.T) {
 		return nil
 	}
 	err = mac2.UnmarshalYAML(unmarshalFuncColon)
-	if err != nil {
-		t.Fatalf("Expected no error for colon-separated address, got: %v", err)
-	}
-	if mac2.String() != expected {
-		t.Errorf("Expected %q, got %q", expected, mac2.String())
-	}
+	assert.NoError(t, err, "Expected no error for colon-separated address")
+	assert.Equal(t, expected, mac2.String(), "MAC address string does not match expected value")
 }
