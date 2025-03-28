@@ -428,10 +428,15 @@ document.addEventListener('DOMContentLoaded', () => {
             groupDiv.appendChild(macList);
 
             // ---- Per‑Group Mode Controls ----
-            const modeControls = document.createElement('div');
-            modeControls.classList.add('group-mode-controls');
+            // Wrapper for flex end.
+            const modeWrapper = document.createElement('div');
+            modeWrapper.classList.add('group-mode-wrapper');
 
             // Mode select: Allow or Block.
+            const modeControls = document.createElement('div');
+            modeWrapper.appendChild(modeControls)
+
+            modeControls.classList.add('group-mode-controls');
             modeControls.appendChild(document.createTextNode("Block / Allow: "));
             const modeSelect = document.createElement('select');
             modeSelect.classList.add('group-mode-select');
@@ -516,7 +521,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // ---------------------------------------
 
-            groupDiv.appendChild(modeControls);
+            groupDiv.appendChild(modeWrapper);
             groupsContainer.appendChild(groupDiv);
         });
     }

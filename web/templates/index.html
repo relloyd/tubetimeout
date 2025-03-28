@@ -36,12 +36,15 @@
           <input id="group-name" type="text" placeholder="Name" required>
         </div>
         <div class="form-field">
-          <label for="group-retention">Retention Days</label>
-          <input id="group-retention" type="number" placeholder="Retention (days)" required>
-        </div>
-        <div class="form-field">
           <label for="group-threshold">Block After Minutes</label>
           <input id="group-threshold" type="number" placeholder="Threshold (minutes)" required>
+        </div>
+        <div class="form-field">
+          <label for="group-retention">Reset After</label>
+          <select id="group-retention">
+            <option value="7">Weekly</option>
+            <option value="1">Daily</option>
+          </select>
         </div>
         <div class="form-field">
           <label for="group-start-day">Reset Day</label>
@@ -61,7 +64,7 @@
         </div>
       </div>
       <div class="button-wrapper">
-        <div class="button-container">
+        <div class="button-container-end">
           <button id="save-tracker-btn" class="button-full-bottom">Save Tracker</button>
         </div>
       </div>
@@ -83,7 +86,7 @@
         </div>
       </div>
       <div class="button-wrapper">
-        <div class="button-container">
+        <div class="button-container-end">
           <button id="add-to-group-btn" class="button-full-bottom" type="button">Add Device To Tracker</button>
         </div>
       </div>
