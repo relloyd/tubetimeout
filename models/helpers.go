@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"net"
 	"strings"
 )
@@ -30,7 +31,7 @@ func (m *MAC) WithColons() string {
 // It converts hyphens to colons and validates the MAC address format.
 func (m *MAC) UnmarshalText(text []byte) error {
 	if m == nil {
-		return nil
+		return fmt.Errorf("MAC: UnmarshalText on nil pointer")
 	}
 	macStr := strings.ReplaceAll(string(text), "-", ":") // Convert hyphens to colons to support both formats.
 	// Validate the MAC address using net.ParseMAC.
