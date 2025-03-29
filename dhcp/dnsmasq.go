@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -21,6 +20,7 @@ import (
 	"github.com/insomniacslk/dhcp/dhcpv4"
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
+	"relloyd/tubetimeout/models"
 )
 
 type DNSMasqConfig struct {
@@ -29,73 +29,73 @@ type DNSMasqConfig struct {
 	ThisGateway         net.IP        `yaml:"thisGateway" json:"thisGateway"`
 	LowerBound          net.IP        `yaml:"lowerBound" json:"lowerBound"`
 	UpperBound          net.IP        `yaml:"upperBound" json:"upperBound"`
-	DnsIPs              []string      `yaml:"dnsIPs" json:"dnsIPs"`
+	DnsIPs              []net.IP      `yaml:"dnsIPs" json:"dnsIPs"`
 	AddressReservations []Reservation `yaml:"addressReservations" json:"addressReservations"`
 	ServiceEnabled      bool          `yaml:"serviceEnabled" json:"serviceEnabled"`
 }
 
 type Reservation struct {
-	MacAddr MACAddress `yaml:"macAddr" json:"macAddr"`
+	MacAddr models.MAC `yaml:"macAddr" json:"macAddr"` // use string type for MacAddr so it marshals to YAML nicely - we had issues implementing interfaces to make this happen on net.HardwareAddr.
 	IpAddr  net.IP     `yaml:"ipAddr" json:"ipAddr"`
 	Name    string     `yaml:"name" json:"name"`
 }
 
-type MACAddress struct {
-	HW net.HardwareAddr  // TODO: undo putting this nested net.HardwareAddr here, as we only tried it to see if we could get MACs written in yaml as a single string!
-}
-
-func (m *MACAddress) String() string {
-	if m == nil || m.HW == nil {
-		return ""
-	}
-	return strings.ToUpper(m.HW.String())
-}
-
-func (m *MACAddress) UnmarshalText(text []byte) error {
-	if len(text) == 0 {
-		m.HW = nil
-		return nil
-	}
-	s := strings.ReplaceAll(string(text), "-", ":")
-	addr, err := net.ParseMAC(s)
-	if err != nil {
-		return fmt.Errorf("invalid MAC address %q: %w", text, err)
-	}
-	m.HW = addr
-	return nil
-}
-
-func (m *MACAddress) MarshalYAML() (interface{}, error) {
-	if m == nil || m.HW == nil {
-		return "", nil
-	}
-	return strings.ToUpper(strings.ReplaceAll(m.HW.String(), ":", "-")), nil
-}
-
-func (m *MACAddress) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var s string
-	if err := unmarshal(&s); err != nil {
-		return err
-	}
-	return m.UnmarshalText([]byte(s))
-}
-
-func (m *MACAddress) MarshalJSON() ([]byte, error) {
-	text := strings.ToUpper(strings.ReplaceAll(m.HW.String(), ":", "-"))
-	return []byte(fmt.Sprintf(`"%s"`, text)), nil
-}
-
-func (m *MACAddress) UnmarshalJSON(data []byte) error {
-	if string(data) == "null" { // Handle JSON "null" explicitly.
-		m.HW = nil
-		return nil
-	}
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-	return m.UnmarshalText([]byte(s))
-}
+// type MACAddress struct {
+// 	HW net.HardwareAddr  // TODO: undo putting this nested net.HardwareAddr here, as we only tried it to see if we could get MACs written in yaml as a single string!
+// }
+//
+// func (m *MACAddress) String() string {
+// 	if m == nil || m.HW == nil {
+// 		return ""
+// 	}
+// 	return strings.ToUpper(m.HW.String())
+// }
+//
+// func (m *MACAddress) UnmarshalText(text []byte) error {
+// 	if len(text) == 0 {
+// 		m.HW = nil
+// 		return nil
+// 	}
+// 	s := strings.ReplaceAll(string(text), "-", ":")
+// 	addr, err := net.ParseMAC(s)
+// 	if err != nil {
+// 		return fmt.Errorf("invalid MAC address %q: %w", text, err)
+// 	}
+// 	m.HW = addr
+// 	return nil
+// }
+//
+// func (m *MACAddress) MarshalYAML() (interface{}, error) {
+// 	if m == nil || m.HW == nil {
+// 		return "", nil
+// 	}
+// 	return strings.ToUpper(strings.ReplaceAll(m.HW.String(), ":", "-")), nil
+// }
+//
+// func (m *MACAddress) UnmarshalYAML(unmarshal func(interface{}) error) error {
+// 	var s string
+// 	if err := unmarshal(&s); err != nil {
+// 		return err
+// 	}
+// 	return m.UnmarshalText([]byte(s))
+// }
+//
+// func (m *MACAddress) MarshalJSON() ([]byte, error) {
+// 	text := strings.ToUpper(strings.ReplaceAll(m.HW.String(), ":", "-"))
+// 	return []byte(fmt.Sprintf(`"%s"`, text)), nil
+// }
+//
+// func (m *MACAddress) UnmarshalJSON(data []byte) error {
+// 	if string(data) == "null" { // Handle JSON "null" explicitly.
+// 		m.HW = nil
+// 		return nil
+// 	}
+// 	var s string
+// 	if err := json.Unmarshal(data, &s); err != nil {
+// 		return err
+// 	}
+// 	return m.UnmarshalText([]byte(s))
+// }
 
 type Server struct{}
 
@@ -118,7 +118,7 @@ var (
 	routeCmd                 = defaultRouteCmd
 	routeCmdArgs             = []string{"-rn"}
 	errDHCPServerNotRunning  = errors.New("DHCP server not running")
-	fallbackDNSIPs           = []string{"1.1.1.1", "8.8.8.8"} // default DNS IPs to CloudFlare and Google
+	fallbackDNSIPs           = []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")} // default DNS IPs to CloudFlare and Google
 )
 
 func init() {
@@ -268,7 +268,7 @@ func GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
 	return cfg, nil
 }
 
-func SetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
+func SetConfig(_ *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("supplied dnsmasq config is nil")
 	}
@@ -294,15 +294,20 @@ func SetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 		}
 		if len(cfg.DnsIPs) == 0 {
 			cfg.DnsIPs = fallbackDNSIPs
-		} else {
-			for _, dnsIP := range cfg.DnsIPs {
-				if net.ParseIP(dnsIP).To4() == nil {
-					return fmt.Errorf("invalid DNS IP: %s", dnsIP)
-				}
-			}
 		}
+		// old code used when DnsIPs was a string.
+		// else {
+		// 	for _, dnsIP := range cfg.DnsIPs {
+		// 		if net.ParseIP(dnsIP).To4() == nil {
+		// 			return fmt.Errorf("invalid DNS IP: %s", dnsIP)
+		// 		}
+		// 	}
+		// }
 		if bytes.Compare(cfg.LowerBound, cfg.UpperBound) >= 0 {
 			return fmt.Errorf("LowerBound must be less than UpperBound")
+		}
+		for _, v := range cfg.AddressReservations { // for each address reservation...
+			v.MacAddr = models.MAC(strings.ToUpper(strings.ReplaceAll(string(v.MacAddr), ":", "-"))) // Ensure upper case and hyphens.
 		}
 		return nil
 	}
@@ -626,10 +631,15 @@ func chooseIPFromBottom(lower, upper net.IP) (chosenIP, newLower, newUpper net.I
 }
 
 // generateDnsmasqConfig builds the full dnsmasq configuration as a string.
-func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper net.IP, thisGatewayHardwareAddress string, dnsIPS []string, reservations []Reservation) (string, error) {
+func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper net.IP, thisGatewayHardwareAddress string, dnsIPS []net.IP, reservations []Reservation) (string, error) {
 	// Global configuration settings.
 	if len(dnsIPS) != 2 {
 		return "", fmt.Errorf("expected two DNS IPs: %v", dnsIPS)
+	}
+
+	var ipStrings []string
+	for _, ip := range dnsIPS {
+		ipStrings = append(ipStrings, ip.String())
 	}
 
 	lines := []string{
@@ -637,7 +647,7 @@ func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper
 		fmt.Sprintf("interface=%v", defaultInterfaceName),
 		fmt.Sprintf("dhcp-range=%v,%v,%v", subnetLower, subnetUpper, defaultLeaseDuration),
 		fmt.Sprintf("dhcp-option=option:router,%v", thisGateway),
-		fmt.Sprintf("dhcp-option=option:dns-server,%v", strings.Join(dnsIPS, ",")),
+		fmt.Sprintf("dhcp-option=option:dns-server,%v", strings.Join(ipStrings, ",")),
 		"no-resolv", // no-resolv will use server entries below as the upstream DNS servers, instead of resolv.conf.
 		fmt.Sprintf("server=%v", dnsIPS[0]),
 		fmt.Sprintf("server=%v", dnsIPS[1]),
@@ -655,7 +665,7 @@ func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper
 	lines = append(lines, "# static IP reservations")
 	lines = append(lines, fmt.Sprintf(reservationsPattern, thisGatewayHardwareAddress, thisGateway, "this gateway"))
 	for _, r := range reservations {
-		lines = append(lines, fmt.Sprintf(reservationsPattern, r.MacAddr.String(), r.IpAddr, r.Name))
+		lines = append(lines, fmt.Sprintf(reservationsPattern, r.MacAddr.WithColons(), r.IpAddr, r.Name))
 	}
 
 	// Custom exclusions to use the default gw:
@@ -768,19 +778,26 @@ func findSmallestSingleCIDR(startIP, endIP net.IP) (string, string) {
 func setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig, fnFinder cidrFinderFunc) error {
 	logger = logger.With("mode", "setting static IP")
 
+	// Example:
 	// nmcli dev mod eth0 ipv4.method manual ipv4.gateway "192.168.1.254" ipv4.addr "192.168.1.230/24" ipv4.dns "8.8.8.8 1.1.1.1"
+
 	if cfg == nil {
 		return fmt.Errorf("no config provided")
 	}
 
 	_, cidr := fnFinder(cfg.LowerBound, cfg.UpperBound)
 
+	var ipStrings []string
+	for _, ip := range cfg.DnsIPs {
+		ipStrings = append(ipStrings, ip.String())
+	}
+
 	cmd := "nmcli"
 	args := []string{"dev", "mod", ifaceName,
 		"ipv4.method", "manual",
 		"ipv4.gateway", cfg.DefaultGateway.To4().String(),
 		"ipv4.addr", cfg.ThisGateway.To4().String() + "/" + cidr,
-		"ipv4.dns", strings.Join(cfg.DnsIPs, " "),
+		"ipv4.dns", strings.Join(ipStrings, " "),
 	}
 	logger.Info("configuring device: ", cmd, strings.Join(args, " "))
 	output, err := exec.Command(cmd, args...).CombinedOutput()

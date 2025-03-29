@@ -2,7 +2,6 @@ package dhcp
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -153,7 +152,7 @@ serviceEnabled: true
 	assert.Equal(t, net.ParseIP("192.168.1.3"), cfg.LowerBound, "LowerBound didn't match the expected value")
 	assert.Equal(t, net.ParseIP("192.168.1.254"), cfg.UpperBound, "UpperBound didn't match the expected value")
 	assert.Equal(t, net.ParseIP("192.168.1.2"), cfg.ThisGateway, "ThisGateway didn't match the expected value")
-	assert.Equal(t, []string{"8.8.8.8", "8.8.4.4"}, cfg.DnsIPs, "DNS IPs didn't match the expected value")
+	assert.Equal(t, []net.IP{net.ParseIP("8.8.8.8"), net.ParseIP("8.8.4.4")}, cfg.DnsIPs, "DNS IPs didn't match the expected value")
 	assert.True(t, cfg.ServiceEnabled, "ServiceEnabled should be true")
 
 	assert.NoError(t, err, "Expected no error when loading config")
@@ -198,9 +197,9 @@ func TestSetConfig_WritesToFile(t *testing.T) {
 		ThisGateway:    net.ParseIP("192.168.1.2"),
 		LowerBound:     net.ParseIP("192.168.1.3"),
 		UpperBound:     net.ParseIP("192.168.1.254"),
-		DnsIPs:         []string{"8.8.8.8", "8.8.4.4"},
+		DnsIPs:         []net.IP{net.ParseIP("8.8.8.8"), net.ParseIP("8.8.4.4")},
 		AddressReservations: []Reservation{
-			{MacAddr: MACAddress{net.HardwareAddr{0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E}}, IpAddr: net.ParseIP("192.168.1.10")},
+			{MacAddr: "00:1A:2B:3C:4D:5E", IpAddr: net.ParseIP("192.168.1.10")},
 		},
 		ServiceEnabled: true,
 	}
@@ -598,8 +597,8 @@ func TestGenerateDnsmasqConfig(t *testing.T) {
 	subnetUpper := net.ParseIP("192.168.1.100")
 	thisGatewayHardwareAddr := net.HardwareAddr{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}.String()
 	reservations := []Reservation{
-		{MacAddr: MACAddress{[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, IpAddr: net.ParseIP("192.168.1.50"), Name: "test1"},
-		{MacAddr: MACAddress{[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}, IpAddr: net.ParseIP("192.168.1.60"), Name: "test2"},
+		{MacAddr: "00:00:00:00:00:00", IpAddr: net.ParseIP("192.168.1.50"), Name: "test1"},
+		{MacAddr: "00:00:00:00:00:00", IpAddr: net.ParseIP("192.168.1.60"), Name: "test2"},
 	}
 
 	// namedMACs := []models.NamedMAC{
@@ -704,122 +703,122 @@ func TestFindSmallestSingleCIDR(t *testing.T) {
 		assert.Equal(t, block, b[1], "findSmallestSingleCIDR %v - %v failed with bad block", test.startIP, test.endIP)
 	}
 }
-
-func TestMarshalJSON_MACAddress(t *testing.T) {
-	tests := []struct {
-		name            string
-		inputMAC        MACAddress
-		expectedOutput  string
-		expectError     bool
-		expectedErrText string
-	}{
-		{
-			name:           "Valid MAC address",
-			inputMAC:       MACAddress{net.HardwareAddr{0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E}},
-			expectedOutput: `"00-1A-2B-3C-4D-5E"`,
-			expectError:    false,
-		},
-		{
-			name:           "Empty MAC address",
-			inputMAC:       MACAddress{net.HardwareAddr{}},
-			expectedOutput: `""`,
-			expectError:    false,
-		},
-		{
-			name:           "Single byte MAC address (is there a point)",
-			inputMAC:       MACAddress{net.HardwareAddr{0xAA}},
-			expectedOutput: `"AA"`,
-			expectError:    false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			output, err := tt.inputMAC.MarshalJSON()
-
-			if tt.expectError {
-				assert.Error(t, err, tt.expectedErrText)
-			} else {
-				assert.NoError(t, err, tt.expectedErrText)
-				assert.Equal(t, tt.expectedOutput, string(output), "unexpected JSON output for MAC address")
-			}
-		})
-	}
-}
-
-func TestMACAddressMarshalYAML(t *testing.T) {
-	tests := []struct {
-		name         string
-		inputMAC     string // Expected input in colon-separated format
-		expectedText string // Expected output in hyphen-separated uppercase format
-	}{
-		{
-			name:         "Basic MAC address",
-			inputMAC:     "01:23:45:67:89:ab",
-			expectedText: "01-23-45-67-89-AB",
-		},
-		{
-			name:         "MAC address with leading zeros",
-			inputMAC:     "0a:0b:0c:0d:0e:0f",
-			expectedText: "0A-0B-0C-0D-0E-0F",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var mac MACAddress
-			// Use UnmarshalText to initialize the MACAddress from a colon-separated string.
-			if err := mac.UnmarshalText([]byte(tt.inputMAC)); err != nil {
-				t.Fatalf("UnmarshalText failed: %v", err)
-			}
-
-			// Marshal the MAC address to text.
-			result, err := mac.MarshalYAML()
-			if err != nil {
-				t.Fatalf("MarshalText returned error: %v", err)
-			}
-
-			if got := result; got != tt.expectedText {
-				t.Errorf("MarshalText() = %q, want %q", got, tt.expectedText)
-			}
-		})
-	}
-}
-
-func TestMACAddress_UnmarshalYAML_Valid(t *testing.T) {
-	var mac MACAddress
-
-	// Define a fake unmarshal function that simulates the YAML unmarshalling process.
-	// It passes the test MAC address string to the UnmarshalYAML function.
-	unmarshalFunc := func(v interface{}) error {
-		// Expecting a pointer to a string.
-		s, ok := v.(*string)
-		if !ok {
-			return errors.New("expected pointer to string")
-		}
-		// Provide a valid MAC address with hyphen separators.
-		*s = "AA-BB-CC-DD-EE-FF"
-		return nil
-	}
-
-	err := mac.UnmarshalYAML(unmarshalFunc)
-	assert.NoError(t, err)
-
-	// The String() method converts the MAC address to an upper-case, hyphen-separated string.
-	expected := "AA:BB:CC:DD:EE:FF"
-	assert.Equal(t, expected, mac.String(), "MAC address string does not match expected value")
-
-	// Also test that providing a string with colon separators is handled correctly.
-	var mac2 MACAddress
-	unmarshalFuncColon := func(v interface{}) error {
-		s, ok := v.(*string)
-		if !ok {
-			return errors.New("expected pointer to string")
-		}
-		*s = "aa:bb:cc:dd:ee:ff"
-		return nil
-	}
-	err = mac2.UnmarshalYAML(unmarshalFuncColon)
-	assert.NoError(t, err, "Expected no error for colon-separated address")
-	assert.Equal(t, expected, mac2.String(), "MAC address string does not match expected value")
-}
+//
+// func TestMarshalJSON_MACAddress(t *testing.T) {
+// 	tests := []struct {
+// 		name            string
+// 		inputMAC        MACAddress
+// 		expectedOutput  string
+// 		expectError     bool
+// 		expectedErrText string
+// 	}{
+// 		{
+// 			name:           "Valid MAC address",
+// 			inputMAC:       MACAddress{net.HardwareAddr{0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E}},
+// 			expectedOutput: `"00-1A-2B-3C-4D-5E"`,
+// 			expectError:    false,
+// 		},
+// 		{
+// 			name:           "Empty MAC address",
+// 			inputMAC:       MACAddress{net.HardwareAddr{}},
+// 			expectedOutput: `""`,
+// 			expectError:    false,
+// 		},
+// 		{
+// 			name:           "Single byte MAC address (is there a point)",
+// 			inputMAC:       MACAddress{net.HardwareAddr{0xAA}},
+// 			expectedOutput: `"AA"`,
+// 			expectError:    false,
+// 		},
+// 	}
+//
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			output, err := tt.inputMAC.MarshalJSON()
+//
+// 			if tt.expectError {
+// 				assert.Error(t, err, tt.expectedErrText)
+// 			} else {
+// 				assert.NoError(t, err, tt.expectedErrText)
+// 				assert.Equal(t, tt.expectedOutput, string(output), "unexpected JSON output for MAC address")
+// 			}
+// 		})
+// 	}
+// }
+//
+// func TestMACAddressMarshalYAML(t *testing.T) {
+// 	tests := []struct {
+// 		name         string
+// 		inputMAC     string // Expected input in colon-separated format
+// 		expectedText string // Expected output in hyphen-separated uppercase format
+// 	}{
+// 		{
+// 			name:         "Basic MAC address",
+// 			inputMAC:     "01:23:45:67:89:ab",
+// 			expectedText: "01-23-45-67-89-AB",
+// 		},
+// 		{
+// 			name:         "MAC address with leading zeros",
+// 			inputMAC:     "0a:0b:0c:0d:0e:0f",
+// 			expectedText: "0A-0B-0C-0D-0E-0F",
+// 		},
+// 	}
+//
+// 	for _, tt := range tests {
+// 		t.Run(tt.name, func(t *testing.T) {
+// 			var mac MACAddress
+// 			// Use UnmarshalText to initialize the MACAddress from a colon-separated string.
+// 			if err := mac.UnmarshalText([]byte(tt.inputMAC)); err != nil {
+// 				t.Fatalf("UnmarshalText failed: %v", err)
+// 			}
+//
+// 			// Marshal the MAC address to text.
+// 			result, err := mac.MarshalYAML()
+// 			if err != nil {
+// 				t.Fatalf("MarshalText returned error: %v", err)
+// 			}
+//
+// 			if got := result; got != tt.expectedText {
+// 				t.Errorf("MarshalText() = %q, want %q", got, tt.expectedText)
+// 			}
+// 		})
+// 	}
+// }
+//
+// func TestMACAddress_UnmarshalYAML_Valid(t *testing.T) {
+// 	var mac MACAddress
+//
+// 	// Define a fake unmarshal function that simulates the YAML unmarshalling process.
+// 	// It passes the test MAC address string to the UnmarshalYAML function.
+// 	unmarshalFunc := func(v interface{}) error {
+// 		// Expecting a pointer to a string.
+// 		s, ok := v.(*string)
+// 		if !ok {
+// 			return errors.New("expected pointer to string")
+// 		}
+// 		// Provide a valid MAC address with hyphen separators.
+// 		*s = "AA-BB-CC-DD-EE-FF"
+// 		return nil
+// 	}
+//
+// 	err := mac.UnmarshalYAML(unmarshalFunc)
+// 	assert.NoError(t, err)
+//
+// 	// The String() method converts the MAC address to an upper-case, hyphen-separated string.
+// 	expected := "AA:BB:CC:DD:EE:FF"
+// 	assert.Equal(t, expected, mac.String(), "MAC address string does not match expected value")
+//
+// 	// Also test that providing a string with colon separators is handled correctly.
+// 	var mac2 MACAddress
+// 	unmarshalFuncColon := func(v interface{}) error {
+// 		s, ok := v.(*string)
+// 		if !ok {
+// 			return errors.New("expected pointer to string")
+// 		}
+// 		*s = "aa:bb:cc:dd:ee:ff"
+// 		return nil
+// 	}
+// 	err = mac2.UnmarshalYAML(unmarshalFuncColon)
+// 	assert.NoError(t, err, "Expected no error for colon-separated address")
+// 	assert.Equal(t, expected, mac2.String(), "MAC address string does not match expected value")
+// }

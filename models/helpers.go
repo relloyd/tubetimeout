@@ -1,6 +1,7 @@
 package models
 
 import (
+	"net"
 	"strings"
 )
 
@@ -16,4 +17,28 @@ func NewGroup(group string) string {
 
 func NewMapGroupTrackerConfig() MapGroupTrackerConfig {
 	return make(MapGroupTrackerConfig)
+}
+
+func (m *MAC) WithColons() string {
+	if m == nil {
+		return ""
+	}
+	return strings.Replace(string(*m), "-", ":", -1)
+}
+
+// UnmarshalText implements the encoding.TextUnmarshaler interface.
+// It converts hyphens to colons and validates the MAC address format.
+func (m *MAC) UnmarshalText(text []byte) error {
+	if m == nil {
+		return nil
+	}
+	macStr := strings.ReplaceAll(string(text), "-", ":") // Convert hyphens to colons to support both formats.
+	// Validate the MAC address using net.ParseMAC.
+	_, err := net.ParseMAC(macStr)
+	if err != nil {
+		return err
+	}
+	// Store our friendly representation using hyphens.
+	*m = MAC(NewMAC(string(text)))
+	return nil
 }
