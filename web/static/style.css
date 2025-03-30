@@ -389,3 +389,11 @@ button:hover {
 .app-footer span {
     opacity: 0.8; /* Slight fade for subtle effect */
 }
+
+.reservation-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-color);
+}
