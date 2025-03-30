@@ -370,7 +370,7 @@ func (h *Handler) dhcpHandler(w http.ResponseWriter, r *http.Request) {
 		var dhcpConfig dhcp.DNSMasqConfig
 		if err := json.NewDecoder(r.Body).Decode(&dhcpConfig); err != nil {
 			h.logger.Errorf("Failed to parse DHCP configuration payload: %v", err)
-			http.Error(w, "Invalid request payload", http.StatusBadRequest)
+			http.Error(w, err.Error(), http.StatusBadRequest) // return the decoder error
 			return
 		}
 
