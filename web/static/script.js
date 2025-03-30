@@ -573,9 +573,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const notification = document.getElementById('notification');
         notification.textContent = message;
 
+        let timeout = 3000;
         if (isError) {
             notification.classList.add('error');
             notification.classList.remove('success');
+            timeout = 5000;
         } else {
             notification.classList.add('success');
             notification.classList.remove('error');
@@ -589,7 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 notification.classList.add('hidden'); // Hide after transition
             }, 300); // Matches the transition duration
-        }, 3000);
+        }, timeout);
     }
 
     function showSaveButton() {
@@ -784,7 +786,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (res.ok) {
             showNotification(`Configuration saved successfully.`, false);
         } else {
-            showNotification(`Failed to save configuration: ${res.status} ${res.statusText}`, true);
+            const responseBody = await res.text();
+            showNotification(`Failed to save configuration: "${responseBody}"`, true);
         }
     }
 
