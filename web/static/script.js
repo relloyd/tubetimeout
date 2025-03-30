@@ -801,7 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (res.ok) {
             showNotification(`Configuration saved successfully.`, false);
         } else {
-            const responseBody = await res.text();
+            const responseBody = (await res.text()).trim();
             showNotification(`Failed to save configuration: "${responseBody}"`, true);
         }
     }
