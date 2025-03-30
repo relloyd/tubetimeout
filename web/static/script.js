@@ -622,40 +622,45 @@ document.addEventListener('DOMContentLoaded', () => {
         groupSelect.dispatchEvent(new Event('change'));
     }
 
-    async function saveDHCPConfig() {
-        const config = {
-            defaultGateway: document.getElementById('default-gateway').value,
-            thisGateway: document.getElementById('this-gateway').value,
-            lowerBound: document.getElementById('lower-bound').value,
-            upperBound: document.getElementById('upper-bound').value,
-            dnsIPs: [
-                document.getElementById('dns-ip1').value,
-                document.getElementById('dns-ip2').value,
-            ],
-            addressReservations: [],
-            serviceEnabled: document.getElementById('service-enabled').checked
-        };
+    function generateAddressReservationRow(r = {}, container) {
+        const row = document.createElement('div');
+        row.className = 'form-field reservation-row';
 
-        const reservationRows = document.querySelectorAll('.reservation-row');
-        reservationRows.forEach(row => {
-            const inputs = row.querySelectorAll('input');
-            if (inputs.length === 3) {
-                const [mac, ip, name] = Array.from(inputs).map(i => i.value);
-                config.addressReservations.push({ macAddr: mac, ipAddr: ip, name: name });
-            }
-        });
+        const macDiv = document.createElement('div');
+        macDiv.className = 'form-field';
+        const macInput = document.createElement('input');
+        macInput.type = 'text';
+        macInput.placeholder = 'MAC Address';
+        macInput.value = r.macAddr || '';
+        macDiv.appendChild(macInput);
 
-        const res = await fetch('/dhcp', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(config)
-        });
+        const ipDiv = document.createElement('div');
+        ipDiv.className = 'form-field';
+        const ipInput = document.createElement('input');
+        ipInput.type = 'text';
+        ipInput.placeholder = 'IP Address';
+        ipInput.value = r.ipAddr || '';
+        ipDiv.appendChild(ipInput);
 
-        if (res.ok) {
-            alert('Configuration saved successfully.');
-        } else {
-            alert('Failed to save configuration.');
-        }
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'form-field';
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.placeholder = 'Name';
+        nameInput.value = r.name || '';
+        nameDiv.appendChild(nameInput);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'Remove';
+        removeBtn.type = 'button';
+        removeBtn.onclick = () => container.removeChild(row);
+
+        row.appendChild(macDiv);
+        row.appendChild(ipDiv);
+        row.appendChild(nameDiv);
+        row.appendChild(removeBtn);
+
+        return row;
     }
 
     function renderDhcpConfig() {
@@ -701,23 +706,12 @@ document.addEventListener('DOMContentLoaded', () => {
         enabledField.appendChild(enabledInput);
         dhcpConfigForm.appendChild(enabledField);
 
-        const saveBtn = document.getElementById('dhcp-save-button');
+        const saveBtn = document.getElementById('dhcp-config-save-button');
         saveBtn.onclick = saveDHCPConfig;
-
-        const saveBtn2 = document.getElementById('dhcp-address-reservations-save-button');
-        saveBtn2.onclick = saveDHCPConfig;
     }
 
     function renderDhcpAddressReservations() {
         const addressReservationsForm = document.getElementById('dhcp-address-reservations');
-
-        // TODO: add help!
-        // const helpIcon = document.createElement('span');
-        // helpIcon.textContent = '❓';
-        // helpIcon.title = 'Assigns static IPs to devices by MAC address. Useful for fixed DHCP addresses.';
-        // helpIcon.style.cursor = 'help';
-        // helpIcon.style.marginLeft = '8px';
-        // addressReservationsForm.appendChild(helpIcon);
 
         const reservationContainer = document.createElement('div');
         reservationContainer.id = 'reservation-container';
@@ -728,51 +722,13 @@ document.addEventListener('DOMContentLoaded', () => {
         addBtn.classList.add('button-full-bottom');
         addBtn.type = 'button';
         addBtn.onclick = () => {
-            reservationContainer.appendChild(generateAddressReservationRow());
+            reservationContainer.appendChild(generateAddressReservationRow({}, reservationContainer));
         };
 
         addressReservationsForm.appendChild(addBtn);
-    }
 
-    function generateAddressReservationRow() {
-        const row = document.createElement('div');
-        row.className = 'reservation-row';
-
-        const nameDiv = document.createElement('div');
-        nameDiv.className = 'form-field';
-        const name = document.createElement('input');
-        name.type = 'text';
-        name.placeholder = 'Name';
-        name.value = r.name;
-        nameDiv.appendChild(name);
-
-        const macDiv = document.createElement('div');
-        macDiv.className = 'form-field';
-        const mac = document.createElement('input');
-        mac.type = 'text';
-        mac.placeholder = 'MAC Address';
-        mac.value = r.macAddr;
-        macDiv.appendChild(mac);
-
-        const ipDiv = document.createElement('div');
-        ipDiv.className = 'form-field';
-        const ip = document.createElement('input');
-        ip.type = 'text';
-        ip.placeholder = 'IP Address';
-        ip.value = r.ipAddr;
-        ipDiv.appendChild(ip);
-
-        const removeBtn = document.createElement('button');
-        removeBtn.textContent = 'Remove';
-        removeBtn.type = 'button';
-        removeBtn.onclick = () => container.removeChild(row);
-
-        row.appendChild(macDiv);
-        row.appendChild(ipDiv);
-        row.appendChild(nameDiv);
-        row.appendChild(removeBtn);
-
-        return row;
+        const saveBtn2 = document.getElementById('dhcp-address-reservations-save-button');
+        saveBtn2.onclick = saveDHCPConfig;
     }
 
     async function populateDhcpForms() {
@@ -791,36 +747,45 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('reservation-container');
         container.innerHTML = '';
         (cfg.addressReservations || []).forEach(r => {
-            const row = document.createElement('div');
-            row.className = 'form-field reservation-row';
-
-            const mac = document.createElement('input');
-            mac.type = 'text';
-            mac.placeholder = 'MAC Address';
-            mac.value = r.macAddr;
-
-            const ip = document.createElement('input');
-            ip.type = 'text';
-            ip.placeholder = 'IP Address';
-            ip.value = r.ipAddr;
-
-            const name = document.createElement('input');
-            name.type = 'text';
-            name.placeholder = 'Name';
-            name.value = r.name;
-
-            const removeBtn = document.createElement('button');
-            removeBtn.textContent = 'Remove';
-            removeBtn.type = 'button';
-            removeBtn.onclick = () => container.removeChild(row);
-
-            row.appendChild(mac);
-            row.appendChild(ip);
-            row.appendChild(name);
-            row.appendChild(removeBtn);
-
+            const row = generateAddressReservationRow(r, container);
             container.appendChild(row);
         });
+    }
+
+    async function saveDHCPConfig() {
+        const config = {
+            defaultGateway: document.getElementById('default-gateway').value,
+            thisGateway: document.getElementById('this-gateway').value,
+            lowerBound: document.getElementById('lower-bound').value,
+            upperBound: document.getElementById('upper-bound').value,
+            dnsIPs: [
+                document.getElementById('dns-ip1').value,
+                document.getElementById('dns-ip2').value,
+            ],
+            addressReservations: [],
+            serviceEnabled: document.getElementById('service-enabled').checked
+        };
+
+        const reservationRows = document.querySelectorAll('.reservation-row');
+        reservationRows.forEach(row => {
+            const inputs = row.querySelectorAll('input');
+            if (inputs.length === 3) {
+                const [mac, ip, name] = Array.from(inputs).map(i => i.value);
+                config.addressReservations.push({ macAddr: mac, ipAddr: ip, name: name });
+            }
+        });
+
+        const res = await fetch('/dhcp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+
+        if (res.ok) {
+            showNotification(`Configuration saved successfully.`, false);
+        } else {
+            showNotification(`Failed to save configuration: ${res.status} ${res.statusText}`, true);
+        }
     }
 
     document.getElementById('group-select').addEventListener('change', (e) => {
