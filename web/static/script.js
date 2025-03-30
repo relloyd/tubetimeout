@@ -628,8 +628,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const row = document.createElement('div');
         row.className = 'form-field reservation-row';
 
+        // Create two spans for two rows
+        const line1 = document.createElement('span');
+        line1.className = 'reservation-row-line';
+        line1.style.flexGrow = '1'; // full width
+        line1.style.justifyContent = 'space-between';
+
+        const line2 = document.createElement('span');
+        line2.className = 'reservation-row-line';
+
+        // First row: MAC Address and IP Address
         const macDiv = document.createElement('div');
-        macDiv.className = 'form-field';
+        macDiv.className = 'form-field mac-field';
         const macInput = document.createElement('input');
         macInput.type = 'text';
         macInput.placeholder = 'MAC Address';
@@ -637,13 +647,17 @@ document.addEventListener('DOMContentLoaded', () => {
         macDiv.appendChild(macInput);
 
         const ipDiv = document.createElement('div');
-        ipDiv.className = 'form-field';
+        ipDiv.className = 'form-field ip-field';
         const ipInput = document.createElement('input');
         ipInput.type = 'text';
         ipInput.placeholder = 'IP Address';
         ipInput.value = r.ipAddr || '';
         ipDiv.appendChild(ipInput);
 
+        line2.appendChild(macDiv);
+        line2.appendChild(ipDiv);
+
+        // Second row: Name and Remove button
         const nameDiv = document.createElement('div');
         nameDiv.className = 'form-field';
         const nameInput = document.createElement('input');
@@ -657,10 +671,11 @@ document.addEventListener('DOMContentLoaded', () => {
         removeBtn.type = 'button';
         removeBtn.onclick = () => container.removeChild(row);
 
-        row.appendChild(macDiv);
-        row.appendChild(ipDiv);
-        row.appendChild(nameDiv);
-        row.appendChild(removeBtn);
+        line1.appendChild(nameDiv);
+        line1.appendChild(removeBtn);
+
+        row.appendChild(line1);
+        row.appendChild(line2);
 
         return row;
     }
@@ -720,7 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
         addressReservationsForm.appendChild(reservationContainer);
 
         const addBtn = document.createElement('button');
-        addBtn.textContent = 'Add Another One >>>';
+        addBtn.textContent = 'Add Another >>';
         addBtn.classList.add('button-full-bottom');
         addBtn.type = 'button';
         addBtn.onclick = () => {
@@ -772,7 +787,7 @@ document.addEventListener('DOMContentLoaded', () => {
         reservationRows.forEach(row => {
             const inputs = row.querySelectorAll('input');
             if (inputs.length === 3) {
-                const [mac, ip, name] = Array.from(inputs).map(i => i.value);
+                const [name, mac, ip] = Array.from(inputs).map(i => i.value);
                 config.addressReservations.push({ macAddr: mac, ipAddr: ip, name: name });
             }
         });

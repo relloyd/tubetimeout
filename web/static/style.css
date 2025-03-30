@@ -396,4 +396,27 @@ button:hover {
     align-items: center;
     padding: 6px 0;
     border-bottom: 1px solid var(--border-color);
+    gap: 0.5rem
+}
+
+.reservation-row button {
+    background-color: var(--error-color);
+    padding: 6px 10px;
+    font-size: 0.9rem;
+}
+
+.reservation-row-line {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+}
+
+.reservation-row-line .mac-field {
+    flex: 3;
+    padding-right: 0.5rem;
+}
+
+.reservation-row-line .ip-field {
+    flex: 2;
 }
