@@ -841,6 +841,15 @@ func unsetStaticIP(logger *zap.SugaredLogger, ifaceName string) error {
 	return nil
 }
 
+func isDnsmasqServiceEnabled() (bool, error) {
+	cmd := exec.Command("systemctl", "is-active", "dnsmasq")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("error checking if dnsmasq service is enabled: %v: %v", string(output), err)
+	}
+	return strings.TrimSpace(string(output)) == "active", nil
+}
+
 // func getEth0IP() (net.IP, error) {
 // 	ips, err := getIfaceAddresses(defaultInterfaceName)
 // 	return ips[0], err
