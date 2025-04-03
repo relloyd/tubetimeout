@@ -808,6 +808,7 @@ func isDnsmasqServiceActive() (bool, error) {
 	cmd := exec.Command("systemctl", "is-active", "dnsmasq")
 	output, err := cmd.CombinedOutput()
 	outStr := strings.TrimSpace(string(output))
+	// Check output before err since return code 3 = "inactive" while 0 = "active".
 	if outStr == "active" {
 		return true, nil
 	} else if outStr == "inactive" {
