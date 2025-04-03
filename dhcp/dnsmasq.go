@@ -40,63 +40,6 @@ type Reservation struct {
 	Name    string     `yaml:"name" json:"name"`
 }
 
-// type MACAddress struct {
-// 	HW net.HardwareAddr  // TODO: undo putting this nested net.HardwareAddr here, as we only tried it to see if we could get MACs written in yaml as a single string!
-// }
-//
-// func (m *MACAddress) String() string {
-// 	if m == nil || m.HW == nil {
-// 		return ""
-// 	}
-// 	return strings.ToUpper(m.HW.String())
-// }
-//
-// func (m *MACAddress) UnmarshalText(text []byte) error {
-// 	if len(text) == 0 {
-// 		m.HW = nil
-// 		return nil
-// 	}
-// 	s := strings.ReplaceAll(string(text), "-", ":")
-// 	addr, err := net.ParseMAC(s)
-// 	if err != nil {
-// 		return fmt.Errorf("invalid MAC address %q: %w", text, err)
-// 	}
-// 	m.HW = addr
-// 	return nil
-// }
-//
-// func (m *MACAddress) MarshalYAML() (interface{}, error) {
-// 	if m == nil || m.HW == nil {
-// 		return "", nil
-// 	}
-// 	return strings.ToUpper(strings.ReplaceAll(m.HW.String(), ":", "-")), nil
-// }
-//
-// func (m *MACAddress) UnmarshalYAML(unmarshal func(interface{}) error) error {
-// 	var s string
-// 	if err := unmarshal(&s); err != nil {
-// 		return err
-// 	}
-// 	return m.UnmarshalText([]byte(s))
-// }
-//
-// func (m *MACAddress) MarshalJSON() ([]byte, error) {
-// 	text := strings.ToUpper(strings.ReplaceAll(m.HW.String(), ":", "-"))
-// 	return []byte(fmt.Sprintf(`"%s"`, text)), nil
-// }
-//
-// func (m *MACAddress) UnmarshalJSON(data []byte) error {
-// 	if string(data) == "null" { // Handle JSON "null" explicitly.
-// 		m.HW = nil
-// 		return nil
-// 	}
-// 	var s string
-// 	if err := json.Unmarshal(data, &s); err != nil {
-// 		return err
-// 	}
-// 	return m.UnmarshalText([]byte(s))
-// }
-
 type Server struct{}
 
 type systemctlAction string
@@ -157,12 +100,14 @@ func (s *Server) SetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error 
 
 // MaybeStartDnsmasq checks if it's okay to start dnsmasq based on config.
 // If the service is config disabled then return false without an error.
-// Return true if config wants dnsmasq started and there isn't already a DHCP server on the network.
-// If there is a DHCP server on the network then return an error.
+// Return true if config wants dnsmasq started and there isn't already a DHCP server on the network i.e. dnsmasq
+// was started.
+// If there is a DHCP server on the network then return false and an error.
 func (s *Server) MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
 	if !isDNSMasqEnabledInConfig() {
 		return false, nil
 	}
+
 	ifaceName, err := getPrimaryInterfaceName()
 	if err != nil {
 		return false, fmt.Errorf("failed to get primary interface: %w", err)
@@ -173,24 +118,38 @@ func (s *Server) MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
 	}
 
 	numAttempts := 5
-	running := false
+	dhcpRunning := false
 
+	// Attempt to start dnsmasq.
 	for idx := 0; idx < numAttempts; idx++ {
-		running, err = isDHCPServerRunning(logger, hwAddr)
-		if err != nil && !errors.Is(err, errDHCPServerNotRunning) {
+		dhcpRunning, err = isDHCPServerRunning(logger, hwAddr)
+		if err != nil && !errors.Is(err, errDHCPServerNotRunning) { // if we should try again...
 			logger.Warnf("Error while checking if DHCP server is running: %v", err)
 			continue // proceed to the next attempt
 		}
-		if running {
-			logger.Info("DHCP server is running, not starting dnsmasq")
+
+		// Check our dnsmasq service status.
+		dnsmasqIsActive, err := isDnsmasqServiceActive()
+		if err != nil {
+			logger.Warnf("Error while checking if dnsmasq service is active: %v", err)
+			continue
+		}
+
+		if dhcpRunning && !dnsmasqIsActive { // if another DHCP server is running...
+			logger.Info("Another DHCP server is running, not starting dnsmasq")
 			return false, fmt.Errorf("attempt to start dnsmasq when a DHCP server is already running")
-		} else {
-			logger.Info("DHCP server is not running, attempting to start dnsmasq")
+		} else { // else there is no other DHCP server running, or it's our own dnsmasq service...
+			if dnsmasqIsActive {
+				logger.Info("The local DHCP server is running, attempting to restart dnsmasq")
+			} else {
+				logger.Info("DHCP server is not running, attempting to start dnsmasq")
+			}
 			// Set a static IP for this gateway.
 			if err := setStaticIP(logger, ifaceName, dnsMasqConfig, findSmallestSingleCIDR); err != nil {
 				logger.Warnf("Failed to set static IP on interface %s on attempt %d: %v", ifaceName, numAttempts+1, err)
 				continue
 			}
+			// Start dnsmasq.
 			if err := startDnsmasq(logger, dnsMasqConfig); err != nil {
 				logger.Warnf("Failed to start dnsmasq on attempt %d: %v", numAttempts+1, err)
 				// TODO: surface dnsmasq service errors back to the web client.
@@ -410,7 +369,7 @@ func isDHCPServerRunning(logger *zap.SugaredLogger, mac net.HardwareAddr) (bool,
 	conn.SetDeadline(time.Now().Add(waitDuration))
 	buf := make([]byte, 1500)
 	n, addr, err := conn.ReadFrom(buf)
-	if err != nil {
+	if err != nil {  // if we timed out and suppose there is no DHCP server running...
 		return false, errDHCPServerNotRunning
 	}
 
@@ -699,7 +658,11 @@ func setDnsmasqServiceState(action systemctlAction) error {
 // Aim is that supplied MACs will be assigned a custom gateway, while anything else
 // gets the default gateway that the device running this code has.
 func startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
-	hwAddr, err := getIfaceHardwareAddress(defaultInterfaceName)
+	ifaceName, err := getPrimaryInterfaceName()
+	if err != nil {
+		return fmt.Errorf("error fetching primary interface name: %v", err)
+	}
+	hwAddr, err := getIfaceHardwareAddress(ifaceName)
 	if err != nil {
 		return fmt.Errorf("error fetching hardware address for net adapter %v: %v", defaultInterfaceName, err)
 	}
@@ -841,13 +804,19 @@ func unsetStaticIP(logger *zap.SugaredLogger, ifaceName string) error {
 	return nil
 }
 
-func isDnsmasqServiceEnabled() (bool, error) {
+func isDnsmasqServiceActive() (bool, error) {
 	cmd := exec.Command("systemctl", "is-active", "dnsmasq")
 	output, err := cmd.CombinedOutput()
+	outStr := strings.TrimSpace(string(output))
+	if outStr == "active" {
+		return true, nil
+	} else if outStr == "inactive" {
+		return false, nil
+	}
 	if err != nil {
 		return false, fmt.Errorf("error checking if dnsmasq service is enabled: %v: %v", string(output), err)
 	}
-	return strings.TrimSpace(string(output)) == "active", nil
+	return false, nil
 }
 
 // func getEth0IP() (net.IP, error) {
