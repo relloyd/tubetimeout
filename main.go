@@ -85,21 +85,22 @@ func main() {
 	var cleanupFuncs []cleanupFunc
 
 	// Maybe start DHCP server.
-	dhcpServer, err := dhcp.NewServer()
+	dhcpServer, err := dhcp.NewServer(ctx, logger)
 	if err != nil {
 		logger.Fatalf("Failed to setup DHCP server: %v", err)
 	}
 	cleanupFuncs = append(cleanupFuncs, dhcpServer.Stop)
-	go func() {
-		if config.AppCfg.DHCPServerEnabled {
-			status, err2 := dhcpServer.MaybeStartDnsmasq(logger)
-			if err2 != nil {
-				logger.Errorf("Failed to start DHCP server: %v", err2)
-			} else {
-				logger.Infof("DHCP server started: %v", status)
-			}
-		}
-	}()
+
+	// go func() {
+	// 	if config.AppCfg.DHCPServerEnabled {
+	// 		status, err2 := dhcpServer.MaybeStartDnsmasq(logger)
+	// 		if err2 != nil {
+	// 			logger.Errorf("Failed to start DHCP server: %v", err2)
+	// 		} else {
+	// 			logger.Infof("DHCP server started: %v", status)
+	// 		}
+	// 	}
+	// }()
 
 	handleDelayedStart(logger, &config.AppCfg)
 	handleDebugging(logger, &config.AppCfg.DebugConfig)
