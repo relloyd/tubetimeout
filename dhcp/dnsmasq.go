@@ -33,8 +33,8 @@ type DNSMasqConfig struct {
 	AddressReservations []Reservation `yaml:"addressReservations" json:"addressReservations"`
 	ServiceEnabled      bool          `yaml:"serviceEnabled" json:"serviceEnabled"`
 
-	mu           *sync.Mutex
 	serviceState serviceState
+	wantsRestart bool
 }
 
 type Reservation struct {
@@ -56,6 +56,7 @@ const (
 	serviceStart        = systemctlAction("start")
 	systemctlRestart    = systemctlAction("restart")
 	serviceStateStarted = serviceState("active")
+	serviceStateWaiting = serviceState("waiting to start")
 	serviceStateStopped = serviceState("inactive")
 )
 
@@ -71,12 +72,13 @@ var (
 	routeCmdArgs             = []string{"-rn"}
 	errDHCPServerNotRunning  = errors.New("DHCP server not running")
 	fallbackDNSIPs           = []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")} // default DNS IPs to CloudFlare and Google
+	dhcpMutex                = &sync.Mutex{}
 )
 
 func newDNSMasqConfig() *DNSMasqConfig {
 	return &DNSMasqConfig{
-		mu:                  &sync.Mutex{},
 		AddressReservations: make([]Reservation, 0),
+		wantsRestart:        true, // allow worker to (re)start dnsmasq for the first time
 	}
 }
 
@@ -101,63 +103,79 @@ func NewServer(ctx context.Context, logger *zap.SugaredLogger) (*Server, error) 
 
 func (s *Server) startWorker(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Second)
+	var err error
 	for {
 		select {
 		case <-ctx.Done():
 			ticker.Stop()
 			return
 		case <-ticker.C:
-			dnsMasqConfig.mu.Lock()
+			dhcpMutex.Lock()
 			if dnsMasqConfig.ServiceEnabled {
 				s.chanWorker <- serviceStart
 			} else {
 				s.chanWorker <- serviceStop
 			}
-			dnsMasqConfig.mu.Unlock()
+			dhcpMutex.Unlock()
 		case action := <-s.chanWorker:
 			switch action {
 			case serviceStart:
-				started, err := s.MaybeStartDnsmasq(s.logger)
+				dhcpMutex.Lock()
+				dnsMasqConfig.serviceState, err = s.maybeStartDnsmasq(s.logger)
 				if err != nil {
-					s.logger.Warnf("Worker failed to start dnsmasq: %v", err)
+					s.logger.Errorf("Worker failed to start dnsmasq: %v", err)
 				}
-				dnsMasqConfig.mu.Lock()
-				if started {
-					dnsMasqConfig.serviceState = serviceStateStarted
-				} else {
-					dnsMasqConfig.serviceState = serviceStateStopped
-				}
-				dnsMasqConfig.mu.Unlock()
+				dhcpMutex.Unlock()
 			case serviceStop:
-				err := s.Stop()
+				err = s.Stop()
 				if err != nil {
 					s.logger.Errorf("Error stopping dnsmasq: %v", err)
 				}
-				dnsMasqConfig.mu.Lock()
+				dhcpMutex.Lock()
 				dnsMasqConfig.serviceState = serviceStateStopped
-				dnsMasqConfig.mu.Unlock()
+				dhcpMutex.Unlock()
 			}
 		}
 	}
 }
 
-// MaybeStartDnsmasq checks if it's okay to start dnsmasq based on config.
+// maybeStartDnsmasq checks if it's okay to start dnsmasq based on config.
 // If the service is config disabled then return false without an error.
 // Return true if config wants dnsmasq started and the service could be started,
 // i.e. there isn't already a DHCP server on the network.
 // If there is a DHCP server on the network then return false and an error.
-func (s *Server) MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
-	if !isDNSMasqEnabledInConfig() {
-		return false, nil
+// TODO: test maybeStartDnsmasq()
+func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger) (serviceState, error) {
+	if !isDNSMasqEnabledInConfig() { // if dnsmasq should be disabled...
+		return serviceStateStopped, nil
 	}
+
+	// Check our dnsmasq service status.
+	localDnsmasqIsActive, err := isDnsmasqServiceActive()
+	if err != nil {
+		logger.Errorf("Error while checking if dnsmasq service is active: %v", err)
+		return serviceStateStopped, fmt.Errorf("error checking if dnsmasq service is active: %w", err)
+	}
+
+	// Check if we should (re)start dnsmasq.
+	if !dnsMasqConfig.wantsRestart { // if nothing has changed in the dnsmasq config...
+		if localDnsmasqIsActive { // if dnsmasq is already up...
+			logger.Debug("Local dnsmasq is already active, OK")
+			return serviceStateStarted, nil
+		}
+		logger.Debug("Local dnsmasq is inactive and want dnsmasq start is false, not starting dnsmasq")
+		return serviceStateStopped, nil
+	}
+
+	logger.Info("Want dnsmasq start and service is inactive, attempting to start dnsmasq")
 
 	ifaceName, err := getPrimaryInterfaceName()
 	if err != nil {
-		return false, fmt.Errorf("failed to get primary interface: %w", err)
+		return serviceStateStopped, fmt.Errorf("failed to get primary interface: %w", err)
 	}
 	hwAddr, err := getIfaceHardwareAddress(ifaceName)
 	if err != nil {
-		return false, fmt.Errorf("failed to get hardware address for interface %s: %w", ifaceName, err)
+		return serviceStateStopped, fmt.Errorf("failed to get hardware address for interface %s: %w", ifaceName, err)
 	}
 
 	numAttempts := 5
@@ -171,19 +189,12 @@ func (s *Server) MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
 			continue // proceed to the next attempt
 		}
 
-		// Check our dnsmasq service status.
-		dnsmasqIsActive, err := isDnsmasqServiceActive()
-		if err != nil {
-			logger.Warnf("Error while checking if dnsmasq service is active: %v", err)
-			continue
-		}
-
-		if dhcpRunning && !dnsmasqIsActive { // if another DHCP server is running...
+		if dhcpRunning && !localDnsmasqIsActive { // if another DHCP server is running...
 			// Return an error.
-			logger.Info("Another DHCP server is running, not starting dnsmasq")
-			return false, fmt.Errorf("attempt to start dnsmasq when another DHCP server is already running")
+			logger.Warn("Another DHCP server is running, waiting to start dnsmasq")
+			return serviceStateWaiting, nil
 		} else { // else there is no other DHCP server running, or it's our own dnsmasq service...
-			if dnsmasqIsActive {
+			if localDnsmasqIsActive {
 				logger.Info("The local DHCP server is running, attempting to restart dnsmasq")
 			} else {
 				logger.Info("DHCP server is not running, attempting to start dnsmasq")
@@ -192,6 +203,7 @@ func (s *Server) MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
 			// Set a static IP for this gateway.
 			if err := setStaticIP(logger, ifaceName, dnsMasqConfig, findSmallestSingleCIDR); err != nil {
 				logger.Warnf("Failed to set static IP on interface %s on attempt %d: %v", ifaceName, numAttempts+1, err)
+				// TODO: surface network error to web
 				continue
 			}
 
@@ -207,10 +219,10 @@ func (s *Server) MaybeStartDnsmasq(logger *zap.SugaredLogger) (bool, error) {
 			}
 
 			logger.Info("Successfully started dnsmasq")
-			return true, nil
+			return serviceStateStarted, nil
 		}
 	}
-	return false, fmt.Errorf("failed to start dnsmasq after %d attempts", numAttempts)
+	return serviceStateStopped, fmt.Errorf("failed to start dnsmasq after %d attempts", numAttempts)
 }
 
 func (s *Server) Stop() error {

@@ -93,7 +93,7 @@ func main() {
 
 	// go func() {
 	// 	if config.AppCfg.DHCPServerEnabled {
-	// 		status, err2 := dhcpServer.MaybeStartDnsmasq(logger)
+	// 		status, err2 := dhcpServer.maybeStartDnsmasq(logger)
 	// 		if err2 != nil {
 	// 			logger.Errorf("Failed to start DHCP server: %v", err2)
 	// 		} else {

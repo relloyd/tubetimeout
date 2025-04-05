@@ -3,6 +3,7 @@ package dhcp
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -12,7 +13,6 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -33,8 +33,7 @@ func GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
 	}
 
 	// Load from file.
-	mu := &sync.Mutex{}
-	cfg, err := config.GetConfig[*DNSMasqConfig](mu, configFileDHCPSettings, newDNSMasqConfig)
+	cfg, err := config.GetConfig[*DNSMasqConfig](dhcpMutex, configFileDHCPSettings, newDNSMasqConfig)
 	if err != nil {
 		logger.Warnf("Failed to get dnsmasq config: %v", err)
 		return nil, fmt.Errorf("failed to get dnsmasq config: %w", err)
@@ -87,9 +86,6 @@ func SetConfig(_ *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 		if cfg == nil {
 			return fmt.Errorf("DNSMasqConfig is nil")
 		}
-		if cfg.mu == nil {
-			cfg.mu = &sync.Mutex{}
-		}
 		if cfg.DefaultGateway == nil || cfg.DefaultGateway.To4() == nil {
 			return fmt.Errorf("invalid or missing DefaultGateway")
 		}
@@ -105,20 +101,13 @@ func SetConfig(_ *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 		if len(cfg.DnsIPs) == 0 {
 			cfg.DnsIPs = fallbackDNSIPs
 		}
-		// old code used when DnsIPs was a string.
-		// else {
-		// 	for _, dnsIP := range cfg.DnsIPs {
-		// 		if net.ParseIP(dnsIP).To4() == nil {
-		// 			return fmt.Errorf("invalid DNS IP: %s", dnsIP)
-		// 		}
-		// 	}
-		// }
 		if bytes.Compare(cfg.LowerBound, cfg.UpperBound) >= 0 {
 			return fmt.Errorf("LowerBound must be less than UpperBound")
 		}
 		for _, v := range cfg.AddressReservations { // for each address reservation...
 			v.MacAddr = models.MAC(strings.ToUpper(strings.ReplaceAll(string(v.MacAddr), ":", "-"))) // Ensure upper case and hyphens.
 		}
+		cfg.wantsRestart = true // assume something has changed for now and that we want a restart
 		return nil
 	}
 
@@ -126,7 +115,7 @@ func SetConfig(_ *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 		dnsMasqConfig = cfg
 	}
 
-	err := config.SetConfig[*DNSMasqConfig](dnsMasqConfig.mu, configFileDHCPSettings, fnValidate, fnUpdateInMem, cfg) // TODO: validate the incoming config but don't override any yet
+	err := config.SetConfig[*DNSMasqConfig](dhcpMutex, configFileDHCPSettings, fnValidate, fnUpdateInMem, cfg) // TODO: validate the incoming config but don't override any yet
 	if err != nil {
 		return fmt.Errorf("failed to set dnsmasq config: %w", err)
 	}
@@ -166,6 +155,11 @@ func getIfaceHardwareAddress(ifaceName string) (net.HardwareAddr, error) {
 }
 
 // isDHCPServerRunning sends a DHCP DISCOVER message and waits for a DHCP OFFER.
+// Returns:
+//   false if DHCP server is not running
+//   errDHCPServerNotRunning if no DHCP server was found running at all
+//   true if DHCP server was found to be running
+//   other errors in case of failure
 func isDHCPServerRunning(logger *zap.SugaredLogger, mac net.HardwareAddr) (bool, error) {
 	waitDuration := 5 * time.Second
 
