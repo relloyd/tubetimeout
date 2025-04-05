@@ -16,7 +16,7 @@ test:
 	go test ./...
 
 build:
-	go build -buildvcs=false -gcflags='all=-N -l' $(LD_FLAGS) -o $(APP_SHORT) .
+	go build -buildvcs=false -gcflags 'all=-N -l' $(LD_FLAGS) -o $(APP_SHORT) .
 
 build-release: test
 	go build -ldflags "-s -w" $(LD_FLAGS) -gcflags "all=-trimpath=$(pwd)" -o $(APP_SHORT) .

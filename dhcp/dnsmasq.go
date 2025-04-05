@@ -92,7 +92,7 @@ func NewServer(ctx context.Context, logger *zap.SugaredLogger) (*Server, error) 
 
 	s := &Server{
 		logger:     logger,
-		chanWorker: make(chan systemctlAction),
+		chanWorker: make(chan systemctlAction, 2),
 	}
 
 	go s.startWorker(ctx)
@@ -104,6 +104,7 @@ func NewServer(ctx context.Context, logger *zap.SugaredLogger) (*Server, error) 
 func (s *Server) startWorker(ctx context.Context) {
 	ticker := time.NewTicker(10 * time.Second)
 	var err error
+	var action systemctlAction
 	for {
 		select {
 		case <-ctx.Done():
@@ -112,11 +113,12 @@ func (s *Server) startWorker(ctx context.Context) {
 		case <-ticker.C:
 			dhcpMutex.Lock()
 			if dnsMasqConfig.ServiceEnabled {
-				s.chanWorker <- serviceRestart
+				action = serviceRestart
 			} else {
-				s.chanWorker <- serviceStop
+				action = serviceStop
 			}
-			dhcpMutex.Unlock()
+			dhcpMutex.Unlock() // don't hold the mutex while sending.
+			s.chanWorker <- action
 		case action := <-s.chanWorker:
 			switch action {
 			case serviceRestart:

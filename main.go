@@ -84,13 +84,6 @@ func main() {
 	// Cleanup functions.
 	var cleanupFuncs []cleanupFunc
 
-	// Maybe start DHCP server.
-	dhcpServer, err := dhcp.NewServer(ctx, logger)
-	if err != nil {
-		logger.Fatalf("Failed to setup DHCP server: %v", err)
-	}
-	cleanupFuncs = append(cleanupFuncs, dhcpServer.Stop)
-
 	// go func() {
 	// 	if config.AppCfg.DHCPServerEnabled {
 	// 		status, err2 := dhcpServer.maybeStartDnsmasq(logger)
@@ -104,6 +97,13 @@ func main() {
 
 	handleDelayedStart(logger, &config.AppCfg)
 	handleDebugging(logger, &config.AppCfg.DebugConfig)
+
+	// Maybe start DHCP server.
+	dhcpServer, err := dhcp.NewServer(ctx, logger)
+	if err != nil {
+		logger.Fatalf("Failed to setup DHCP server: %v", err)
+	}
+	cleanupFuncs = append(cleanupFuncs, dhcpServer.Stop)
 
 	// NFT rules to send traffic to NFQueue.
 	// There won't be any NFT rules until dest IPs are supplied by manager callbacks.
