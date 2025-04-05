@@ -24,37 +24,13 @@ func init() {
 	}
 }
 
-type DNSMasqConfig struct {
-	DefaultGateway      net.IP        `yaml:"defaultGateway" json:"defaultGateway"`
-	ThisGateway         net.IP        `yaml:"thisGateway" json:"thisGateway"`
-	LowerBound          net.IP        `yaml:"lowerBound" json:"lowerBound"`
-	UpperBound          net.IP        `yaml:"upperBound" json:"upperBound"`
-	DnsIPs              []net.IP      `yaml:"dnsIPs" json:"dnsIPs"`
-	AddressReservations []Reservation `yaml:"addressReservations" json:"addressReservations"`
-	ServiceEnabled      bool          `yaml:"serviceEnabled" json:"serviceEnabled"`
-
-	serviceState serviceState
-	wantsRestart bool
-}
-
-type Reservation struct {
-	MacAddr models.MAC `yaml:"macAddr" json:"macAddr"` // use string type for MacAddr so it marshals to YAML nicely - we had issues implementing interfaces to make this happen on net.HardwareAddr.
-	IpAddr  net.IP     `yaml:"ipAddr" json:"ipAddr"`
-	Name    string     `yaml:"name" json:"name"`
-}
-
-type Server struct {
-	chanWorker chan systemctlAction
-	logger     *zap.SugaredLogger
-}
-
 type systemctlAction string
 type serviceState string
 
 const (
-	serviceStop         = systemctlAction("stop")
-	serviceStart        = systemctlAction("start")
-	systemctlRestart    = systemctlAction("restart")
+	serviceStop    = systemctlAction("stop")
+	serviceRestart = systemctlAction("restart")
+
 	serviceStateStarted = serviceState("active")
 	serviceStateWaiting = serviceState("waiting to start")
 	serviceStateStopped = serviceState("inactive")
@@ -75,11 +51,35 @@ var (
 	dhcpMutex                = &sync.Mutex{}
 )
 
+type DNSMasqConfig struct {
+	DefaultGateway      net.IP        `yaml:"defaultGateway" json:"defaultGateway"`
+	ThisGateway         net.IP        `yaml:"thisGateway" json:"thisGateway"`
+	LowerBound          net.IP        `yaml:"lowerBound" json:"lowerBound"`
+	UpperBound          net.IP        `yaml:"upperBound" json:"upperBound"`
+	DnsIPs              []net.IP      `yaml:"dnsIPs" json:"dnsIPs"`
+	AddressReservations []Reservation `yaml:"addressReservations" json:"addressReservations"`
+	ServiceEnabled      bool          `yaml:"serviceEnabled" json:"serviceEnabled"`
+
+	serviceState serviceState
+	wantsRestart bool
+}
+
+type Reservation struct {
+	MacAddr models.MAC `yaml:"macAddr" json:"macAddr"` // use string type for MacAddr so it marshals to YAML nicely - we had issues implementing interfaces to make this happen on net.HardwareAddr.
+	IpAddr  net.IP     `yaml:"ipAddr" json:"ipAddr"`
+	Name    string     `yaml:"name" json:"name"`
+}
+
 func newDNSMasqConfig() *DNSMasqConfig {
 	return &DNSMasqConfig{
 		AddressReservations: make([]Reservation, 0),
 		wantsRestart:        true, // allow worker to (re)start dnsmasq for the first time
 	}
+}
+
+type Server struct {
+	chanWorker chan systemctlAction
+	logger     *zap.SugaredLogger
 }
 
 func NewServer(ctx context.Context, logger *zap.SugaredLogger) (*Server, error) {
@@ -96,7 +96,7 @@ func NewServer(ctx context.Context, logger *zap.SugaredLogger) (*Server, error) 
 	}
 
 	go s.startWorker(ctx)
-	s.chanWorker <- serviceStart
+	s.chanWorker <- serviceRestart // initial startup
 
 	return s, nil
 }
@@ -112,14 +112,14 @@ func (s *Server) startWorker(ctx context.Context) {
 		case <-ticker.C:
 			dhcpMutex.Lock()
 			if dnsMasqConfig.ServiceEnabled {
-				s.chanWorker <- serviceStart
+				s.chanWorker <- serviceRestart
 			} else {
 				s.chanWorker <- serviceStop
 			}
 			dhcpMutex.Unlock()
 		case action := <-s.chanWorker:
 			switch action {
-			case serviceStart:
+			case serviceRestart:
 				dhcpMutex.Lock()
 				dnsMasqConfig.serviceState, err = s.maybeStartDnsmasq(s.logger)
 				if err != nil {
@@ -234,5 +234,10 @@ func (s *Server) GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
 }
 
 func (s *Server) SetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
-	return defaultSetConfig(logger, cfg)
+	err := defaultSetConfig(logger, cfg)
+	if err != nil {
+		return err
+	}
+	s.chanWorker <- serviceRestart
+	return nil
 }

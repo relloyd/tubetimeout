@@ -2,13 +2,13 @@ package dhcp
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -52,7 +52,7 @@ func TestNewServer(t *testing.T) {
 				return newDNSMasqConfig(), tt.mockGetConfigError
 			}
 
-			server, err := NewServer()
+			server, err := NewServer(context.Background(), config.MustGetLogger())
 
 			if tt.expectError {
 				assert.Error(t, err, tt.errorMsg)
@@ -196,7 +196,6 @@ func TestSetConfig_WritesToFile(t *testing.T) {
 
 	// Create a sample config with a known value.
 	sampleCfg := &DNSMasqConfig{
-		mu:             &sync.Mutex{},
 		DefaultGateway: net.ParseIP("192.168.1.1"),
 		ThisGateway:    net.ParseIP("192.168.1.2"),
 		LowerBound:     net.ParseIP("192.168.1.3"),

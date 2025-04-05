@@ -523,7 +523,7 @@ func startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 	}
 
 	// Restart dnsmasq to apply the new configuration.
-	if err := setDnsmasqServiceState(systemctlRestart); err != nil {
+	if err := setDnsmasqServiceState(serviceRestart); err != nil {
 		return fmt.Errorf("error restarting dnsmasq: %v", err)
 	}
 
@@ -612,7 +612,7 @@ func setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig
 	if err != nil {
 		return fmt.Errorf("error setting static IP: %v: %v", string(output), err)
 	}
-	logger.Infof("command output: %v", string(output))
+	logger.Infof("command output: %v", strings.TrimRight(string(output), "\n"))
 	return nil
 }
 
