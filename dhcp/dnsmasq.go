@@ -61,7 +61,6 @@ type DNSMasqConfig struct {
 	ServiceEnabled      bool          `yaml:"serviceEnabled" json:"serviceEnabled"`
 
 	serviceState serviceState
-	wantsRestart bool
 }
 
 type Reservation struct {
@@ -148,10 +147,6 @@ func (s *Server) startWorker(ctx context.Context) {
 // If there is a DHCP server on the network then return false and an error.
 // TODO: test maybeStartDnsmasq()
 func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger) (serviceState, error) {
-	if !isDNSMasqEnabledInConfig() { // if dnsmasq should be disabled...
-		return serviceStateStopped, nil
-	}
-
 	// Check our dnsmasq service status.
 	localDnsmasqIsActive, err := isDnsmasqServiceActive()
 	if err != nil {
@@ -159,7 +154,18 @@ func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger) (serviceState, err
 		return serviceStateStopped, fmt.Errorf("error checking if dnsmasq service is active: %w", err)
 	}
 
-	// Check if we should (re)start dnsmasq.
+	// Maybe stop the dnsmasq.
+	if !isDNSMasqEnabledInConfig() { // if dnsmasq should be disabled...
+		if localDnsmasqIsActive {
+			err := setDnsmasqServiceState(serviceStop)
+			if err != nil {
+				logger.Errorf("Error while stopping dnsmasq service: %v", err)
+			}
+		}
+		return serviceStateStopped, nil
+	}
+
+	// Maybe (re)start dnsmasq.
 	if !dnsMasqConfig.wantsRestart { // if nothing has changed in the dnsmasq config...
 		if localDnsmasqIsActive { // if dnsmasq is already up...
 			logger.Debug("Local dnsmasq is already active, OK")
@@ -192,7 +198,7 @@ func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger) (serviceState, err
 		}
 
 		if dhcpRunning && !localDnsmasqIsActive { // if another DHCP server is running...
-			// Return an error.
+			// Signal that we're waiting for the other DHCP server to be stopped first.
 			logger.Warn("Another DHCP server is running, waiting to start dnsmasq")
 			return serviceStateWaiting, nil
 		} else { // else there is no other DHCP server running, or it's our own dnsmasq service...
@@ -201,6 +207,8 @@ func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger) (serviceState, err
 			} else {
 				logger.Info("DHCP server is not running, attempting to start dnsmasq")
 			}
+
+			// (re)start dnsmasq.
 
 			// Set a static IP for this gateway.
 			if err := setStaticIP(logger, ifaceName, dnsMasqConfig, findSmallestSingleCIDR); err != nil {
