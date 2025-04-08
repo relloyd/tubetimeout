@@ -156,10 +156,11 @@ func getIfaceHardwareAddress(ifaceName string) (net.HardwareAddr, error) {
 
 // isDHCPServerRunning sends a DHCP DISCOVER message and waits for a DHCP OFFER.
 // Returns:
-//   false if DHCP server is not running
-//   errDHCPServerNotRunning if no DHCP server was found running at all
-//   true if DHCP server was found to be running
-//   other errors in case of failure
+//
+//	false if DHCP server is not running
+//	errDHCPServerNotRunning if no DHCP server was found running at all
+//	true if DHCP server was found to be running
+//	other errors in case of failure
 func isDHCPServerRunning(logger *zap.SugaredLogger, mac net.HardwareAddr) (bool, error) {
 	waitDuration := 5 * time.Second
 
@@ -526,8 +527,6 @@ func startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 	if err := setDnsmasqServiceState(serviceRestart); err != nil {
 		return fmt.Errorf("error restarting dnsmasq: %v", err)
 	}
-
-	// TODO: surface dnsmasq service errors back to the web client.
 
 	logger.Info("dnsmasq configuration updated and service restarted successfully")
 	return nil
