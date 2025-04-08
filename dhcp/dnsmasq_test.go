@@ -83,9 +83,10 @@ func TestCheckDHCPServer(t *testing.T) {
 
 	// TODO: fix this non-deterministic test that uses different logic when dnsmasq is enabled vs disabled!
 	//  you need to actually test isDHCPServerRunning!
-	res, err := isDHCPServerRunning(config.MustGetLogger(), mac)
+	svc := &dhcpService{}
+	res, err := svc.isDHCPServerRunning(config.MustGetLogger(), mac)
 
-	if isActive, err2 := isDnsmasqServiceActive(); err2 == nil && isActive {
+	if isActive, err2 := svc.isDnsmasqServiceActive(); err2 == nil && isActive {
 		assert.Equal(t, true, res, "isDHCPServerRunning() should return true: %v", err)
 	} else {
 		assert.Equal(t, false, res, "isDHCPServerRunning() should return false: %v", err)

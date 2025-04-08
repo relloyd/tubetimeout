@@ -123,13 +123,6 @@ func SetConfig(_ *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 	return nil
 }
 
-func isDNSMasqEnabledInConfig() bool {
-	if dnsMasqConfig != nil && dnsMasqConfig.ServiceEnabled {
-		return true
-	}
-	return false
-}
-
 func getPrimaryInterfaceName() (string, error) {
 	switch runtime.GOOS {
 	case "linux":
@@ -154,6 +147,15 @@ func getIfaceHardwareAddress(ifaceName string) (net.HardwareAddr, error) {
 	return iface.HardwareAddr, nil
 }
 
+type dhcpService struct{}
+
+func (d *dhcpService) isDNSMasqEnabledInConfig() bool {
+	if dnsMasqConfig != nil && dnsMasqConfig.ServiceEnabled {
+		return true
+	}
+	return false
+}
+
 // isDHCPServerRunning sends a DHCP DISCOVER message and waits for a DHCP OFFER.
 // Returns:
 //
@@ -161,7 +163,7 @@ func getIfaceHardwareAddress(ifaceName string) (net.HardwareAddr, error) {
 //	errDHCPServerNotRunning if no DHCP server was found running at all
 //	true if DHCP server was found to be running
 //	other errors in case of failure
-func isDHCPServerRunning(logger *zap.SugaredLogger, mac net.HardwareAddr) (bool, error) {
+func (d *dhcpService) isDHCPServerRunning(logger *zap.SugaredLogger, mac net.HardwareAddr) (bool, error) {
 	waitDuration := 5 * time.Second
 
 	// Use ListenConfig with a Control function to set SO_REUSEADDR.
@@ -503,7 +505,7 @@ func setDnsmasqServiceState(action systemctlAction) error {
 // EnableDnsmasq updates the dnsmasq configuration with the given named MACs and restarts the service.
 // Aim is that supplied MACs will be assigned a custom gateway, while anything else
 // gets the default gateway that the device running this code has.
-func startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
+func (d *dhcpService) startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 	ifaceName, err := getPrimaryInterfaceName()
 	if err != nil {
 		return fmt.Errorf("error fetching primary interface name: %v", err)
@@ -582,7 +584,7 @@ func findSmallestSingleCIDR(startIP, endIP net.IP) (string, string) {
 	return "", ""
 }
 
-func setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig, fnFinder cidrFinderFunc) error {
+func (d *dhcpService) setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig, fnFinder cidrFinderFunc) error {
 	logger = logger.With("mode", "setting static IP")
 
 	// Example:
@@ -615,7 +617,7 @@ func setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig
 	return nil
 }
 
-func unsetStaticIP(logger *zap.SugaredLogger, ifaceName string) error {
+func (d *dhcpService) unsetStaticIP(logger *zap.SugaredLogger, ifaceName string) error {
 	logger = logger.With("mode", "unsetting static IP")
 	cmd := "nmcli"
 
@@ -648,7 +650,7 @@ func unsetStaticIP(logger *zap.SugaredLogger, ifaceName string) error {
 	return nil
 }
 
-func isDnsmasqServiceActive() (bool, error) {
+func (d *dhcpService) isDnsmasqServiceActive() (bool, error) {
 	cmd := exec.Command("systemctl", "is-active", "dnsmasq")
 	output, err := cmd.CombinedOutput()
 	outStr := strings.TrimSpace(string(output))
