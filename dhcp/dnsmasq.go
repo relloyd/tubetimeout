@@ -44,6 +44,7 @@ var (
 	configFileDNSMasqService = "/etc/dnsmasq.conf"
 	configFileDHCPSettings   = "dhcp-config.yaml"
 	dnsMasqConfig            *DNSMasqConfig // expect NewServer() to set dnsMasqConfig up.
+	defaultDhcpService       = &dhcpService{}
 	routeCmd                 = defaultRouteCmd
 	routeCmdArgs             = []string{"-rn"}
 	errDHCPServerNotRunning  = errors.New("DHCP server not running")
@@ -77,18 +78,19 @@ func newDNSMasqConfig() *DNSMasqConfig {
 	}
 }
 
-type Restarter interface {
-	isDnsmasqServiceActive() bool
+type restarter interface {
+	isDnsmasqServiceActive() (bool, error)
 	isDNSMasqEnabledInConfig() bool
 	isDHCPServerRunning(logger *zap.SugaredLogger, hwAddr net.HardwareAddr) (bool, error)
-	setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig, findSmallestSingleCIDR bool) error
+	setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig, fnFinder cidrFinderFunc) error
+	unsetStaticIP(logger *zap.SugaredLogger, ifaceName string) error
 	startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error
 }
 
 type Server struct {
 	logger      *zap.SugaredLogger
 	chanWorker  chan systemctlAction
-	dhcpService *dhcpService
+	dhcpService restarter
 	ifaceName   string
 	hwAddr      net.HardwareAddr
 }
@@ -104,7 +106,7 @@ func NewServer(ctx context.Context, logger *zap.SugaredLogger) (*Server, error) 
 	s := &Server{
 		logger:      logger,
 		chanWorker:  make(chan systemctlAction, 2),
-		dhcpService: &dhcpService{},
+		dhcpService: defaultDhcpService,
 	}
 
 	s.ifaceName, err = getPrimaryInterfaceName()
@@ -168,7 +170,7 @@ func (s *Server) startWorker(ctx context.Context) {
 // i.e. there isn't already a DHCP server on the network.
 // If there is a DHCP server on the network then return false and an error.
 // TODO: test maybeStartDnsmasq()
-func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger, svc *dhcpService) (serviceState, error) {
+func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger, svc restarter) (serviceState, error) {
 	// Check our dnsmasq service status.
 	localDnsmasqIsActive, err := svc.isDnsmasqServiceActive()
 	if err != nil {
