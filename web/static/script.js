@@ -4,6 +4,10 @@
 document.addEventListener('DOMContentLoaded', () => {
     const saveButton = document.getElementById('save-config-btn');
 
+    document.getElementById('title-button').addEventListener('click', () => {
+        location.reload();
+    });
+
     // API endpoints – note the use of /groups instead of /groupMACs.
     const UrlGroupAPI = '/groups';
     const UrlUsageAPI = '/usage';
@@ -595,10 +599,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showSaveButton() {
-        saveButton.style.display = 'inline-block';
+        saveButton.classList.add('fade-in');
     }
 
     function hideSaveButton() {
+        saveButton.classList.remove('fade-in');
         saveButton.style.display = 'none';
     }
 
