@@ -127,7 +127,7 @@ func (d *dhcpService) startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig
 	}
 
 	// Restart dnsmasq to apply the new configuration.
-	if err := setDnsmasqServiceState(serviceRestart); err != nil {
+	if err := d.setDnsmasqServiceState(serviceRestart); err != nil {
 		return fmt.Errorf("error restarting dnsmasq: %v", err)
 	}
 
@@ -215,4 +215,10 @@ func (d *dhcpService) isDnsmasqServiceActive() (bool, error) {
 		return false, fmt.Errorf("error checking if dnsmasq service is enabled: %v: %v", string(output), err)
 	}
 	return false, nil
+}
+
+// setDnsmasqServiceState restarts the dnsmasq service so that the new config takes effect.
+func (d *dhcpService) setDnsmasqServiceState(action systemctlAction) error {
+	cmd := exec.Command("sudo", "systemctl", string(action), "dnsmasq")
+	return cmd.Run()
 }

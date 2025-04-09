@@ -85,6 +85,7 @@ type restarter interface {
 	setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig, fnFinder cidrFinderFunc) error
 	unsetStaticIP(logger *zap.SugaredLogger, ifaceName string) error
 	startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error
+	setDnsmasqServiceState(action systemctlAction) error
 }
 
 type Server struct {
@@ -181,7 +182,7 @@ func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger, svc restarter) (se
 	// Maybe stop dnsmasq.
 	if !svc.isDNSMasqEnabledInConfig() { // if dnsmasq is disabled by the user...
 		if localDnsmasqIsActive {
-			err := setDnsmasqServiceState(serviceStop)
+			err := s.dhcpService.setDnsmasqServiceState(serviceStop)
 			if err != nil {
 				logger.Errorf("Error while stopping dnsmasq service: %v", err)
 			}
@@ -204,7 +205,7 @@ func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger, svc restarter) (se
 			// Signal that we're waiting for the other DHCP server to be stopped first.
 			logger.Warn("Another DHCP server is running, waiting to start dnsmasq")
 			return serviceStateWaiting, nil
-		} else { // else there is no other DHCP server running, or it's our own dnsmasq service...
+		} else {                                                     // else there is no other DHCP server running, or it's our own dnsmasq service...
 			if dnsMasqConfig.wantsRestart || !localDnsmasqIsActive { // if the service needs a (re)start...
 				// (Re)start dnsmasq.
 				pattern := "The local DHCP server %v running, attempting to (%v)start dnsmasq"
@@ -247,7 +248,7 @@ func (s *Server) restart() {
 }
 
 func (s *Server) Stop() error {
-	return setDnsmasqServiceState(serviceStop)
+	return s.dhcpService.setDnsmasqServiceState(serviceStop)
 }
 
 func (s *Server) GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {

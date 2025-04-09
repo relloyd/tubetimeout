@@ -403,12 +403,6 @@ func writeDnsmasqConfig(configPath string, configContent string) error {
 	return os.WriteFile(configPath, []byte(configContent), 0644)
 }
 
-// setDnsmasqServiceState restarts the dnsmasq service so that the new config takes effect.
-func setDnsmasqServiceState(action systemctlAction) error {
-	cmd := exec.Command("sudo", "systemctl", string(action), "dnsmasq")
-	return cmd.Run()
-}
-
 // ipToBigInt converts an IP to a big.Int
 func ipToBigInt(ip net.IP) *big.Int {
 	ip = ip.To16() // Ensure IPv6 representation (even for IPv4)
