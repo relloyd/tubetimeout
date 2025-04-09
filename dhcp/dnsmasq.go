@@ -181,9 +181,9 @@ func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger, svc restarter) (se
 	// Maybe stop dnsmasq.
 	if !svc.isDNSMasqEnabledInConfig() { // if dnsmasq is disabled by the user...
 		if localDnsmasqIsActive {
-			err := s.dhcpService.setDnsmasqServiceState(serviceStop)
+			err := s.Stop()
 			if err != nil {
-				logger.Errorf("Error while stopping dnsmasq service: %v", err)
+				return dnsMasqConfig.ServiceState, err
 			}
 		}
 		return serviceStateStopped, nil
@@ -191,49 +191,52 @@ func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger, svc restarter) (se
 
 	numAttempts := 5
 	dhcpRunning := false
+	wantStart := false
 
 	for idx := 0; idx < numAttempts; idx++ {
-		// Is dnsmasq running?
-		dhcpRunning, err = svc.isDHCPServerRunning(logger, s.hwAddr)
-		if err != nil && !errors.Is(err, errDHCPServerNotRunning) { // if we should try again...
-			logger.Warnf("Error while checking if DHCP server is running: %v", err)
-			continue
-		}
-
-		if dhcpRunning && !localDnsmasqIsActive { // if another DHCP server is running...
-			// Signal that we're waiting for the other DHCP server to be stopped first.
-			logger.Warn("Another DHCP server is running, waiting to start dnsmasq")
-			return serviceStateWaiting, nil
-		} else { // else there is no other DHCP server running, or it's our own dnsmasq service...
-			if dnsMasqConfig.wantsRestart || !localDnsmasqIsActive { // if the service needs a (re)start...
-				// (Re)start dnsmasq.
-				pattern := "The local DHCP server %v running, attempting to (%v)start dnsmasq"
-				if localDnsmasqIsActive {
-					logger.Info(fmt.Sprintf(pattern, "is", ""))
-				} else {
-					logger.Info(fmt.Sprintf(pattern, "is not", "re"))
-				}
-
-				// Set a static IP for this gateway.
-				if err := svc.setStaticIP(logger, s.ifaceName, dnsMasqConfig, findSmallestSingleCIDR); err != nil {
-					logger.Warnf("Failed to set static IP on interface %s on attempt %d: %v", s.ifaceName, numAttempts+1, err)
-					// TODO: surface network error to web
-					continue
-				}
-
-				// Start dnsmasq.
-				if err := svc.startDnsmasq(logger, dnsMasqConfig); err != nil { // if dnsmasq failed to started...
-					logger.Warnf("Failed to start dnsmasq on attempt %d: %v", numAttempts+1, err)
-					err := svc.unsetStaticIP(logger, s.ifaceName) // reset to dynamic IP allocation in case we need another DHCP server to get an IP for web access.
-					if err != nil {
-						logger.Warnf("Failed to unset static IP on interface %s on attempt %d: %v", s.ifaceName, numAttempts+1, err)
-					}
-					continue // retry in case of failure
-				}
-
-				logger.Info("Successfully started dnsmasq")
-				return serviceStateStarted, nil
+		if !localDnsmasqIsActive { // if the local server isn't running...
+			// Check if another one is.
+			dhcpRunning, err = svc.isDHCPServerRunning(logger, s.hwAddr)
+			if err != nil { // if we should try again...
+				logger.Warnf("Error while checking if DHCP server is running: %v", err)
+				continue
 			}
+			if dhcpRunning { // if another DHCP server is running...
+				// Signal that we're waiting for the other DHCP server to be stopped first.
+				logger.Warn("Another DHCP server is running, waiting to start dnsmasq")
+				return serviceStateWaiting, nil
+			}
+			wantStart = true
+		}
+		// Local dnsmasq is running.
+		if wantStart || dnsMasqConfig.wantsRestart { // if the service needs a (re)start...
+			pattern := "The local DHCP server %v running, attempting to (%v)start dnsmasq"
+			if localDnsmasqIsActive {
+				logger.Info(fmt.Sprintf(pattern, "is", ""))
+			} else {
+				logger.Info(fmt.Sprintf(pattern, "is not", "re"))
+			}
+
+			// Set a static IP for this gateway.
+			if err = svc.setStaticIP(logger, s.ifaceName, dnsMasqConfig, findSmallestSingleCIDR); err != nil {
+				logger.Warnf("Failed to set static IP on interface %s on attempt %d: %v", s.ifaceName, numAttempts+1, err)
+				// TODO: surface network error to web
+				continue
+			}
+
+			// Start dnsmasq.
+			if err = svc.startDnsmasq(logger, dnsMasqConfig); err != nil { // if dnsmasq failed to started...
+				logger.Warnf("Failed to start dnsmasq on attempt %d: %v", numAttempts+1, err)
+				err := svc.unsetStaticIP(logger, s.ifaceName) // reset to dynamic IP allocation in case we need another DHCP server to get an IP for web access.
+				if err != nil {
+					logger.Warnf("Failed to unset static IP on interface %s on attempt %d: %v", s.ifaceName, numAttempts+1, err)
+				}
+				continue // retry in case of failure
+			}
+
+			logger.Info("Successfully started dnsmasq")
+			dnsMasqConfig.wantsRestart = false // wantsRestart set false to prevent restarts until config changes.
+			return serviceStateStarted, nil
 		}
 	}
 
@@ -247,7 +250,13 @@ func (s *Server) restart() {
 }
 
 func (s *Server) Stop() error {
-	return s.dhcpService.setDnsmasqServiceState(serviceStop)
+	err := s.dhcpService.setDnsmasqServiceState(serviceStop)
+	if err != nil {
+		s.logger.Errorf("Error while stopping dnsmasq service: %v", err)
+		return fmt.Errorf("failed to stop dnsmasq: %w", err)
+	}
+	s.logger.Info("Stopped dnsmasq service")
+	return nil
 }
 
 func (s *Server) GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {

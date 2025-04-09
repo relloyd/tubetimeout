@@ -85,7 +85,7 @@ func (d *dhcpService) isDHCPServerRunning(logger *zap.SugaredLogger, mac net.Har
 	buf := make([]byte, 1500)
 	n, addr, err := conn.ReadFrom(buf)
 	if err != nil { // if we timed out and suppose there is no DHCP server running...
-		return false, errDHCPServerNotRunning
+		return false, nil // alternatively return errDHCPServerNotRunning for the positive false case.
 	}
 
 	// Parse the response into a DHCP message.
