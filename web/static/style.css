@@ -83,6 +83,34 @@ h1 {
 }
 
 /* ------------------------------------
+   Pull To Refresh
+------------------------------------- */
+#pullToRefresh {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(-60px);
+    background: #f0f0f0;
+    color: #555;
+    font-family: sans-serif;
+    transition: transform 0.3s;
+    z-index: 1000;
+}
+
+#pullToRefresh.show {
+    transform: translateY(0);
+}
+
+#content {
+    padding-top: 20px;
+}
+
+/* ------------------------------------
    Table Styles
 ------------------------------------- */
 table {
