@@ -39,14 +39,14 @@ const (
 var (
 	defaultInterfaceName     = "eth0"
 	defaultLeaseDuration     = "12h"
-	defaultGetConfig         = GetConfig
-	defaultSetConfig         = SetConfig
-	configFileDNSMasqService = "/etc/dnsmasq.conf"
-	configFileDHCPSettings   = "dhcp-config.yaml"
-	dnsMasqConfig            *DNSMasqConfig // expect NewServer() to set dnsMasqConfig up.
-	defaultDhcpService       = &dhcpService{}
+	defaultGetConfig         = GetConfig // allow mocking
+	defaultSetConfig         = SetConfig // allow mocking
 	routeCmd                 = defaultRouteCmd
 	routeCmdArgs             = []string{"-rn"}
+	configFileDNSMasqService = "/etc/dnsmasq.conf"
+	configFileDHCPSettings   = "dhcp-config.yaml"
+	dnsMasqConfig            *DNSMasqConfig   // expect NewServer() to set dnsMasqConfig up.
+	defaultDhcpService       = &dhcpService{} // allow mocking
 	errDHCPServerNotRunning  = errors.New("DHCP server not running")
 	fallbackDNSIPs           = []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("8.8.8.8")} // default DNS IPs to CloudFlare and Google.
 	dhcpMutex                = &sync.Mutex{}
@@ -170,7 +170,6 @@ func (s *Server) startWorker(ctx context.Context) {
 // Return true if config wants dnsmasq started and the service could be started,
 // i.e. there isn't already a DHCP server on the network.
 // If there is a DHCP server on the network then return false and an error.
-// TODO: test maybeStartDnsmasq()
 func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger, svc restarter) (serviceState, error) {
 	// Check our dnsmasq service status.
 	localDnsmasqIsActive, err := svc.isDnsmasqServiceActive()
