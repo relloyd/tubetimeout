@@ -60,8 +60,8 @@ type DNSMasqConfig struct {
 	DnsIPs              []net.IP      `yaml:"dnsIPs" json:"dnsIPs"`
 	AddressReservations []Reservation `yaml:"addressReservations" json:"addressReservations"`
 	ServiceEnabled      bool          `yaml:"serviceEnabled" json:"serviceEnabled"`
+	ServiceState        serviceState  `yaml:"serviceState" json:"serviceState"`
 
-	serviceState serviceState
 	wantsRestart bool
 }
 
@@ -147,7 +147,7 @@ func (s *Server) startWorker(ctx context.Context) {
 			switch action {
 			case serviceRestart:
 				dhcpMutex.Lock()
-				dnsMasqConfig.serviceState, err = s.maybeStartDnsmasq(s.logger, s.dhcpService)
+				dnsMasqConfig.ServiceState, err = s.maybeStartDnsmasq(s.logger, s.dhcpService)
 				if err != nil {
 					s.logger.Errorf("Worker failed to start dnsmasq: %v", err)
 				}
@@ -158,7 +158,7 @@ func (s *Server) startWorker(ctx context.Context) {
 					s.logger.Errorf("Error stopping dnsmasq: %v", err)
 				}
 				dhcpMutex.Lock()
-				dnsMasqConfig.serviceState = serviceStateStopped
+				dnsMasqConfig.ServiceState = serviceStateStopped
 				dhcpMutex.Unlock()
 			}
 		}
@@ -204,7 +204,7 @@ func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger, svc restarter) (se
 			// Signal that we're waiting for the other DHCP server to be stopped first.
 			logger.Warn("Another DHCP server is running, waiting to start dnsmasq")
 			return serviceStateWaiting, nil
-		} else {                                                     // else there is no other DHCP server running, or it's our own dnsmasq service...
+		} else { // else there is no other DHCP server running, or it's our own dnsmasq service...
 			if dnsMasqConfig.wantsRestart || !localDnsmasqIsActive { // if the service needs a (re)start...
 				// (Re)start dnsmasq.
 				pattern := "The local DHCP server %v running, attempting to (%v)start dnsmasq"

@@ -716,9 +716,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const enabledLabel = document.createElement('label');
         enabledLabel.setAttribute('for', 'service-enabled');
         enabledLabel.textContent = 'Enable DHCP Service';
+
         const enabledInput = document.createElement('input');
         enabledInput.id = 'service-enabled';
         enabledInput.type = 'checkbox';
+
+        const statusSpan = document.createElement('span');
+        statusSpan.id = 'service-state';
+        statusSpan.style.marginLeft = '8px';
+
         enabledField.appendChild(enabledLabel);
         enabledField.appendChild(enabledInput);
         dhcpConfigForm.appendChild(enabledField);
@@ -760,6 +766,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('dns-ip1').value = cfg.dnsIPs?.[0] || '';
         document.getElementById('dns-ip2').value = cfg.dnsIPs?.[1] || '';
         document.getElementById('service-enabled').checked = cfg.serviceEnabled || false;
+        document.getElementById('service-state').value = cfg.serviceState || '';
 
         const container = document.getElementById('reservation-container');
         container.innerHTML = '';
@@ -780,7 +787,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('dns-ip2').value,
             ],
             addressReservations: [],
-            serviceEnabled: document.getElementById('service-enabled').checked
+            serviceEnabled: document.getElementById('service-enabled').checked,
+            serviceState: document.getElementById('service-state').textContent
         };
 
         const reservationRows = document.querySelectorAll('.reservation-row');

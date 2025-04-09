@@ -84,17 +84,6 @@ func main() {
 	// Cleanup functions.
 	var cleanupFuncs []cleanupFunc
 
-	// go func() {
-	// 	if config.AppCfg.DHCPServerEnabled {
-	// 		status, err2 := dhcpServer.maybeStartDnsmasq(logger)
-	// 		if err2 != nil {
-	// 			logger.Errorf("Failed to start DHCP server: %v", err2)
-	// 		} else {
-	// 			logger.Infof("DHCP server started: %v", status)
-	// 		}
-	// 	}
-	// }()
-
 	handleDelayedStart(logger, &config.AppCfg)
 	handleDebugging(logger, &config.AppCfg.DebugConfig)
 
