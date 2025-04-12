@@ -155,7 +155,7 @@ func (s *Server) startWorker(ctx context.Context) {
 			case serviceStop:
 				err = s.Stop()
 				if err != nil {
-					s.logger.Errorf("Error stopping dnsmasq: %v", err)
+					s.logger.Errorf("Worker fialed to stop dnsmasq: %v", err)
 				}
 				dhcpMutex.Lock()
 				dnsMasqConfig.ServiceState = serviceStateStopped

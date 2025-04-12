@@ -69,7 +69,7 @@ func TestNewServer(t *testing.T) {
 	}
 }
 
-func TestCheckDHCPServer(t *testing.T) {
+func TestCheckDHCPServer_IsDHCPServerRunning(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("skipping test on non-linux platform")
 	}
