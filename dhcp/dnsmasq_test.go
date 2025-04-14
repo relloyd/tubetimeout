@@ -63,7 +63,7 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	// serviceStateStarted
 	mockSvc.On("isDnsmasqServiceActive").Return(false, nil)
 	mockSvc.On("isDNSMasqEnabledInConfig").Return(true)
-	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, nil)
+	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, false, nil)
 	mockSvc.On("setStaticIP", mock.Anything, iface, cfg, mock.AnythingOfType("cidrFinderFunc")).Return(nil)
 	mockSvc.On("startDnsmasq", mock.Anything, cfg).Return(nil)
 
@@ -80,7 +80,7 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(true, nil)
 	state, err = s.maybeStartDnsmasq(logger, mockSvc)
 	assert.NoError(t, err)
-	assert.Equal(t, serviceStateWaiting, state)
+	assert.Equal(t, serviceStateWaitingToStart, state)
 	mockSvc.AssertExpectations(t)
 
 	// serviceStateStopped

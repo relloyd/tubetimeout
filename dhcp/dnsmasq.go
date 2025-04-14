@@ -31,9 +31,10 @@ const (
 	serviceStop    = systemctlAction("stop")
 	serviceRestart = systemctlAction("restart")
 
-	serviceStateStarted = serviceState("active")
-	serviceStateWaiting = serviceState("waiting to start")
-	serviceStateStopped = serviceState("inactive")
+	serviceStateStarted        = serviceState("active")
+	serviceStateWaitingToStart = serviceState("waiting to start")
+	serviceStateWaitingToStop  = serviceState("waiting to stop")
+	serviceStateStopped        = serviceState("inactive")
 )
 
 var (
@@ -59,8 +60,8 @@ type DNSMasqConfig struct {
 	UpperBound          net.IP        `yaml:"upperBound" json:"upperBound"`
 	DnsIPs              []net.IP      `yaml:"dnsIPs" json:"dnsIPs"`
 	AddressReservations []Reservation `yaml:"addressReservations" json:"addressReservations"`
-	ServiceEnabled      bool          `yaml:"serviceEnabled" json:"serviceEnabled"`
-	ServiceState        serviceState  `yaml:"serviceState" json:"serviceState"`
+	ServiceEnabled      bool          `yaml:"serviceEnabled" json:"serviceEnabled"` // want state
+	ServiceState        serviceState  `yaml:"serviceState" json:"serviceState"` // current state // TODO: put the service into this state at boot time
 
 	wantsRestart bool
 }
@@ -205,11 +206,11 @@ func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger, svc restarter) (se
 			if dhcpRunningLocal { // if another DHCP server is running on localhost...
 				// Signal that we're waiting for the other DHCP server to be stopped first.
 				logger.Warn("Another DHCP server is running on localhost, waiting to start dnsmasq")
-				return serviceStateWaiting, nil
+				return serviceStateWaitingToStart, nil
 			}
 			if dhcpRunningRouter { // if another DHCP server is running on the router...
 				logger.Warn("Another DHCP server is running on the router, waiting to start dnsmasq")
-				return serviceStateWaiting, nil
+				return serviceStateWaitingToStart, nil
 			}
 			wantStart = true
 		}
