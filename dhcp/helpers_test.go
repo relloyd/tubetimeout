@@ -83,15 +83,22 @@ func TestCheckDHCPServer_IsDHCPServerRunning(t *testing.T) {
 
 	// TODO: fix this non-deterministic test that uses different logic when dnsmasq is enabled vs disabled!
 	//  you need to actually test isDHCPServerRunning!
-	
-	svc := &dhcpService{}
-	res, err := svc.isDHCPServerRunning(config.MustGetLogger(), mac)
 
-	if isActive, err2 := svc.isDnsmasqServiceActive(); err2 == nil && isActive {
-		assert.Equal(t, true, res, "isDHCPServerRunning() should return true: %v", err)
-	} else {
-		assert.Equal(t, false, res, "isDHCPServerRunning() should return false: %v", err)
+	svc := &dhcpService{}
+
+	isActive, err := svc.isDnsmasqServiceActive()
+	assert.NoError(t, err, "isDnsmasqServiceActive() should not return an error")
+
+	local, router, err := svc.isDHCPServerRunning(config.MustGetLogger(), mac)
+	t.Log("isActive: ", isActive, "local: ", local, "router: ", router, "err: ", err)
+
+	if isActive && !local {
+		t.Fatalf("isDHCPServerRunning() should return local true when dnsmasq service is active")
+	} else if !isActive && local {
+		t.Fatalf("isDHCPServerRunning() should return local false when dnsmasq service is active")
 	}
+
+	// TODO: test remote/router dhcp service handling.
 }
 
 // TestGetConfigCached verifies that when dnsMasqConfig is already set,

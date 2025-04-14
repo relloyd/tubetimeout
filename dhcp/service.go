@@ -2,6 +2,7 @@ package dhcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os/exec"
@@ -25,12 +26,10 @@ func (d *dhcpService) isDNSMasqEnabledInConfig() bool {
 
 // isDHCPServerRunning sends a DHCP DISCOVER message and waits for a DHCP OFFER.
 // Returns:
-//
 //	false if DHCP server is not running
-//	errDHCPServerNotRunning if no DHCP server was found running at all
 //	true if DHCP server was found to be running
 //	other errors in case of failure
-func (d *dhcpService) isDHCPServerRunning(logger *zap.SugaredLogger, mac net.HardwareAddr) (bool, error) {
+func (d *dhcpService) isDHCPServerRunning(logger *zap.SugaredLogger, mac net.HardwareAddr) (localDetected bool, routerDetected bool, err error) {
 	waitDuration := 5 * time.Second
 
 	// Use ListenConfig with a Control function to set SO_REUSEADDR.
@@ -43,7 +42,6 @@ func (d *dhcpService) isDHCPServerRunning(logger *zap.SugaredLogger, mac net.Har
 					return
 				}
 				// Optionally, if your OS supports it, you can also enable SO_REUSEPORT.
-				// Uncomment the following lines if desired:
 				/*
 					if err := syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEPORT, 1); err != nil {
 						controlErr = fmt.Errorf("failed to set SO_REUSEPORT: %v", err)
@@ -61,46 +59,70 @@ func (d *dhcpService) isDHCPServerRunning(logger *zap.SugaredLogger, mac net.Har
 	// Bind to UDP port 68 (DHCP client port)
 	conn, err := lc.ListenPacket(context.Background(), "udp4", ":68")
 	if err != nil {
-		return false, fmt.Errorf("failed to bind to UDP port 68: %v", err)
+		return false, false, fmt.Errorf("failed to bind to UDP port 68: %v", err)
 	}
-	defer func(conn net.PacketConn) {
-		_ = conn.Close()
-	}(conn)
+	defer conn.Close()
 
 	// Create a DHCP DISCOVER message with broadcast option.
 	msg, err := dhcpv4.NewDiscovery(mac, dhcpv4.WithBroadcast(true))
 	if err != nil {
-		return false, fmt.Errorf("failed to create DHCPDISCOVER message: %v", err)
+		return false, false, fmt.Errorf("failed to create DHCPDISCOVER message: %v", err)
 	}
 
 	// The DHCP server listens on port 67, so we send to the broadcast address.
 	broadcastAddr := &net.UDPAddr{IP: net.IPv4bcast, Port: 67}
 	_, err = conn.WriteTo(msg.ToBytes(), broadcastAddr)
 	if err != nil {
-		return false, fmt.Errorf("failed to send DHCPDISCOVER message: %v", err)
+		return false, false, fmt.Errorf("failed to send DHCPDISCOVER message: %v", err)
 	}
 
-	// Set a deadline to wait for a response.
+	// Set a deadline to wait for responses.
 	conn.SetDeadline(time.Now().Add(waitDuration))
-	buf := make([]byte, 1500)
-	n, addr, err := conn.ReadFrom(buf)
-	if err != nil { // if we timed out and suppose there is no DHCP server running...
-		return false, nil // alternatively return errDHCPServerNotRunning for the positive false case.
-	}
 
-	// Parse the response into a DHCP message.
-	resp, err := dhcpv4.FromBytes(buf[:n])
-	if err != nil {
-		return false, fmt.Errorf("failed to parse DHCP response: %v", err)
-	}
+	// Assume getLocalIP() is defined on the receiver (d) to return the local interface IP.
+	localIP := d.getLocalIP()
 
-	// Check that the response is a DHCP OFFER.
-	if msgType := resp.MessageType(); msgType == dhcpv4.MessageTypeOffer {
+	for {
+		buf := make([]byte, 1500)
+		n, addr, err := conn.ReadFrom(buf)
+		if err != nil {
+			// If the error is a timeout, we're done collecting responses.
+			var nErr net.Error
+			if errors.As(err, &nErr) && nErr.Timeout() {
+				break
+			}
+			// Return any unexpected errors.
+			return localDetected, routerDetected, fmt.Errorf("error reading from UDP socket: %v", err)
+		}
+
+		// Parse the response into a DHCP message.
+		resp, err := dhcpv4.FromBytes(buf[:n])
+		if err != nil {
+			logger.Warnf("failed to parse DHCP response: %v", err)
+			continue
+		}
+
+		// Only process DHCP OFFER messages.
+		if resp.MessageType() != dhcpv4.MessageTypeOffer {
+			logger.Warnf("received unexpected DHCP message type: %v", resp.MessageType())
+			continue
+		}
+
 		logger.Infof("Received DHCPOFFER from DHCP server at %v", addr)
-		return true, nil
+
+		// Determine whether this offer originates from the local machine or from the router.
+		if udpAddr, ok := addr.(*net.UDPAddr); ok {
+			if udpAddr.IP.Equal(localIP) {
+				localDetected = true
+			} else {
+				routerDetected = true
+			}
+		} else {
+			logger.Warnf("unable to determine source IP from address: %v", addr)
+		}
 	}
 
-	return false, fmt.Errorf("received unexpected DHCP message type")
+	return localDetected, routerDetected, nil
 }
 
 // EnableDnsmasq updates the dnsmasq configuration with the given named MACs and restarts the service.
@@ -221,4 +243,21 @@ func (d *dhcpService) isDnsmasqServiceActive() (bool, error) {
 func (d *dhcpService) setDnsmasqServiceState(action systemctlAction) error {
 	cmd := exec.Command("sudo", "systemctl", string(action), "dnsmasq")
 	return cmd.Run()
+}
+
+func (d *dhcpService) getLocalIP() net.IP { // new method to get local IP
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil
+	}
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			return ipnet.IP
+		}
+	}
+	return nil
+}
+
+func isLocalIP(ip net.IP, localIP net.IP) bool { // helper function to compare IPs
+	return ip.Equal(localIP)
 }

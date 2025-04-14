@@ -81,7 +81,7 @@ func newDNSMasqConfig() *DNSMasqConfig {
 type restarter interface {
 	isDnsmasqServiceActive() (bool, error)
 	isDNSMasqEnabledInConfig() bool
-	isDHCPServerRunning(logger *zap.SugaredLogger, hwAddr net.HardwareAddr) (bool, error)
+	isDHCPServerRunning(logger *zap.SugaredLogger, hwAddr net.HardwareAddr) (bool, bool, error) // updated to return two bools
 	setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig, fnFinder cidrFinderFunc) error
 	unsetStaticIP(logger *zap.SugaredLogger, ifaceName string) error
 	startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error
@@ -190,20 +190,25 @@ func (s *Server) maybeStartDnsmasq(logger *zap.SugaredLogger, svc restarter) (se
 	}
 
 	numAttempts := 5
-	dhcpRunning := false
+	dhcpRunningLocal := false
+	dhcpRunningRouter := false
 	wantStart := false
 
 	for idx := 0; idx < numAttempts; idx++ {
 		if !localDnsmasqIsActive { // if the local server isn't running...
 			// Check if another one is.
-			dhcpRunning, err = svc.isDHCPServerRunning(logger, s.hwAddr)
+			dhcpRunningLocal, dhcpRunningRouter, err = svc.isDHCPServerRunning(logger, s.hwAddr)
 			if err != nil { // if we should try again...
 				logger.Warnf("Error while checking if DHCP server is running: %v", err)
 				continue
 			}
-			if dhcpRunning { // if another DHCP server is running...
+			if dhcpRunningLocal { // if another DHCP server is running on localhost...
 				// Signal that we're waiting for the other DHCP server to be stopped first.
-				logger.Warn("Another DHCP server is running, waiting to start dnsmasq")
+				logger.Warn("Another DHCP server is running on localhost, waiting to start dnsmasq")
+				return serviceStateWaiting, nil
+			}
+			if dhcpRunningRouter { // if another DHCP server is running on the router...
+				logger.Warn("Another DHCP server is running on the router, waiting to start dnsmasq")
 				return serviceStateWaiting, nil
 			}
 			wantStart = true

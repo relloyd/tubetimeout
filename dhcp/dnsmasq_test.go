@@ -17,7 +17,7 @@ type mockRestarter struct {
 
 func (m *mockRestarter) isDnsmasqServiceActive() (bool, error) {
 	args := m.Called()
-	return args.Bool(0), args.Error(1)
+	return args.Bool(0), args.Error(2)
 }
 
 func (m *mockRestarter) isDNSMasqEnabledInConfig() bool {
@@ -25,9 +25,9 @@ func (m *mockRestarter) isDNSMasqEnabledInConfig() bool {
 	return args.Bool(0)
 }
 
-func (m *mockRestarter) isDHCPServerRunning(logger *zap.SugaredLogger, hwAddr net.HardwareAddr) (bool, error) {
+func (m *mockRestarter) isDHCPServerRunning(logger *zap.SugaredLogger, hwAddr net.HardwareAddr) (bool, bool, error) {
 	args := m.Called(logger, hwAddr)
-	return args.Bool(0), args.Error(1)
+	return args.Bool(0), args.Bool(1), args.Error(1)
 }
 
 func (m *mockRestarter) setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig, fnFinder cidrFinderFunc) error {
