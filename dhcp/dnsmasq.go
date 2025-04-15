@@ -84,7 +84,7 @@ type restarter interface {
 	isDHCPServerRunning(logger *zap.SugaredLogger, hwAddr net.HardwareAddr) (bool, bool, error) // updated to return two bools
 	setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig, fnFinder cidrFinderFunc) error
 	unsetStaticIP(logger *zap.SugaredLogger, ifaceName string) error
-	startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error
+	startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig, ifaceName string, hwAddr net.HardwareAddr) error
 	setDnsmasqServiceState(action systemctlAction) error
 }
 
@@ -208,22 +208,12 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 				logger.Info(fmt.Sprintf(pattern, "is not", ""))
 			}
 
-			// Set a static IP for this gateway.
-			if err = svc.setStaticIP(logger, s.ifaceName, dnsMasqConfig, findSmallestSingleCIDR); err != nil {
-				logger.Warnf("Failed to set static IP on interface %s on attempt %d: %v", s.ifaceName, numAttempts+1, err)
-				continue
-			}
-
 			// Start dnsmasq.
-			if err = svc.startDnsmasq(logger, dnsMasqConfig); err != nil { // if dnsmasq failed to started...
+			if err = svc.startDnsmasq(logger, dnsMasqConfig, s.ifaceName, s.hwAddr); err != nil { // if dnsmasq failed to started...
 				logger.Warnf("Failed to start dnsmasq on attempt %d: %v", numAttempts+1, err)
-				if err := svc.unsetStaticIP(logger, s.ifaceName); err != nil { // reset to dynamic IP allocation in case we need another DHCP server to get an IP for web access.
-					logger.Warnf("Failed to unset static IP on interface %s on attempt %d: %v", s.ifaceName, numAttempts+1, err)
-				}
 				continue // retry in case of failure
 			}
 
-			logger.Info("Successfully started dnsmasq")
 			dnsMasqConfig.needsRestart = false // dnsMasqConfig.needsRestart set false to prevent restarts until config changes.
 
 			if dhcpRunningRouter {
@@ -233,10 +223,13 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 		}
 	}
 
-	// All attempts failed.
-
+	// All attempts failed; try to start dnsmasq anyway.
 	if wantEnabled { // if dnsmasq config is enabled...
-
+		logger.Errorf("Attempting to force start dnsmasq after %v failed attempts", numAttempts)
+		if err = svc.startDnsmasq(logger, dnsMasqConfig, s.ifaceName, s.hwAddr); err != nil { // if dnsmasq failed to started...
+			logger.Error("Failed to force start dnsmasq")
+		}
+		return serviceStateActive, nil
 	}
 
 	return serviceStateFailedCheckConfig, fmt.Errorf("failed to start dnsmasq after %d attempts", numAttempts)

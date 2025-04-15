@@ -128,32 +128,41 @@ func (d *dhcpService) isDHCPServerRunning(logger *zap.SugaredLogger, mac net.Har
 // EnableDnsmasq updates the dnsmasq configuration with the given named MACs and restarts the service.
 // Aim is that supplied MACs will be assigned a custom gateway, while anything else
 // gets the default gateway that the device running this code has.
-func (d *dhcpService) startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
-	ifaceName, err := getPrimaryInterfaceName()
-	if err != nil {
-		return fmt.Errorf("error fetching primary interface name: %v", err)
-	}
-	hwAddr, err := getIfaceHardwareAddress(ifaceName)
-	if err != nil {
-		return fmt.Errorf("error fetching hardware address for net adapter %v: %v", defaultInterfaceName, err)
+func (d *dhcpService) startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig, ifaceName string, hwAddr net.HardwareAddr) (err error) {
+	defer func() {
+		if err != nil {
+			if unSetErr := d.unsetStaticIP(logger, ifaceName); err != nil {
+				err = fmt.Errorf("%v: also failed to unset static IP on interface %v: %w", err, ifaceName, unSetErr)
+			}
+		}
+	}()
+
+	if err = d.setStaticIP(logger, ifaceName, dnsMasqConfig, findSmallestSingleCIDR); err != nil {
+		return fmt.Errorf("startDnsmasq: %w", err)
 	}
 
-	dat, err := generateDnsmasqConfig(cfg.DefaultGateway, cfg.ThisGateway, cfg.LowerBound, cfg.UpperBound, hwAddr.String(), cfg.DnsIPs, cfg.AddressReservations)
+	var dat string
+	dat, err = generateDnsmasqConfig(cfg.DefaultGateway, cfg.ThisGateway, cfg.LowerBound, cfg.UpperBound, hwAddr.String(), cfg.DnsIPs, cfg.AddressReservations)
 	if err != nil {
 		return fmt.Errorf("error generating dnsmasq config: %v", err)
 	}
 
 	// Write the configuration.
-	if err := writeDnsmasqConfig(configFileDNSMasqService, dat); err != nil {
+	if err = writeDnsmasqConfig(configFileDNSMasqService, dat); err != nil {
 		return fmt.Errorf("error writing dnsmasq config: %v", err)
 	}
 
 	// Restart dnsmasq to apply the new configuration.
-	if err := d.setDnsmasqServiceState(serviceRestart); err != nil {
+	if err = d.setDnsmasqServiceState(serviceRestart); err != nil {
 		return fmt.Errorf("error restarting dnsmasq: %v", err)
 	}
 
-	logger.Info("dnsmasq configuration updated and service restarted successfully")
+	ok := false
+	if ok, err = d.isDnsmasqServiceActive(); !ok {
+		return fmt.Errorf("dnsmasq should have started: %v", err)
+	}
+
+	logger.Info("Dnsmasq service started successfully")
 	return nil
 }
 
