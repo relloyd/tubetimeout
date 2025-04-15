@@ -30,7 +30,7 @@ const (
 	serviceRestart = systemctlAction("restart")
 	serviceStop    = systemctlAction("stop")
 
-	serviceStateStarted            = serviceState("active") // local is the primary dhcp server
+	serviceStateActive             = serviceState("active") // local is the primary dhcp server
 	serviceStateRouterCanBeStopped = serviceState("router DHCP server can be stopped")
 	serviceStateWaitingToStop      = serviceState("waiting to stop") // waiting for another DHCP server to be running
 	serviceStateFailedCheckConfig  = serviceState("failed to start") // check config and retry
@@ -220,7 +220,7 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 			if dhcpRunningRouter {
 				return serviceStateRouterCanBeStopped, nil
 			}
-			return serviceStateStarted, nil
+			return serviceStateActive, nil
 		}
 	}
 

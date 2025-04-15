@@ -27,7 +27,7 @@ func (m *mockRestarter) isDNSMasqEnabledInConfig() bool {
 
 func (m *mockRestarter) isDHCPServerRunning(logger *zap.SugaredLogger, hwAddr net.HardwareAddr) (bool, bool, error) {
 	args := m.Called(logger, hwAddr)
-	return args.Bool(0), args.Bool(1), args.Error(1)
+	return args.Bool(0), args.Bool(1), args.Error(2)
 }
 
 func (m *mockRestarter) setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig, fnFinder cidrFinderFunc) error {
@@ -51,7 +51,6 @@ func (m *mockRestarter) setDnsmasqServiceState(action systemctlAction) error {
 }
 
 func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
-	mockSvc := new(mockRestarter)
 	logger := zap.NewNop().Sugar()
 
 	cfg := &DNSMasqConfig{ServiceEnabled: true}
@@ -60,53 +59,71 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	hw := net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55}
 	iface := "eth0"
 
-	// serviceStateStarted
-	mockSvc.On("isDnsmasqServiceActive").Return(false, nil)
-	mockSvc.On("isDNSMasqEnabledInConfig").Return(true)
-	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, false, nil)
-	mockSvc.On("setStaticIP", mock.Anything, iface, cfg, mock.AnythingOfType("cidrFinderFunc")).Return(nil)
-	mockSvc.On("startDnsmasq", mock.Anything, cfg).Return(nil)
+	s := &Server{ifaceName: iface, hwAddr: hw, logger: logger}
 
-	s := &Server{ifaceName: iface, hwAddr: hw}
+	// serviceStateStopped
+	mockSvc := new(mockRestarter)
+	s.dhcpService = mockSvc
+	mockSvc.On("isDNSMasqEnabledInConfig").Return(false)
+	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(true, true, nil)
+	mockSvc.On("unsetStaticIP", mock.Anything, iface).Return(nil)
+	mockSvc.On("setDnsmasqServiceState", serviceStop).Return(nil)
 	state, err := s.maybeStartOrStopDnsmasq(logger, mockSvc)
 	assert.NoError(t, err)
-	assert.Equal(t, serviceStateStarted, state)
+	assert.Equal(t, serviceStateStopped, state)
 	mockSvc.AssertExpectations(t)
 
-	// serviceStateWaiting
+	// serviceStateWaitingToStop
 	mockSvc = new(mockRestarter)
-	mockSvc.On("isDnsmasqServiceActive").Return(false, nil)
+	s.dhcpService = mockSvc
+	mockSvc.On("isDNSMasqEnabledInConfig").Return(false)
+	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(true, false, nil)
+	state, err = s.maybeStartOrStopDnsmasq(logger, mockSvc)
+	assert.NoError(t, err)
+	assert.Equal(t, serviceStateWaitingToStop, state)
+	mockSvc.AssertExpectations(t)
+
+	// serviceStateStopped
+	mockSvc = new(mockRestarter)
+	s.dhcpService = mockSvc
+	mockSvc.On("isDNSMasqEnabledInConfig").Return(false)
+	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, false, nil)
+	state, err = s.maybeStartOrStopDnsmasq(logger, mockSvc)
+	assert.NoError(t, err)
+	assert.Equal(t, serviceStateStopped, state)
+	mockSvc.AssertExpectations(t)
+
+	// serviceStateRouterCanBeStopped
+	mockSvc = new(mockRestarter)
+	s.dhcpService = mockSvc
 	mockSvc.On("isDNSMasqEnabledInConfig").Return(true)
-	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(true, nil)
+	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, true, nil)
+	mockSvc.On("setStaticIP", mock.Anything, iface, cfg, mock.AnythingOfType("cidrFinderFunc")).Return(nil)
+	mockSvc.On("startDnsmasq", mock.Anything, cfg).Return(nil)
 	state, err = s.maybeStartOrStopDnsmasq(logger, mockSvc)
 	assert.NoError(t, err)
 	assert.Equal(t, serviceStateRouterCanBeStopped, state)
 	mockSvc.AssertExpectations(t)
 
-	// serviceStateStopped
+	// serviceStateStarted
 	mockSvc = new(mockRestarter)
-	mockSvc.On("isDnsmasqServiceActive").Return(false, errors.New("mock error"))
-	state, err = s.maybeStartOrStopDnsmasq(logger, mockSvc)
-	assert.Error(t, err)
-	assert.Equal(t, serviceStateStopped, state)
-	mockSvc.AssertExpectations(t)
-
-	// serviceStateStopped
-	mockSvc = new(mockRestarter)
-	mockSvc.On("isDnsmasqServiceActive").Return(false, nil)
-	mockSvc.On("isDNSMasqEnabledInConfig").Return(false)
+	s.dhcpService = mockSvc
+	mockSvc.On("isDNSMasqEnabledInConfig").Return(true)
+	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, false, nil)
+	mockSvc.On("setStaticIP", mock.Anything, iface, cfg, mock.AnythingOfType("cidrFinderFunc")).Return(nil)
+	mockSvc.On("startDnsmasq", mock.Anything, cfg).Return(nil)
 	state, err = s.maybeStartOrStopDnsmasq(logger, mockSvc)
 	assert.NoError(t, err)
-	assert.Equal(t, serviceStateStopped, state)
+	assert.Equal(t, serviceStateActive, state)
 	mockSvc.AssertExpectations(t)
 
-	// serviceStateStopped after running out of retries
+	// serviceStateFailedCheckConfig after running out of retries
 	mockSvc = new(mockRestarter)
-	mockSvc.On("isDnsmasqServiceActive").Return(false, nil)
-	mockSvc.On("isDNSMasqEnabledInConfig").Return(true)
-	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(true, errors.New("mock error"))
+	s.dhcpService = mockSvc
+	mockSvc.On("isDNSMasqEnabledInConfig").Return(false)
+	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, false, errors.New("mock error"))
 	state, err = s.maybeStartOrStopDnsmasq(logger, mockSvc)
 	assert.Error(t, err)
-	assert.Equal(t, serviceStateStopped, state)
+	assert.Equal(t, serviceStateFailedCheckConfig, state)
 	mockSvc.AssertExpectations(t)
 }
