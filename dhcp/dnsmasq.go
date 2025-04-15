@@ -126,7 +126,7 @@ func NewServer(ctx context.Context, logger *zap.SugaredLogger) (*Server, error) 
 }
 
 func (s *Server) startWorker(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(15 * time.Second)
 	var err error
 	for {
 		select {
@@ -134,6 +134,13 @@ func (s *Server) startWorker(ctx context.Context) {
 			ticker.Stop()
 			return
 		case <-ticker.C:
+			// Generate synthetic events to trigger the refresh of dnsmasq service state:
+			// If the service is on the way up:
+			// - The user may have configured dnsmasq to be enabled in the config file but the router DHCP service
+			//   may still be running so we advise the user via status.
+			// If the service is on the way down:
+			// - The user may have configured dnsmasq to be disabled in the config file but it may not be safe to
+			//   disable dnsmasq yet. We advise the user to enable another DHCP service.
 			s.chanWorker <- struct{}{}
 		case <-s.chanWorker:
 			dhcpMutex.Lock()
@@ -184,6 +191,7 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 
 		if wantEnabled { // if dnsmasq should be enabled by the user...
 			if !dhcpRunningLocal || dnsMasqConfig.needsRestart { // if the local server isn't running, or it needs a restart...
+				// needsRestart is set to true when the config file is changed.
 				// We don't care if another server is running on the router.
 				// Prefer to have two DHCP services running than none at all and advise the user to stop the
 				// router DHCP service via web interface.
