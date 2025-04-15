@@ -158,15 +158,22 @@ func (s *Server) startWorker(ctx context.Context) {
 // Return true if config wants dnsmasq started and the service could be started,
 // i.e. there isn't already a DHCP server on the network.
 // If there is a DHCP server on the network then return false and an error.
-func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarter) (serviceState, error) {
-	var err error
+func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarter) (state serviceState, err error) {
 	numAttempts := 5
 	dhcpRunningLocal := false
 	dhcpRunningRouter := false
 	wantStart := false
 	wantEnabled := svc.isDNSMasqEnabledInConfig()
 
+	defer func() {
+		if state == serviceStateActive || state == serviceStateInactive { // if the service make it all the way up or down...
+			dnsMasqConfig.needsAction = false
+		}
+	}()
 
+	if !dnsMasqConfig.needsAction { // if there is nothing to do...
+		return dnsMasqConfig.ServiceState, nil
+	}
 
 	for idx := 0; idx < numAttempts; idx++ {
 		// Determine DHCP service status.
@@ -184,13 +191,11 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 				if err != nil {
 					return dnsMasqConfig.ServiceState, err
 				}
-				dnsMasqConfig.needsAction = false // dnsMasqConfig.needsAction set false to prevent restarts until config changes.
 				return serviceStateInactive, nil
 			} else if dhcpRunningLocal  { // else if dhcpRunningRouter is false...
 				// We are waiting for the router DHCP server to be stopped.
 				return serviceStateWaitingToStop, nil
 			} else { // else the local dnsmasq is not running...
-				dnsMasqConfig.needsAction = false // dnsMasqConfig.needsAction set false to prevent restarts until config changes.
 				return serviceStateInactive, nil
 			}
 		} else {                                                // else dnsmasq is enabled by the user...
@@ -222,7 +227,6 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 				return serviceStateActiveRouterCanBeStopped, nil
 			}
 
-			dnsMasqConfig.needsAction = false // dnsMasqConfig.needsAction set false to prevent restarts until config changes.
 			return serviceStateActive, nil
 		}
 	}
