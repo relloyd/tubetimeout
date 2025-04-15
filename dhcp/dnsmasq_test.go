@@ -70,7 +70,7 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	mockSvc.On("setDnsmasqServiceState", serviceStop).Return(nil)
 	state, err := s.maybeStartOrStopDnsmasq(logger, mockSvc)
 	assert.NoError(t, err)
-	assert.Equal(t, serviceStateStopped, state)
+	assert.Equal(t, serviceStateInactive, state)
 	mockSvc.AssertExpectations(t)
 
 	// serviceStateWaitingToStop
@@ -90,7 +90,7 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, false, nil)
 	state, err = s.maybeStartOrStopDnsmasq(logger, mockSvc)
 	assert.NoError(t, err)
-	assert.Equal(t, serviceStateStopped, state)
+	assert.Equal(t, serviceStateInactive, state)
 	mockSvc.AssertExpectations(t)
 
 	// serviceStateRouterCanBeStopped
@@ -102,7 +102,7 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	mockSvc.On("startDnsmasq", mock.Anything, cfg).Return(nil)
 	state, err = s.maybeStartOrStopDnsmasq(logger, mockSvc)
 	assert.NoError(t, err)
-	assert.Equal(t, serviceStateRouterCanBeStopped, state)
+	assert.Equal(t, serviceStateActiveRouterCanBeStopped, state)
 	mockSvc.AssertExpectations(t)
 
 	// serviceStateStarted

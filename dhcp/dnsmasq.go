@@ -30,11 +30,11 @@ const (
 	serviceRestart = systemctlAction("restart")
 	serviceStop    = systemctlAction("stop")
 
-	serviceStateActive             = serviceState("active") // local is the primary dhcp server
-	serviceStateRouterCanBeStopped = serviceState("router DHCP server can be stopped")
-	serviceStateWaitingToStop      = serviceState("waiting to stop") // waiting for another DHCP server to be running
-	serviceStateFailedCheckConfig  = serviceState("failed to start") // check config and retry
-	serviceStateStopped            = serviceState("inactive")        //
+	serviceStateActive                   = serviceState("active") // local is the primary dhcp server
+	serviceStateActiveRouterCanBeStopped = serviceState("router DHCP server can be stopped")
+	serviceStateWaitingToStop            = serviceState("waiting to stop") // waiting for another DHCP server to be running
+	serviceStateFailedCheckConfig        = serviceState("failed to start") // check config and retry
+	serviceStateInactive                 = serviceState("inactive")        //
 )
 
 var (
@@ -174,29 +174,30 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 				if err != nil {
 					return dnsMasqConfig.ServiceState, err
 				}
-				return serviceStateStopped, nil
+				return serviceStateInactive, nil
 			} else if dhcpRunningLocal && !dhcpRunningRouter {
 				return serviceStateWaitingToStop, nil
 			} else { // else the local dnsmasq is not running...
-				return serviceStateStopped, nil
+				return serviceStateInactive, nil
 			}
 		}
 
 		if wantEnabled { // if dnsmasq should be enabled by the user...
 			if !dhcpRunningLocal || dnsMasqConfig.needsRestart { // if the local server isn't running, or it needs a restart...
 				// We don't care if another server is running on the router.
-				// Prefer to have two DHCP services running than none at all.
+				// Prefer to have two DHCP services running than none at all and advise the user to stop the
+				// router DHCP service via web interface.
 				wantStart = true
 			}
 		}
 
 		// (Re)start the service.
 		if wantStart {
-			pattern := "The local DHCP server %v running, attempting to (%v)start dnsmasq"
+			pattern := "The local DHCP server %v running, attempting to %vstart dnsmasq"
 			if dhcpRunningLocal {
-				logger.Info(fmt.Sprintf(pattern, "is", ""))
+				logger.Info(fmt.Sprintf(pattern, "is", "re"))
 			} else {
-				logger.Info(fmt.Sprintf(pattern, "is not", "re"))
+				logger.Info(fmt.Sprintf(pattern, "is not", ""))
 			}
 
 			// Set a static IP for this gateway.
@@ -218,7 +219,7 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 			dnsMasqConfig.needsRestart = false // dnsMasqConfig.needsRestart set false to prevent restarts until config changes.
 
 			if dhcpRunningRouter {
-				return serviceStateRouterCanBeStopped, nil
+				return serviceStateActiveRouterCanBeStopped, nil
 			}
 			return serviceStateActive, nil
 		}
