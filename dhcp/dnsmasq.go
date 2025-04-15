@@ -62,7 +62,7 @@ type DNSMasqConfig struct {
 	ServiceEnabled      bool          `yaml:"serviceEnabled" json:"serviceEnabled"` // want state
 	ServiceState        serviceState  `yaml:"serviceState" json:"serviceState"`     // current state // TODO: put the service into this state at boot time
 
-	needsRestart bool
+	needsAction bool
 }
 
 type Reservation struct {
@@ -74,7 +74,7 @@ type Reservation struct {
 func newDNSMasqConfig() *DNSMasqConfig {
 	return &DNSMasqConfig{
 		AddressReservations: make([]Reservation, 0),
-		needsRestart:        true, // allow worker to (re)start dnsmasq for the first time
+		needsAction:         true, // allow worker to (re)start dnsmasq for the first time
 	}
 }
 
@@ -166,6 +166,8 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 	wantStart := false
 	wantEnabled := svc.isDNSMasqEnabledInConfig()
 
+
+
 	for idx := 0; idx < numAttempts; idx++ {
 		// Determine DHCP service status.
 		dhcpRunningLocal, dhcpRunningRouter, err = svc.isDHCPServerRunning(logger, s.hwAddr)
@@ -182,15 +184,17 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 				if err != nil {
 					return dnsMasqConfig.ServiceState, err
 				}
+				dnsMasqConfig.needsAction = false // dnsMasqConfig.needsAction set false to prevent restarts until config changes.
 				return serviceStateInactive, nil
 			} else if dhcpRunningLocal  { // else if dhcpRunningRouter is false...
 				// We are waiting for the router DHCP server to be stopped.
 				return serviceStateWaitingToStop, nil
 			} else { // else the local dnsmasq is not running...
+				dnsMasqConfig.needsAction = false // dnsMasqConfig.needsAction set false to prevent restarts until config changes.
 				return serviceStateInactive, nil
 			}
-		} else { // else dnsmasq is enabled by the user...
-			if !dhcpRunningLocal || dnsMasqConfig.needsRestart { // if the local server isn't running, or it needs a restart...
+		} else {                                                // else dnsmasq is enabled by the user...
+			if !dhcpRunningLocal || dnsMasqConfig.needsAction { // if the local server isn't running, or it needs a restart...
 				// needsRestart is set to true when the config file is changed.
 				// We don't care if another server is running on the router.
 				// Prefer to have two DHCP services running than none at all and advise the user to stop the
@@ -214,11 +218,11 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 				continue // retry in case of failure
 			}
 
-			dnsMasqConfig.needsRestart = false // dnsMasqConfig.needsRestart set false to prevent restarts until config changes.
-
 			if dhcpRunningRouter {
 				return serviceStateActiveRouterCanBeStopped, nil
 			}
+
+			dnsMasqConfig.needsAction = false // dnsMasqConfig.needsAction set false to prevent restarts until config changes.
 			return serviceStateActive, nil
 		}
 	}
@@ -263,6 +267,10 @@ func (s *Server) SetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error 
 }
 
 func (s *Server) restart() {
-	dnsMasqConfig.needsRestart = true
+	dnsMasqConfig.needsAction = true
 	s.chanWorker <- struct{}{}
+}
+
+func needsRestart(cfg *DNSMasqConfig) bool {
+	return cfg.needsAction
 }
