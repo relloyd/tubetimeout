@@ -103,7 +103,7 @@ func SetConfig(_ *zap.SugaredLogger, cfg *DNSMasqConfig) error {
 		for _, v := range cfg.AddressReservations { // for each address reservation...
 			v.MacAddr = models.MAC(strings.ToUpper(strings.ReplaceAll(string(v.MacAddr), ":", "-"))) // Ensure upper case and hyphens.
 		}
-		cfg.wantsRestart = true // assume something has changed for now and that we want a restart
+		cfg.needsRestart = true // assume something has changed for now and that we want a restart
 		return nil
 	}
 
