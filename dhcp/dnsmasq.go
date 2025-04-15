@@ -172,24 +172,24 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 		if err != nil { // if we should try again...
 			logger.Warnf("Error while checking if DHCP server is running: %v", err)
 			continue
+			// TODO: if we come back from a reboot and there is no DHCP server anywhere then we should try to start ours
 		}
 
 		// Maybe stop dnsmasq.
-		if !wantEnabled { // if dnsmasq should be disabled by the user...
+		if !wantEnabled { // if dnsmasq is disabled by the user...
 			if dhcpRunningLocal && dhcpRunningRouter { // if it's safe to disable the local dnsmasq...
 				err := s.Stop()
 				if err != nil {
 					return dnsMasqConfig.ServiceState, err
 				}
 				return serviceStateInactive, nil
-			} else if dhcpRunningLocal && !dhcpRunningRouter {
+			} else if dhcpRunningLocal  { // else if dhcpRunningRouter is false...
+				// We are waiting for the router DHCP server to be stopped.
 				return serviceStateWaitingToStop, nil
 			} else { // else the local dnsmasq is not running...
 				return serviceStateInactive, nil
 			}
-		}
-
-		if wantEnabled { // if dnsmasq should be enabled by the user...
+		} else { // else dnsmasq is enabled by the user...
 			if !dhcpRunningLocal || dnsMasqConfig.needsRestart { // if the local server isn't running, or it needs a restart...
 				// needsRestart is set to true when the config file is changed.
 				// We don't care if another server is running on the router.
@@ -234,6 +234,11 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 	}
 
 	// All attempts failed.
+
+	if wantEnabled { // if dnsmasq config is enabled...
+
+	}
+
 	return serviceStateFailedCheckConfig, fmt.Errorf("failed to start dnsmasq after %d attempts", numAttempts)
 }
 

@@ -328,6 +328,24 @@ func compareIP(a, b net.IP) int {
 	return 0
 }
 
+// ipToBigInt converts an IP to a big.Int
+func ipToBigInt(ip net.IP) *big.Int {
+	ip = ip.To16() // Ensure IPv6 representation (even for IPv4)
+	return new(big.Int).SetBytes(ip)
+}
+
+// bigIntToIP converts a big.Int to an IP address
+func bigIntToIP(ipInt *big.Int) net.IP {
+	b := ipInt.Bytes()
+	if len(b) < 16 {
+		// Pad to 16 bytes for IPv6
+		padded := make([]byte, 16)
+		copy(padded[16-len(b):], b)
+		b = padded
+	}
+	return net.IP(b)
+}
+
 // ChooseIPFromBottom picks the lowest IP in the range and updates the range.
 func chooseIPFromBottom(lower, upper net.IP) (chosenIP, newLower, newUpper net.IP, err error) {
 	if len(lower) != len(upper) || (lower.To4() == nil) != (upper.To4() == nil) {
@@ -401,24 +419,6 @@ func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper
 // writeDnsmasqConfig writes the generated config to the given file path.
 func writeDnsmasqConfig(configPath string, configContent string) error {
 	return os.WriteFile(configPath, []byte(configContent), 0644)
-}
-
-// ipToBigInt converts an IP to a big.Int
-func ipToBigInt(ip net.IP) *big.Int {
-	ip = ip.To16() // Ensure IPv6 representation (even for IPv4)
-	return new(big.Int).SetBytes(ip)
-}
-
-// bigIntToIP converts a big.Int to an IP address
-func bigIntToIP(ipInt *big.Int) net.IP {
-	b := ipInt.Bytes()
-	if len(b) < 16 {
-		// Pad to 16 bytes for IPv6
-		padded := make([]byte, 16)
-		copy(padded[16-len(b):], b)
-		b = padded
-	}
-	return net.IP(b)
 }
 
 type cidrFinderFunc func(startIP, endIP net.IP) (string, string)
