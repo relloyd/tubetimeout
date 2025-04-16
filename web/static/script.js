@@ -217,44 +217,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function addPullToRefresh() {
-        const pullIndicator = document.getElementById('pull-to-refresh');
-        let startY = 0;
-        let isPulling = false;
-        const PULL_THRESHOLD = 100;
-
-        window.addEventListener('touchstart', (e) => {
-            if (window.scrollY === 0) {
-                startY = e.touches[0].pageY;
-                isPulling = true;
-            }
-        });
-
-        window.addEventListener('touchmove', (e) => {
-            if (!isPulling) return;
-            const distance = e.touches[0].pageY - startY;
-            if (distance > 0) {
-                pullIndicator.style.transform = `translateY(${Math.min(distance - 60, 60)}px)`;
-            }
-            if (distance > PULL_THRESHOLD) {
-                pullIndicator.classList.add('show');
-            } else {
-                pullIndicator.classList.remove('show');
-            }
-        });
-
-        window.addEventListener('touchend', () => {
-            if (isPulling) {
-                if (pullIndicator.classList.contains('show')) {
-                    pullIndicator.innerText = 'Refreshing...';
-                    location.reload();
-                } else {
-                    pullIndicator.style.transform = 'translateY(-60px)';
-                }
-            }
-            isPulling = false;
-        });
-    }
+    // function addPullToRefresh() {
+    //     const pullIndicator = document.getElementById('pull-to-refresh');
+    //     let startY = 0;
+    //     let isPulling = false;
+    //     const PULL_THRESHOLD = 100;
+    //
+    //     window.addEventListener('touchstart', (e) => {
+    //         if (window.scrollY === 0) {
+    //             startY = e.touches[0].pageY;
+    //             isPulling = true;
+    //         }
+    //     });
+    //
+    //     window.addEventListener('touchmove', (e) => {
+    //         if (!isPulling) return;
+    //         const distance = e.touches[0].pageY - startY;
+    //         if (distance > 0) {
+    //             pullIndicator.style.transform = `translateY(${Math.min(distance - 60, 60)}px)`;
+    //         }
+    //         if (distance > PULL_THRESHOLD) {
+    //             pullIndicator.classList.add('show');
+    //         } else {
+    //             pullIndicator.classList.remove('show');
+    //         }
+    //     });
+    //
+    //     window.addEventListener('touchend', () => {
+    //         if (isPulling) {
+    //             if (pullIndicator.classList.contains('show')) {
+    //                 pullIndicator.innerText = 'Refreshing...';
+    //                 location.reload();
+    //             } else {
+    //                 pullIndicator.style.transform = 'translateY(-60px)';
+    //             }
+    //         }
+    //         isPulling = false;
+    //     });
+    // }
 
     // Fetch tracker configuration – ensure data is an array.
     async function fetchTrackerConfig() {
@@ -947,5 +947,5 @@ document.addEventListener('DOMContentLoaded', () => {
     saveButton.addEventListener('click', saveConfig);
 
     fetchConfigAndRender();
-    addPullToRefresh();
+    // addPullToRefresh();
 });

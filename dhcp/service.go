@@ -26,6 +26,7 @@ func (d *dhcpService) isDNSMasqEnabledInConfig() bool {
 
 // isDHCPServerRunning sends a DHCP DISCOVER message and waits for a DHCP OFFER.
 // Returns:
+//
 //	false if DHCP server is not running
 //	true if DHCP server was found to be running
 //	other errors in case of failure
@@ -138,32 +139,41 @@ func (d *dhcpService) startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig
 	}()
 
 	if err = d.setStaticIP(logger, ifaceName, dnsMasqConfig, findSmallestSingleCIDR); err != nil {
-		return fmt.Errorf("startDnsmasq: %w", err)
+		err = fmt.Errorf("startDnsmasq: %w", err)
+		return
 	}
 
 	var dat string
 	dat, err = generateDnsmasqConfig(cfg.DefaultGateway, cfg.ThisGateway, cfg.LowerBound, cfg.UpperBound, hwAddr.String(), cfg.DnsIPs, cfg.AddressReservations)
 	if err != nil {
-		return fmt.Errorf("error generating dnsmasq config: %v", err)
+		err = fmt.Errorf("error generating dnsmasq config: %v", err)
+		return
 	}
 
 	// Write the configuration.
 	if err = writeDnsmasqConfig(configFileDNSMasqService, dat); err != nil {
-		return fmt.Errorf("error writing dnsmasq config: %v", err)
+		err = fmt.Errorf("error writing dnsmasq config: %v", err)
+		return
 	}
 
 	// Restart dnsmasq to apply the new configuration.
 	if err = d.setDnsmasqServiceState(serviceRestart); err != nil {
-		return fmt.Errorf("error restarting dnsmasq: %v", err)
+		err = fmt.Errorf("error restarting dnsmasq: %v", err)
+		return
 	}
 
 	ok := false
 	if ok, err = d.isDnsmasqServiceActive(); !ok {
-		return fmt.Errorf("dnsmasq should have started: %v", err)
+		if err != nil {
+			err = fmt.Errorf("dnsmasq should have started: %w", err)
+		} else {
+			err = fmt.Errorf("dnsmasq should have started")
+		}
+		return
 	}
 
 	logger.Info("Dnsmasq service started successfully")
-	return nil
+	return
 }
 
 func (d *dhcpService) setStaticIP(logger *zap.SugaredLogger, ifaceName string, cfg *DNSMasqConfig, fnFinder cidrFinderFunc) error {

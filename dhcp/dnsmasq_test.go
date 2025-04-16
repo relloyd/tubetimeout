@@ -17,7 +17,7 @@ type mockRestarter struct {
 
 func (m *mockRestarter) isDnsmasqServiceActive() (bool, error) {
 	args := m.Called()
-	return args.Bool(0), args.Error(2)
+	return args.Bool(0), args.Error(1)
 }
 
 func (m *mockRestarter) isDNSMasqEnabledInConfig() bool {
@@ -61,14 +61,26 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 
 	s := &Server{ifaceName: iface, hwAddr: hw, logger: logger}
 
-	// serviceStateInactive
+	// no action
 	mockSvc := new(mockRestarter)
 	s.dhcpService = mockSvc
+	dnsMasqConfig.needsAction = false
+	dnsMasqConfig.ServiceState = "mock-state"
+	mockSvc.On("isDNSMasqEnabledInConfig").Return(false)
+	state, err := s.maybeStartOrStopDnsmasq(logger, mockSvc)
+	assert.NoError(t, err)
+	assert.Equal(t, serviceState("mock-state"), state)
+	mockSvc.AssertExpectations(t)
+
+	// serviceStateInactive
+	mockSvc = new(mockRestarter)
+	s.dhcpService = mockSvc
+	dnsMasqConfig.needsAction = true
 	mockSvc.On("isDNSMasqEnabledInConfig").Return(false)
 	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(true, true, nil)
 	mockSvc.On("unsetStaticIP", mock.Anything, iface).Return(nil)
 	mockSvc.On("setDnsmasqServiceState", serviceStop).Return(nil)
-	state, err := s.maybeStartOrStopDnsmasq(logger, mockSvc)
+	state, err = s.maybeStartOrStopDnsmasq(logger, mockSvc)
 	assert.NoError(t, err)
 	assert.Equal(t, serviceStateInactive, state)
 	mockSvc.AssertExpectations(t)
@@ -76,6 +88,7 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	// serviceStateWaitingToStop
 	mockSvc = new(mockRestarter)
 	s.dhcpService = mockSvc
+	dnsMasqConfig.needsAction = true
 	mockSvc.On("isDNSMasqEnabledInConfig").Return(false)
 	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(true, false, nil)
 	state, err = s.maybeStartOrStopDnsmasq(logger, mockSvc)
@@ -86,6 +99,7 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	// serviceStateInactive
 	mockSvc = new(mockRestarter)
 	s.dhcpService = mockSvc
+	dnsMasqConfig.needsAction = true
 	mockSvc.On("isDNSMasqEnabledInConfig").Return(false)
 	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, false, nil)
 	state, err = s.maybeStartOrStopDnsmasq(logger, mockSvc)
@@ -96,6 +110,7 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	// serviceStateRouterCanBeStopped
 	mockSvc = new(mockRestarter)
 	s.dhcpService = mockSvc
+	dnsMasqConfig.needsAction = true
 	mockSvc.On("isDNSMasqEnabledInConfig").Return(true)
 	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, true, nil)
 	mockSvc.On("startDnsmasq", mock.Anything, cfg, iface, hw).Return(nil)
@@ -107,6 +122,7 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	// serviceStateActive
 	mockSvc = new(mockRestarter)
 	s.dhcpService = mockSvc
+	dnsMasqConfig.needsAction = true
 	mockSvc.On("isDNSMasqEnabledInConfig").Return(true)
 	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, false, nil)
 	mockSvc.On("startDnsmasq", mock.Anything, cfg, iface, hw).Return(nil)
@@ -118,8 +134,10 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	// serviceStateFailedCheckConfig and force start dnsmasq
 	mockSvc = new(mockRestarter)
 	s.dhcpService = mockSvc
+	dnsMasqConfig.needsAction = true
 	mockSvc.On("isDNSMasqEnabledInConfig").Return(true)
 	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, false, errors.New("mock error"))
+	mockSvc.On("isDnsmasqServiceActive").Return(false, nil)
 	mockSvc.On("startDnsmasq", mock.Anything, cfg, iface, hw).Return(nil)
 	state, err = s.maybeStartOrStopDnsmasq(logger, mockSvc)
 	assert.NoError(t, err)
@@ -129,8 +147,10 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	// serviceStateFailedCheckConfig after running out of retries
 	mockSvc = new(mockRestarter)
 	s.dhcpService = mockSvc
+	dnsMasqConfig.needsAction = true
 	mockSvc.On("isDNSMasqEnabledInConfig").Return(false)
 	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, false, errors.New("mock error"))
+	mockSvc.On("isDnsmasqServiceActive").Return(true, nil)
 	state, err = s.maybeStartOrStopDnsmasq(logger, mockSvc)
 	assert.Error(t, err)
 	assert.Equal(t, serviceStateFailedCheckConfig, state)

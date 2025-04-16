@@ -49,7 +49,8 @@ func TestNewServer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Mock GetConfig behavior
 			defaultGetConfig = func(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
-				return newDNSMasqConfig(), tt.mockGetConfigError
+				dnsMasqConfig = newDNSMasqConfig()
+				return dnsMasqConfig, tt.mockGetConfigError
 			}
 
 			server, err := NewServer(context.Background(), config.MustGetLogger())
