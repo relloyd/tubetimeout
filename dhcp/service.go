@@ -17,8 +17,8 @@ import (
 // dhcpService implements the restarter interface.
 type dhcpService struct{}
 
-func (d *dhcpService) isDNSMasqEnabledInConfig() bool {
-	if dnsMasqConfig != nil && dnsMasqConfig.ServiceEnabled {
+func (d *dhcpService) isDNSMasqEnabledInConfig(cfg *DNSMasqConfig) bool {
+	if cfg != nil && cfg.ServiceEnabled {
 		return true
 	}
 	return false
@@ -138,7 +138,7 @@ func (d *dhcpService) startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig
 		}
 	}()
 
-	if err = d.setStaticIP(logger, ifaceName, dnsMasqConfig, findSmallestSingleCIDR); err != nil {
+	if err = d.setStaticIP(logger, ifaceName, cfg, findSmallestSingleCIDR); err != nil {
 		err = fmt.Errorf("startDnsmasq: %w", err)
 		return
 	}

@@ -41,8 +41,10 @@ func TestNewServer(t *testing.T) {
 	}
 
 	originalGetConfig := defaultGetConfig
+	originalDhcpService := defaultDhcpService
 	t.Cleanup(func() {
 		defaultGetConfig = originalGetConfig
+		defaultDhcpService = originalDhcpService
 	})
 
 	for _, tt := range tests {
@@ -53,7 +55,9 @@ func TestNewServer(t *testing.T) {
 				return dnsMasqConfig, tt.mockGetConfigError
 			}
 
-			server, err := NewServer(context.Background(), config.MustGetLogger())
+			// defaultDhcpService = &mockRestarter{}
+			ctx, cancelFunc := context.WithCancel(context.Background())
+			server, err := NewServer(ctx, config.MustGetLogger())
 
 			if tt.expectError {
 				assert.Error(t, err, tt.errorMsg)
@@ -66,6 +70,8 @@ func TestNewServer(t *testing.T) {
 			} else {
 				assert.Nil(t, server, "expected no server instance to be returned")
 			}
+
+			cancelFunc()
 		})
 	}
 }
