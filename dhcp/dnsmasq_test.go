@@ -21,7 +21,7 @@ func (m *mockRestarter) isDnsmasqServiceActive() (bool, error) {
 }
 
 func (m *mockRestarter) isDNSMasqEnabledInConfig(cfg *DNSMasqConfig) bool {
-	args := m.Called()
+	args := m.Called(cfg)
 	return args.Bool(0)
 }
 

@@ -1,10 +1,12 @@
 package dhcp
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -97,16 +99,16 @@ type Server struct {
 }
 
 func NewServer(ctx context.Context, logger *zap.SugaredLogger) (*Server, error) {
-	dnsMasqConfig, err := defaultGetConfig(logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get dnsmasq config: %w", err)
-	}
-
 	s := &Server{
 		logger:      logger,
 		chanWorker:  make(chan struct{}, 2),
 		dhcpService: defaultDhcpService,
-		cfg:         dnsMasqConfig,
+		// cfg:         newDNSMasqConfig(),
+	}
+
+	_, err := s.GetConfig() // GetConfig() sets the server config anyway.
+	if err != nil {
+		return nil, err
 	}
 
 	s.ifaceName, err = getPrimaryInterfaceName()
@@ -263,16 +265,119 @@ func (s *Server) Stop() error {
 	return nil
 }
 
-func (s *Server) GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
-	return defaultGetConfig(logger)
+func (s *Server) GetConfig() (*DNSMasqConfig, error) {
+	// Allow lazy mocking of the func that gets config so we don't have to mock
+	// the whole inner workings of config.GetConfig in tests.
+	return defaultGetConfig(s.logger, s.cfg)
 }
 
-func (s *Server) SetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) error {
-	err := defaultSetConfig(logger, cfg)
+func GetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) (*DNSMasqConfig, error) {
+	if cfg != nil { // if dns config is already loaded...
+		return cfg, nil
+	}
+
+	// Load from file.
+	newCfg, err := config.GetConfig[*DNSMasqConfig](dhcpMutex, configFileDHCPSettings, newDNSMasqConfig)
+	if err != nil {
+		logger.Warnf("Failed to get dnsmasq config: %v", err)
+		return nil, fmt.Errorf("failed to get dnsmasq config: %w", err)
+	}
+
+	// Assume defaults if empty.
+	if newCfg.DefaultGateway == nil {
+		newCfg.DefaultGateway, err = getDefaultGateway()
+		if err != nil {
+			logger.Warnf("Failed to get default gateway: %v", err)
+			return nil, fmt.Errorf("failed to get default gateway: %w", err)
+		}
+	}
+
+	ifaceName, err := getPrimaryInterfaceName()
+	if err != nil {
+		logger.Warnf("Failed to get primary interface (check your o/s is listed): %v", err)
+		return nil, fmt.Errorf("failed to get primary interface (check your o/s is listed): %w", err)
+	}
+
+	if newCfg.LowerBound == nil || newCfg.UpperBound == nil || newCfg.ThisGateway == nil {
+		lowerBound, upperBound, err := getSubnetBoundsForInterface(ifaceName)
+		if err != nil {
+			logger.Warnf("Failed to get subnet range for interface %s: %v", ifaceName, err)
+			return nil, fmt.Errorf("failed to get subnet range for interface %s: %w", ifaceName, err)
+		}
+		newCfg.LowerBound, newCfg.UpperBound, newCfg.ThisGateway, err = adjustSubnetRange(lowerBound, upperBound, newCfg.DefaultGateway)
+		if err != nil {
+			logger.Warnf("Failed to adjust subnet range for interface %s: %v", ifaceName, err)
+			return nil, fmt.Errorf("failed to adjust subnet range for interface %s: %w", ifaceName, err)
+		}
+	}
+
+	if len(newCfg.DnsIPs) == 0 {
+		newCfg.DnsIPs = fallbackDNSIPs
+	}
+
+	// Set the package global variable to the new value.
+	cfg = newCfg
+
+	return newCfg, nil
+}
+
+func (s *Server) SetConfig(logger *zap.SugaredLogger, newCfg *DNSMasqConfig) error {
+	// Allow lazy mocking of the func that gets config so we don't have to mock
+	// the whole inner workings of config.GetConfig in tests.
+	err := defaultSetConfig(logger, s.cfg, newCfg)
 	if err != nil {
 		return err
 	}
 	s.restart()
+	return nil
+}
+
+func SetConfig(_ *zap.SugaredLogger, oldCfg *DNSMasqConfig, newCfg *DNSMasqConfig) error {
+	if newCfg == nil || oldCfg == nil {
+		return fmt.Errorf("supplied new dnsmasq config is nil")
+	}
+	if oldCfg == nil {
+		return fmt.Errorf("existing dnsmasq config is nil")
+	}
+
+	fnValidate := func(cfg *DNSMasqConfig) error {
+		if cfg == nil {
+			return fmt.Errorf("DNSMasqConfig is nil")
+		}
+		if cfg.DefaultGateway == nil || cfg.DefaultGateway.To4() == nil {
+			return fmt.Errorf("invalid or missing DefaultGateway")
+		}
+		if cfg.ThisGateway == nil || cfg.ThisGateway.To4() == nil {
+			return fmt.Errorf("invalid or missing ThisGateway")
+		}
+		if cfg.LowerBound == nil || cfg.LowerBound.To4() == nil {
+			return fmt.Errorf("invalid or missing LowerBound")
+		}
+		if cfg.UpperBound == nil || cfg.UpperBound.To4() == nil {
+			return fmt.Errorf("invalid or missing UpperBound")
+		}
+		if len(cfg.DnsIPs) == 0 {
+			cfg.DnsIPs = fallbackDNSIPs
+		}
+		if bytes.Compare(cfg.LowerBound, cfg.UpperBound) >= 0 {
+			return fmt.Errorf("LowerBound must be less than UpperBound")
+		}
+		for _, v := range cfg.AddressReservations { // for each address reservation...
+			v.MacAddr = models.MAC(strings.ToUpper(strings.ReplaceAll(string(v.MacAddr), ":", "-"))) // Ensure upper case and hyphens.
+		}
+		cfg.needsAction = true // assume something has changed for now and that we want a restart
+		return nil
+	}
+
+	fnUpdateInMem := func(cfg *DNSMasqConfig) {
+		oldCfg = cfg
+	}
+
+	err := config.SetConfig[*DNSMasqConfig](dhcpMutex, configFileDHCPSettings, fnValidate, fnUpdateInMem, newCfg) // TODO: validate the incoming config but don't override any yet
+	if err != nil {
+		return fmt.Errorf("failed to set dnsmasq config: %w", err)
+	}
+
 	return nil
 }
 

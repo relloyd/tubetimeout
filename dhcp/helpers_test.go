@@ -40,19 +40,17 @@ func TestNewServer(t *testing.T) {
 		},
 	}
 
-	originalGetConfig := defaultGetConfig
 	originalDhcpService := defaultDhcpService
 	t.Cleanup(func() {
-		defaultGetConfig = originalGetConfig
 		defaultDhcpService = originalDhcpService
 	})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Mock GetConfig behavior
-			defaultGetConfig = func(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
-				dnsMasqConfig = newDNSMasqConfig()
-				return dnsMasqConfig, tt.mockGetConfigError
+			defaultGetConfig = func(logger *zap.SugaredLogger, cfg *DNSMasqConfig) (*DNSMasqConfig, error) {
+				cfg = newDNSMasqConfig()
+				return cfg, tt.mockGetConfigError
 			}
 
 			// defaultDhcpService = &mockRestarter{}
@@ -117,10 +115,14 @@ func TestGetConfigCached(t *testing.T) {
 	// Here you can also set other fields as needed.
 
 	// Set the global to simulate an already loaded config.
-	dnsMasqConfig = dummyCfg
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+	s, err := NewServer(ctx, config.MustGetLogger())
+	assert.NoError(t, err)
+	s.cfg = dummyCfg
 
 	// Call GetConfig. In this case, the function should simply return our dummyCfg.
-	cfg, err := GetConfig(config.MustGetLogger())
+	cfg, err := GetConfig(config.MustGetLogger(), s.cfg)
 	assert.NoError(t, err, "GetConfig should not return an error when a config is cached")
 	assert.Equal(t, dummyCfg, cfg, "Expected cached config to be returned")
 }
@@ -129,12 +131,18 @@ func TestGetConfigCached(t *testing.T) {
 // GetConfig attempts to load the configuration and returns a non-nil result.
 func TestGetConfigLoads(t *testing.T) {
 	// Reset the global to force a fresh load.
-	dnsMasqConfig = nil
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+	s, err := NewServer(ctx, config.MustGetLogger())
+	assert.NoError(t, err)
+	// s.cfg = nil
 
 	// Create a temporary file for the dummy config
 	tmpFile, err := os.CreateTemp("", "dnsmasq-config-*.yaml")
 	assert.NoError(t, err, "Failed to create temporary file for config")
-	defer os.Remove(tmpFile.Name()) // Clean up the temp file when done
+	defer func(name string) {
+		_ = os.Remove(name)
+	}(tmpFile.Name()) // Clean up the temp file when done
 
 	// Write dummy config data to the temporary file
 	dummyConfigContent := `defaultGateway: "192.168.1.1"
@@ -163,7 +171,7 @@ serviceEnabled: true
 		return tmpFile.Name(), nil
 	}
 
-	cfg, err := GetConfig(config.MustGetLogger())
+	cfg, err := GetConfig(config.MustGetLogger(), s.cfg)
 	assert.NoError(t, err, "Expected no error when loading config")
 	assert.NotNil(t, cfg, "Expected non-nil config")
 
@@ -192,7 +200,9 @@ func TestSetConfig_WritesToFile(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "dnsmasq-config-*.json")
 	assert.NoError(t, err)
 	// Clean up the temp file when done
-	defer os.Remove(tmpFile.Name())
+	defer func(name string) {
+		_ = os.Remove(name)
+	}(tmpFile.Name())
 
 	// Override the function to return our temp file path.
 	config.FnDefaultCreateAppHomeDirAndGetConfigFilePath = func(fileName string) (string, error) {
@@ -210,6 +220,12 @@ func TestSetConfig_WritesToFile(t *testing.T) {
 		configFileDNSMasqService = originalFile
 	}()
 
+	// Setup server config.
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+	s, err := NewServer(ctx, config.MustGetLogger())
+	assert.NoError(t, err)
+
 	// Create a sample config with a known value.
 	sampleCfg := &DNSMasqConfig{
 		DefaultGateway: net.ParseIP("192.168.1.1"),
@@ -224,7 +240,7 @@ func TestSetConfig_WritesToFile(t *testing.T) {
 	}
 
 	// Call SetConfig and ensure no error is returned.
-	err = SetConfig(config.MustGetLogger(), sampleCfg)
+	err = SetConfig(config.MustGetLogger(), s.cfg, sampleCfg)
 	assert.NoError(t, err)
 
 	// Read back the file contents.

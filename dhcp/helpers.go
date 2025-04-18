@@ -2,7 +2,6 @@ package dhcp
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -12,111 +11,11 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
-
-	"go.uber.org/zap"
-	"relloyd/tubetimeout/config"
-	"relloyd/tubetimeout/models"
 )
 
 func defaultRouteCmd() (string, error) {
 	output, err := exec.Command("netstat", routeCmdArgs...).Output() // -n: show numerical addresses, -a: show all hosts
 	return string(output), err
-}
-
-func GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
-	if dnsMasqConfig != nil { // if dns config is already loaded...
-		return dnsMasqConfig, nil
-	}
-
-	// Load from file.
-	cfg, err := config.GetConfig[*DNSMasqConfig](dhcpMutex, configFileDHCPSettings, newDNSMasqConfig)
-	if err != nil {
-		logger.Warnf("Failed to get dnsmasq config: %v", err)
-		return nil, fmt.Errorf("failed to get dnsmasq config: %w", err)
-	}
-
-	// Assume defaults if empty.
-	if cfg.DefaultGateway == nil {
-		cfg.DefaultGateway, err = getDefaultGateway()
-		if err != nil {
-			logger.Warnf("Failed to get default gateway: %v", err)
-			return nil, fmt.Errorf("failed to get default gateway: %w", err)
-		}
-	}
-
-	ifaceName, err := getPrimaryInterfaceName()
-	if err != nil {
-		logger.Warnf("Failed to get primary interface (check your o/s is listed): %v", err)
-		return nil, fmt.Errorf("failed to get primary interface (check your o/s is listed): %w", err)
-	}
-
-	if cfg.LowerBound == nil || cfg.UpperBound == nil || cfg.ThisGateway == nil {
-		lowerBound, upperBound, err := getSubnetBoundsForInterface(ifaceName)
-		if err != nil {
-			logger.Warnf("Failed to get subnet range for interface %s: %v", ifaceName, err)
-			return nil, fmt.Errorf("failed to get subnet range for interface %s: %w", ifaceName, err)
-		}
-		cfg.LowerBound, cfg.UpperBound, cfg.ThisGateway, err = adjustSubnetRange(lowerBound, upperBound, cfg.DefaultGateway)
-		if err != nil {
-			logger.Warnf("Failed to adjust subnet range for interface %s: %v", ifaceName, err)
-			return nil, fmt.Errorf("failed to adjust subnet range for interface %s: %w", ifaceName, err)
-		}
-	}
-
-	if len(cfg.DnsIPs) == 0 {
-		cfg.DnsIPs = fallbackDNSIPs
-	}
-
-	// Set the package global variable to the new value.
-	dnsMasqConfig = cfg
-
-	return cfg, nil
-}
-
-func SetConfig(_ *zap.SugaredLogger, cfg *DNSMasqConfig) error {
-	if cfg == nil {
-		return fmt.Errorf("supplied dnsmasq config is nil")
-	}
-
-	fnValidate := func(cfg *DNSMasqConfig) error {
-		if cfg == nil {
-			return fmt.Errorf("DNSMasqConfig is nil")
-		}
-		if cfg.DefaultGateway == nil || cfg.DefaultGateway.To4() == nil {
-			return fmt.Errorf("invalid or missing DefaultGateway")
-		}
-		if cfg.ThisGateway == nil || cfg.ThisGateway.To4() == nil {
-			return fmt.Errorf("invalid or missing ThisGateway")
-		}
-		if cfg.LowerBound == nil || cfg.LowerBound.To4() == nil {
-			return fmt.Errorf("invalid or missing LowerBound")
-		}
-		if cfg.UpperBound == nil || cfg.UpperBound.To4() == nil {
-			return fmt.Errorf("invalid or missing UpperBound")
-		}
-		if len(cfg.DnsIPs) == 0 {
-			cfg.DnsIPs = fallbackDNSIPs
-		}
-		if bytes.Compare(cfg.LowerBound, cfg.UpperBound) >= 0 {
-			return fmt.Errorf("LowerBound must be less than UpperBound")
-		}
-		for _, v := range cfg.AddressReservations { // for each address reservation...
-			v.MacAddr = models.MAC(strings.ToUpper(strings.ReplaceAll(string(v.MacAddr), ":", "-"))) // Ensure upper case and hyphens.
-		}
-		cfg.needsAction = true // assume something has changed for now and that we want a restart
-		return nil
-	}
-
-	fnUpdateInMem := func(cfg *DNSMasqConfig) {
-		dnsMasqConfig = cfg
-	}
-
-	err := config.SetConfig[*DNSMasqConfig](dhcpMutex, configFileDHCPSettings, fnValidate, fnUpdateInMem, cfg) // TODO: validate the incoming config but don't override any yet
-	if err != nil {
-		return fmt.Errorf("failed to set dnsmasq config: %w", err)
-	}
-
-	return nil
 }
 
 func getPrimaryInterfaceName() (string, error) {
