@@ -41,16 +41,18 @@ func TestNewServer(t *testing.T) {
 	}
 
 	originalDhcpService := defaultDhcpService
+	originalGetConfig := defaultGetConfig
 	t.Cleanup(func() {
 		defaultDhcpService = originalDhcpService
+		defaultGetConfig = originalGetConfig
 	})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Mock GetConfig behavior
-			defaultGetConfig = func(logger *zap.SugaredLogger, cfg *DNSMasqConfig) (*DNSMasqConfig, error) {
-				cfg = newDNSMasqConfig()
-				return cfg, tt.mockGetConfigError
+			defaultGetConfig = func(logger *zap.SugaredLogger, cfg **DNSMasqConfig) error {
+				*cfg = newDNSMasqConfig()
+				return tt.mockGetConfigError
 			}
 
 			// defaultDhcpService = &mockRestarter{}
@@ -114,28 +116,20 @@ func TestGetConfigCached(t *testing.T) {
 	dummyCfg.DefaultGateway = net.ParseIP("192.168.1.1")
 	// Here you can also set other fields as needed.
 
-	// Set the global to simulate an already loaded config.
-	ctx, cancelFunc := context.WithCancel(context.Background())
-	defer cancelFunc()
-	s, err := NewServer(ctx, config.MustGetLogger())
-	assert.NoError(t, err)
-	s.cfg = dummyCfg
+	// Set the initial cfg state.
+	s := &Server{cfg: dummyCfg}
 
 	// Call GetConfig. In this case, the function should simply return our dummyCfg.
-	cfg, err := GetConfig(config.MustGetLogger(), s.cfg)
+	err := s.GetConfig()
 	assert.NoError(t, err, "GetConfig should not return an error when a config is cached")
-	assert.Equal(t, dummyCfg, cfg, "Expected cached config to be returned")
+	assert.Equal(t, dummyCfg, s.cfg, "Expected cached config to be returned")
 }
 
 // TestGetConfigLoads verifies that, if dnsMasqConfig is nil,
 // GetConfig attempts to load the configuration and returns a non-nil result.
 func TestGetConfigLoads(t *testing.T) {
-	// Reset the global to force a fresh load.
-	ctx, cancelFunc := context.WithCancel(context.Background())
-	defer cancelFunc()
-	s, err := NewServer(ctx, config.MustGetLogger())
-	assert.NoError(t, err)
-	// s.cfg = nil
+	// Start with no server config
+	s := &Server{cfg: nil}
 
 	// Create a temporary file for the dummy config
 	tmpFile, err := os.CreateTemp("", "dnsmasq-config-*.yaml")
@@ -171,26 +165,26 @@ serviceEnabled: true
 		return tmpFile.Name(), nil
 	}
 
-	cfg, err := GetConfig(config.MustGetLogger(), s.cfg)
+	err = s.GetConfig()
 	assert.NoError(t, err, "Expected no error when loading config")
-	assert.NotNil(t, cfg, "Expected non-nil config")
+	assert.NotNil(t, s.cfg, "Expected non-nil config")
 
 	// Basic sanity check for fields that should be set.
-	assert.Equal(t, net.ParseIP("192.168.1.1"), cfg.DefaultGateway, "DefaultGateway didn't match the expected value")
-	assert.Equal(t, net.ParseIP("192.168.1.3"), cfg.LowerBound, "LowerBound didn't match the expected value")
-	assert.Equal(t, net.ParseIP("192.168.1.254"), cfg.UpperBound, "UpperBound didn't match the expected value")
-	assert.Equal(t, net.ParseIP("192.168.1.2"), cfg.ThisGateway, "ThisGateway didn't match the expected value")
-	assert.Equal(t, []net.IP{net.ParseIP("8.8.8.8"), net.ParseIP("8.8.4.4")}, cfg.DnsIPs, "DNS IPs didn't match the expected value")
-	assert.True(t, cfg.ServiceEnabled, "ServiceEnabled should be true")
+	assert.Equal(t, net.ParseIP("192.168.1.1"), s.cfg.DefaultGateway, "DefaultGateway didn't match the expected value")
+	assert.Equal(t, net.ParseIP("192.168.1.3"), s.cfg.LowerBound, "LowerBound didn't match the expected value")
+	assert.Equal(t, net.ParseIP("192.168.1.254"), s.cfg.UpperBound, "UpperBound didn't match the expected value")
+	assert.Equal(t, net.ParseIP("192.168.1.2"), s.cfg.ThisGateway, "ThisGateway didn't match the expected value")
+	assert.Equal(t, []net.IP{net.ParseIP("8.8.8.8"), net.ParseIP("8.8.4.4")}, s.cfg.DnsIPs, "DNS IPs didn't match the expected value")
+	assert.True(t, s.cfg.ServiceEnabled, "ServiceEnabled should be true")
 
 	assert.NoError(t, err, "Expected no error when loading config")
-	assert.NotNil(t, cfg, "Expected non-nil config")
+	assert.NotNil(t, s.cfg, "Expected non-nil config")
 
 	// Basic sanity check for fields that should be set.
-	assert.NotNil(t, cfg.DefaultGateway, "DefaultGateway is nil")
-	assert.NotNil(t, cfg.LowerBound, "LowerBound is nil")
-	assert.NotNil(t, cfg.UpperBound, "UpperBound is nil")
-	assert.NotNil(t, cfg.ThisGateway, "ThisGateway is nil")
+	assert.NotNil(t, s.cfg.DefaultGateway, "DefaultGateway is nil")
+	assert.NotNil(t, s.cfg.LowerBound, "LowerBound is nil")
+	assert.NotNil(t, s.cfg.UpperBound, "UpperBound is nil")
+	assert.NotNil(t, s.cfg.ThisGateway, "ThisGateway is nil")
 }
 
 func TestSetConfig_WritesToFile(t *testing.T) {
@@ -738,123 +732,3 @@ func TestFindSmallestSingleCIDR(t *testing.T) {
 		assert.Equal(t, block, b[1], "findSmallestSingleCIDR %v - %v failed with bad block", test.startIP, test.endIP)
 	}
 }
-
-//
-// func TestMarshalJSON_MACAddress(t *testing.T) {
-// 	tests := []struct {
-// 		name            string
-// 		inputMAC        MACAddress
-// 		expectedOutput  string
-// 		expectError     bool
-// 		expectedErrText string
-// 	}{
-// 		{
-// 			name:           "Valid MAC address",
-// 			inputMAC:       MACAddress{net.HardwareAddr{0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E}},
-// 			expectedOutput: `"00-1A-2B-3C-4D-5E"`,
-// 			expectError:    false,
-// 		},
-// 		{
-// 			name:           "Empty MAC address",
-// 			inputMAC:       MACAddress{net.HardwareAddr{}},
-// 			expectedOutput: `""`,
-// 			expectError:    false,
-// 		},
-// 		{
-// 			name:           "Single byte MAC address (is there a point)",
-// 			inputMAC:       MACAddress{net.HardwareAddr{0xAA}},
-// 			expectedOutput: `"AA"`,
-// 			expectError:    false,
-// 		},
-// 	}
-//
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			output, err := tt.inputMAC.MarshalJSON()
-//
-// 			if tt.expectError {
-// 				assert.Error(t, err, tt.expectedErrText)
-// 			} else {
-// 				assert.NoError(t, err, tt.expectedErrText)
-// 				assert.Equal(t, tt.expectedOutput, string(output), "unexpected JSON output for MAC address")
-// 			}
-// 		})
-// 	}
-// }
-//
-// func TestMACAddressMarshalYAML(t *testing.T) {
-// 	tests := []struct {
-// 		name         string
-// 		inputMAC     string // Expected input in colon-separated format
-// 		expectedText string // Expected output in hyphen-separated uppercase format
-// 	}{
-// 		{
-// 			name:         "Basic MAC address",
-// 			inputMAC:     "01:23:45:67:89:ab",
-// 			expectedText: "01-23-45-67-89-AB",
-// 		},
-// 		{
-// 			name:         "MAC address with leading zeros",
-// 			inputMAC:     "0a:0b:0c:0d:0e:0f",
-// 			expectedText: "0A-0B-0C-0D-0E-0F",
-// 		},
-// 	}
-//
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			var mac MACAddress
-// 			// Use UnmarshalText to initialize the MACAddress from a colon-separated string.
-// 			if err := mac.UnmarshalText([]byte(tt.inputMAC)); err != nil {
-// 				t.Fatalf("UnmarshalText failed: %v", err)
-// 			}
-//
-// 			// Marshal the MAC address to text.
-// 			result, err := mac.MarshalYAML()
-// 			if err != nil {
-// 				t.Fatalf("MarshalText returned error: %v", err)
-// 			}
-//
-// 			if got := result; got != tt.expectedText {
-// 				t.Errorf("MarshalText() = %q, want %q", got, tt.expectedText)
-// 			}
-// 		})
-// 	}
-// }
-//
-// func TestMACAddress_UnmarshalYAML_Valid(t *testing.T) {
-// 	var mac MACAddress
-//
-// 	// Define a fake unmarshal function that simulates the YAML unmarshalling process.
-// 	// It passes the test MAC address string to the UnmarshalYAML function.
-// 	unmarshalFunc := func(v interface{}) error {
-// 		// Expecting a pointer to a string.
-// 		s, ok := v.(*string)
-// 		if !ok {
-// 			return errors.New("expected pointer to string")
-// 		}
-// 		// Provide a valid MAC address with hyphen separators.
-// 		*s = "AA-BB-CC-DD-EE-FF"
-// 		return nil
-// 	}
-//
-// 	err := mac.UnmarshalYAML(unmarshalFunc)
-// 	assert.NoError(t, err)
-//
-// 	// The String() method converts the MAC address to an upper-case, hyphen-separated string.
-// 	expected := "AA:BB:CC:DD:EE:FF"
-// 	assert.Equal(t, expected, mac.String(), "MAC address string does not match expected value")
-//
-// 	// Also test that providing a string with colon separators is handled correctly.
-// 	var mac2 MACAddress
-// 	unmarshalFuncColon := func(v interface{}) error {
-// 		s, ok := v.(*string)
-// 		if !ok {
-// 			return errors.New("expected pointer to string")
-// 		}
-// 		*s = "aa:bb:cc:dd:ee:ff"
-// 		return nil
-// 	}
-// 	err = mac2.UnmarshalYAML(unmarshalFuncColon)
-// 	assert.NoError(t, err, "Expected no error for colon-separated address")
-// 	assert.Equal(t, expected, mac2.String(), "MAC address string does not match expected value")
-// }

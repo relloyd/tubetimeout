@@ -42,7 +42,7 @@ const (
 var (
 	defaultInterfaceName     = "eth0"
 	defaultLeaseDuration     = "12h"
-	defaultGetConfig         = GetConfig                 // allow mocking
+	defaultGetConfig         = GetConfig                 // allow mocking // TODO: stop using default funcs, but you'll need to update tests to be smarter
 	defaultSetConfig         = SetConfig                 // allow mocking
 	defaultDhcpService       = restarter(&dhcpService{}) // allow mocking
 	routeCmd                 = defaultRouteCmd
@@ -103,10 +103,10 @@ func NewServer(ctx context.Context, logger *zap.SugaredLogger) (*Server, error) 
 		logger:      logger,
 		chanWorker:  make(chan struct{}, 2),
 		dhcpService: defaultDhcpService,
-		// cfg:         newDNSMasqConfig(),
+		// nil cfg so that it is fetched by s.GetConfig() below.
 	}
 
-	_, err := s.GetConfig() // GetConfig() sets the server config anyway.
+	err := s.GetConfig() // GetConfig() sets the server config.
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +115,7 @@ func NewServer(ctx context.Context, logger *zap.SugaredLogger) (*Server, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to get primary interface: %w", err)
 	}
+
 	s.hwAddr, err = getIfaceHardwareAddress(s.ifaceName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get hardware address for interface %s: %w", s.ifaceName, err)
@@ -204,18 +205,13 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 				return
 			}
 		} else {                   // else dnsmasq is enabled by the user...
-			if !dhcpRunningLocal { // if the local server isn't running, or it needs a restart...
+			if !dhcpRunningLocal { // if the local server isn't running...
 				// (Re)start the service.
 				// needsAction is set to true when the config file is changed.
 				// We don't care if another server is running on the router.
 				// Prefer to have two DHCP services running than none at all and advise the user to stop the
 				// router DHCP service via web interface.
-				pattern := "The local DHCP server %v running, attempting to %vstart dnsmasq"
-				if dhcpRunningLocal {
-					logger.Info(fmt.Sprintf(pattern, "is", "re"))
-				} else {
-					logger.Info(fmt.Sprintf(pattern, "is not", ""))
-				}
+				logger.Info("Attempting to start dnsmasq (the local DHCP server is not running)")
 
 				// Start dnsmasq.
 				if err = svc.startDnsmasq(logger, s.cfg, s.ifaceName, s.hwAddr); err != nil { // if dnsmasq failed to started...
@@ -265,22 +261,23 @@ func (s *Server) Stop() error {
 	return nil
 }
 
-func (s *Server) GetConfig() (*DNSMasqConfig, error) {
+func (s *Server) GetConfig() error {
 	// Allow lazy mocking of the func that gets config so we don't have to mock
 	// the whole inner workings of config.GetConfig in tests.
-	return defaultGetConfig(s.logger, s.cfg)
+	// TODO: stop deferring to a plain func when getting/setting dnsmasq cfg - tests need updating.
+	return defaultGetConfig(s.logger, &s.cfg)
 }
 
-func GetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) (*DNSMasqConfig, error) {
-	if cfg != nil { // if dns config is already loaded...
-		return cfg, nil
+func GetConfig(logger *zap.SugaredLogger, cfg **DNSMasqConfig) error {
+	if *cfg != nil { // if dns config is already loaded...
+		return nil
 	}
 
 	// Load from file.
 	newCfg, err := config.GetConfig[*DNSMasqConfig](dhcpMutex, configFileDHCPSettings, newDNSMasqConfig)
 	if err != nil {
 		logger.Warnf("Failed to get dnsmasq config: %v", err)
-		return nil, fmt.Errorf("failed to get dnsmasq config: %w", err)
+		return fmt.Errorf("failed to get dnsmasq config: %w", err)
 	}
 
 	// Assume defaults if empty.
@@ -288,26 +285,26 @@ func GetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) (*DNSMasqConfig, e
 		newCfg.DefaultGateway, err = getDefaultGateway()
 		if err != nil {
 			logger.Warnf("Failed to get default gateway: %v", err)
-			return nil, fmt.Errorf("failed to get default gateway: %w", err)
+			return fmt.Errorf("failed to get default gateway: %w", err)
 		}
 	}
 
 	ifaceName, err := getPrimaryInterfaceName()
 	if err != nil {
 		logger.Warnf("Failed to get primary interface (check your o/s is listed): %v", err)
-		return nil, fmt.Errorf("failed to get primary interface (check your o/s is listed): %w", err)
+		return fmt.Errorf("failed to get primary interface (check your o/s is listed): %w", err)
 	}
 
 	if newCfg.LowerBound == nil || newCfg.UpperBound == nil || newCfg.ThisGateway == nil {
 		lowerBound, upperBound, err := getSubnetBoundsForInterface(ifaceName)
 		if err != nil {
 			logger.Warnf("Failed to get subnet range for interface %s: %v", ifaceName, err)
-			return nil, fmt.Errorf("failed to get subnet range for interface %s: %w", ifaceName, err)
+			return fmt.Errorf("failed to get subnet range for interface %s: %w", ifaceName, err)
 		}
 		newCfg.LowerBound, newCfg.UpperBound, newCfg.ThisGateway, err = adjustSubnetRange(lowerBound, upperBound, newCfg.DefaultGateway)
 		if err != nil {
 			logger.Warnf("Failed to adjust subnet range for interface %s: %v", ifaceName, err)
-			return nil, fmt.Errorf("failed to adjust subnet range for interface %s: %w", ifaceName, err)
+			return fmt.Errorf("failed to adjust subnet range for interface %s: %w", ifaceName, err)
 		}
 	}
 
@@ -316,9 +313,9 @@ func GetConfig(logger *zap.SugaredLogger, cfg *DNSMasqConfig) (*DNSMasqConfig, e
 	}
 
 	// Set the package global variable to the new value.
-	cfg = newCfg
+	*cfg = newCfg
 
-	return newCfg, nil
+	return  nil
 }
 
 func (s *Server) SetConfig(logger *zap.SugaredLogger, newCfg *DNSMasqConfig) error {
@@ -333,7 +330,7 @@ func (s *Server) SetConfig(logger *zap.SugaredLogger, newCfg *DNSMasqConfig) err
 }
 
 func SetConfig(_ *zap.SugaredLogger, oldCfg *DNSMasqConfig, newCfg *DNSMasqConfig) error {
-	if newCfg == nil || oldCfg == nil {
+	if newCfg == nil  {
 		return fmt.Errorf("supplied new dnsmasq config is nil")
 	}
 	if oldCfg == nil {
@@ -384,8 +381,4 @@ func SetConfig(_ *zap.SugaredLogger, oldCfg *DNSMasqConfig, newCfg *DNSMasqConfi
 func (s *Server) restart() {
 	s.cfg.needsAction = true
 	s.chanWorker <- struct{}{}
-}
-
-func needsRestart(cfg *DNSMasqConfig) bool {
-	return cfg.needsAction
 }
