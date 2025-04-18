@@ -120,9 +120,10 @@ func TestGetConfigCached(t *testing.T) {
 	s := &Server{cfg: dummyCfg}
 
 	// Call GetConfig. In this case, the function should simply return our dummyCfg.
-	err := s.GetConfig()
+	newCfg, err := s.GetConfig(config.MustGetLogger())
 	assert.NoError(t, err, "GetConfig should not return an error when a config is cached")
-	assert.Equal(t, dummyCfg, s.cfg, "Expected cached config to be returned")
+	assert.Equal(t, dummyCfg, s.cfg, "Expected cached config to be set in struct")
+	assert.Equal(t, dummyCfg, newCfg, "Expected cached config to be returned")
 }
 
 // TestGetConfigLoads verifies that, if dnsMasqConfig is nil,
@@ -165,7 +166,7 @@ serviceEnabled: true
 		return tmpFile.Name(), nil
 	}
 
-	err = s.GetConfig()
+	_, err = s.GetConfig(config.MustGetLogger())
 	assert.NoError(t, err, "Expected no error when loading config")
 	assert.NotNil(t, s.cfg, "Expected non-nil config")
 

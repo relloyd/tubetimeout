@@ -106,7 +106,7 @@ func NewServer(ctx context.Context, logger *zap.SugaredLogger) (*Server, error) 
 		// nil cfg so that it is fetched by s.GetConfig() below.
 	}
 
-	err := s.GetConfig() // GetConfig() sets the server config.
+	_, err := s.GetConfig(s.logger) // GetConfig() sets the server config.
 	if err != nil {
 		return nil, err
 	}
@@ -261,11 +261,15 @@ func (s *Server) Stop() error {
 	return nil
 }
 
-func (s *Server) GetConfig() error {
+func (s *Server) GetConfig(logger *zap.SugaredLogger) (*DNSMasqConfig, error) {
 	// Allow lazy mocking of the func that gets config so we don't have to mock
 	// the whole inner workings of config.GetConfig in tests.
 	// TODO: stop deferring to a plain func when getting/setting dnsmasq cfg - tests need updating.
-	return defaultGetConfig(s.logger, &s.cfg)
+	err := defaultGetConfig(logger, &s.cfg)
+	if err != nil {
+		return nil, err
+	}
+	return s.cfg, nil
 }
 
 func GetConfig(logger *zap.SugaredLogger, cfg **DNSMasqConfig) error {
