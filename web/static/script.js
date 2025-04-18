@@ -4,10 +4,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const saveButton = document.getElementById('save-config-btn');
 
-    document.getElementById('title-button').addEventListener('click', () => {
-        location.reload();
-    });
-
     // API endpoints – note the use of /groups instead of /groupMACs.
     const UrlGroupAPI = '/groups';
     const UrlUsageAPI = '/usage';
@@ -216,45 +212,6 @@ document.addEventListener('DOMContentLoaded', () => {
             groupStartDayField.style.display = '';
         }
     }
-
-    // function addPullToRefresh() {
-    //     const pullIndicator = document.getElementById('pull-to-refresh');
-    //     let startY = 0;
-    //     let isPulling = false;
-    //     const PULL_THRESHOLD = 100;
-    //
-    //     window.addEventListener('touchstart', (e) => {
-    //         if (window.scrollY === 0) {
-    //             startY = e.touches[0].pageY;
-    //             isPulling = true;
-    //         }
-    //     });
-    //
-    //     window.addEventListener('touchmove', (e) => {
-    //         if (!isPulling) return;
-    //         const distance = e.touches[0].pageY - startY;
-    //         if (distance > 0) {
-    //             pullIndicator.style.transform = `translateY(${Math.min(distance - 60, 60)}px)`;
-    //         }
-    //         if (distance > PULL_THRESHOLD) {
-    //             pullIndicator.classList.add('show');
-    //         } else {
-    //             pullIndicator.classList.remove('show');
-    //         }
-    //     });
-    //
-    //     window.addEventListener('touchend', () => {
-    //         if (isPulling) {
-    //             if (pullIndicator.classList.contains('show')) {
-    //                 pullIndicator.innerText = 'Refreshing...';
-    //                 location.reload();
-    //             } else {
-    //                 pullIndicator.style.transform = 'translateY(-60px)';
-    //             }
-    //         }
-    //         isPulling = false;
-    //     });
-    // }
 
     // Fetch tracker configuration – ensure data is an array.
     async function fetchTrackerConfig() {
@@ -638,11 +595,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showSaveButton() {
-        saveButton.classList.add('fade-in');
+        saveButton.style.display = 'inline-block';
     }
 
     function hideSaveButton() {
-        saveButton.classList.remove('fade-in');
         saveButton.style.display = 'none';
     }
 
@@ -760,15 +716,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const enabledLabel = document.createElement('label');
         enabledLabel.setAttribute('for', 'service-enabled');
         enabledLabel.textContent = 'Enable DHCP Service';
-
         const enabledInput = document.createElement('input');
         enabledInput.id = 'service-enabled';
         enabledInput.type = 'checkbox';
-
-        const statusSpan = document.createElement('span');
-        statusSpan.id = 'service-state';
-        statusSpan.style.marginLeft = '8px';
-
         enabledField.appendChild(enabledLabel);
         enabledField.appendChild(enabledInput);
         dhcpConfigForm.appendChild(enabledField);
@@ -810,7 +760,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('dns-ip1').value = cfg.dnsIPs?.[0] || '';
         document.getElementById('dns-ip2').value = cfg.dnsIPs?.[1] || '';
         document.getElementById('service-enabled').checked = cfg.serviceEnabled || false;
-        document.getElementById('service-state').value = cfg.serviceState || '';
 
         const container = document.getElementById('reservation-container');
         container.innerHTML = '';
@@ -831,8 +780,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('dns-ip2').value,
             ],
             addressReservations: [],
-            serviceEnabled: document.getElementById('service-enabled').checked,
-            serviceState: document.getElementById('service-state').textContent
+            serviceEnabled: document.getElementById('service-enabled').checked
         };
 
         const reservationRows = document.querySelectorAll('.reservation-row');
@@ -947,5 +895,4 @@ document.addEventListener('DOMContentLoaded', () => {
     saveButton.addEventListener('click', saveConfig);
 
     fetchConfigAndRender();
-    // addPullToRefresh();
 });

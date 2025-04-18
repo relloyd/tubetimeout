@@ -64,52 +64,6 @@ h1 {
     margin-bottom: 20px;
 }
 
-.heading-button {
-    font-size: 1.8rem;
-    text-align: center;
-    margin-bottom: 20px;
-    font-weight: bold;
-    border: none;
-    background: none;
-    cursor: pointer;
-    padding: 0;
-    width: 100%; /* Makes the button span the full width like a centered h1 */
-    color: inherit; /* Ensures it uses your normal text color */
-    font-family: inherit; /* Keeps it consistent with other text */
-}
-
-.heading-button:hover {
-    text-decoration: underline;
-}
-
-/* ------------------------------------
-   Pull To Refresh
-------------------------------------- */
-#pullToRefresh {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 60px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transform: translateY(-60px);
-    background: #f0f0f0;
-    color: #555;
-    font-family: sans-serif;
-    transition: transform 0.3s;
-    z-index: 1000;
-}
-
-#pullToRefresh.show {
-    transform: translateY(0);
-}
-
-#content {
-    padding-top: 20px;
-}
-
 /* ------------------------------------
    Table Styles
 ------------------------------------- */
@@ -178,78 +132,13 @@ button:hover {
     background-color: var(--primary-hover);
 }
 
-.button-container {
+/* Optional containers for centering buttons */
+.button-container,
+.save-container {
     display: flex;
     justify-content: center;
     align-items: center;
     margin: 20px 0;
-}
-
-/* ------------------------------------
-   Floating button container
-------------------------------------- */
-.save-container {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    z-index: 1000;
-    margin: 0;
-}
-
-/* Save button styling */
-#save-config-btn {
-    padding: 10px 16px;
-    font-size: 16px;
-    border: none;
-    border-radius: 6px;
-    background-color: #007BFF;
-    color: white;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-    cursor: pointer;
-    display: none; /* default hidden */
-    opacity: 0;    /* will fade in */
-    transition: opacity 0.5s ease;
-}
-
-/* Fade-in animation */
-.fade-in {
-    display: inline-block !important;
-    opacity: 1;
-    animation: fadeIn 0.5s ease forwards, pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-/* Pulse effect */
-@keyframes pulse {
-    0% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.5);
-    }
-    70% {
-        transform: scale(1.05);
-        box-shadow: 0 0 0 10px rgba(0, 123, 255, 0);
-    }
-    100% {
-        transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0);
-    }
-}
-
-@media (max-width: 600px) {
-    #save-config-btn {
-        font-size: 14px;
-        padding: 8px 12px;
-    }
 }
 
 /* ------------------------------------
