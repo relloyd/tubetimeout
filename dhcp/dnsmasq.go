@@ -219,7 +219,6 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 					continue // retry in case of failure
 				}
 
-
 				if dhcpRunningRouter {
 					state = serviceStateActiveRouterCanBeStopped
 					logger.Info("Started dnsmasq (router DHCP server is running)")
@@ -235,16 +234,17 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 
 	// All attempts failed; try to force start dnsmasq anyway.
 	isLocalActive, _ := svc.isDnsmasqServiceActive()
-	if wantEnabled && !isLocalActive { // if dnsmasq config is enabled but it's still not running...
-		logger.Errorf("Attempting to force start dnsmasq after %v failed attempts", numAttempts)
+	if wantEnabled { // if dnsmasq config is either still not enabled or it's already running...
+		if isLocalActive {
+			logger.Info("Restarting dnsmasq")
+		} else {
+			logger.Errorf("Attempting to force start dnsmasq after %v failed attempts", numAttempts)
+		}
 		if err = svc.startDnsmasq(logger, s.cfg, s.ifaceName, s.hwAddr); err == nil { // if dnsmasq started...
 			state = serviceStateActive
 			return
-		} else {
-			logger.Error("Failed to force start dnsmasq")
 		}
 	}
-
 	state = serviceStateFailedCheckConfig
 	err = fmt.Errorf("failed to start dnsmasq after %d attempt(s)", numAttempts)
 	return
@@ -322,7 +322,7 @@ func GetConfig(logger *zap.SugaredLogger, cfg **DNSMasqConfig) error {
 	// Set the package global variable to the new value.
 	*cfg = newCfg
 
-	return  nil
+	return nil
 }
 
 func (s *Server) SetConfig(logger *zap.SugaredLogger, newCfg *DNSMasqConfig) error {
@@ -337,7 +337,7 @@ func (s *Server) SetConfig(logger *zap.SugaredLogger, newCfg *DNSMasqConfig) err
 }
 
 func SetConfig(_ *zap.SugaredLogger, oldCfg *DNSMasqConfig, newCfg *DNSMasqConfig) error {
-	if newCfg == nil  {
+	if newCfg == nil {
 		return fmt.Errorf("supplied new dnsmasq config is nil")
 	}
 	if oldCfg == nil {
