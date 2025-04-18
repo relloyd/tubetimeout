@@ -219,12 +219,15 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 					continue // retry in case of failure
 				}
 
+
 				if dhcpRunningRouter {
 					state = serviceStateActiveRouterCanBeStopped
+					logger.Info("Started dnsmasq (router DHCP server is running)")
 					return
 				}
 
 				state = serviceStateActive
+				logger.Info("Started dnsmasq")
 				return
 			}
 		}
