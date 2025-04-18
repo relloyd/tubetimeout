@@ -96,13 +96,15 @@ type Server struct {
 	cfg         *DNSMasqConfig
 	ifaceName   string
 	hwAddr      net.HardwareAddr
+	dnsMasqServiceDisabledForDebug     bool
 }
 
-func NewServer(ctx context.Context, logger *zap.SugaredLogger) (*Server, error) {
+func NewServer(ctx context.Context, logger *zap.SugaredLogger, dnsMasqServiceDisabledForDebug bool) (*Server, error) {
 	s := &Server{
 		logger:      logger,
 		chanWorker:  make(chan struct{}, 2),
 		dhcpService: defaultDhcpService,
+		dnsMasqServiceDisabledForDebug: dnsMasqServiceDisabledForDebug, // hacky way of disabling dnsmasq start/stopping activity for stable network connectivity.
 		// nil cfg so that it is fetched by s.GetConfig() below.
 	}
 
@@ -176,6 +178,11 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 	}()
 
 	if !s.cfg.needsAction { // if there is nothing to do...
+		return
+	}
+
+	if s.dnsMasqServiceDisabledForDebug {
+		logger.Infof("DNSMasq service is disabled for debug - maybeStartOrStopDnsmasq exit early")
 		return
 	}
 

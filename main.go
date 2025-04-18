@@ -88,7 +88,7 @@ func main() {
 	handleDebugging(logger, &config.AppCfg.DebugConfig)
 
 	// Maybe start DHCP server.
-	dhcpServer, err := dhcp.NewServer(ctx, logger)
+	dhcpServer, err := dhcp.NewServer(ctx, logger, config.AppCfg.DHCPServerDisabled)
 	if err != nil {
 		logger.Fatalf("Failed to setup DHCP server: %v", err)
 	}

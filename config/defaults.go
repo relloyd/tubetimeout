@@ -29,16 +29,15 @@ func init() {
 }
 
 type AppConfig struct {
-	LogLevel    string      `envconfig:"LOG_LEVEL" default:"info"`
-	DelayStart  bool        `envconfig:"DELAY_START" default:"true"`
-	DebugConfig DebugConfig `envconfig:"DEBUG"`
-	DHCPServerEnabled     bool                  `envconfig:"DHCP_SERVER_ENABLED" default:"true"` // DHCPServerEnabled indicates whether we attempt to start DHCP server functionality at all.
+	LogLevel              string                `envconfig:"LOG_LEVEL" default:"info"`
+	DelayStart            bool                  `envconfig:"DELAY_START" default:"true"`
+	DebugConfig           DebugConfig           `envconfig:"DEBUG"`
+	DHCPServerDisabled    bool                  `envconfig:"DHCP_SERVER_DISABLED" default:"false"` // DHCPServerDisabled is a hack to indicate whether we attempt to start DHCP server functionality at all, aiming to help debugging which needs a stable eth0 IP.
 	FilterConfig          FilterConfig          `envconfig:"FILTER"`
 	WebConfig             WebConfig             `envconfig:"WEB"`
 	MonitorConfig         MonitorConfig         `envconfig:"MONITOR"`
 	TrackerConfig         models.TrackerConfig  `envconfig:"TRACKER"`
 	ActivityMonitorConfig ActivityMonitorConfig `envconfig:"ACTIVITY_MONITOR"`
-
 }
 
 type DebugConfig struct {

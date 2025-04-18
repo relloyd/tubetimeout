@@ -32,7 +32,7 @@ run: build
 	LOG_LEVEL=info DELAY_START=false $(APP_SHORT)
 
 run-debug: build
-	LOG_LEVEL=debug DELAY_START=false $(APP_SHORT)
+	LOG_LEVEL=debug DELAY_START=false DHCP_SERVER_DISABLED=true $(APP_SHORT)
 
 install: build-release
 	@echo "Installing $(APP) with timestamp $(INSTALL_TIMESTAMP)..."
