@@ -22,7 +22,7 @@ func TestSetStaticIP(t *testing.T) {
 		ThisGateway:         net.ParseIP("192.168.1.253"),
 		LowerBound:          net.ParseIP("192.168.1.1"),
 		UpperBound:          net.ParseIP("192.168.1.253"),
-		DnsIPs:              []string{"1.1.1.1","8.8.8.8"},
+		DnsIPs:              []string{"1.1.1.1", "8.8.8.8"},
 		AddressReservations: nil,
 		ServiceEnabled:      false,
 	}

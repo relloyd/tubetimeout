@@ -63,7 +63,8 @@ type DNSMasqConfig struct {
 	ServiceEnabled      bool          `yaml:"serviceEnabled" json:"serviceEnabled"` // want state
 	ServiceState        serviceState  `yaml:"serviceState" json:"serviceState"`     // current state // TODO: put the service into this state at boot time
 
-	needsAction bool
+	needsAction  bool // needsAction allows worker to continually try to up the dnsmasq service until the router DHCP server is stopped.
+	needsRestart bool // needsRestart allows dnsmasq to be restart once, until set false
 }
 
 type Reservation struct {
@@ -75,7 +76,8 @@ type Reservation struct {
 func newDNSMasqConfig() *DNSMasqConfig {
 	return &DNSMasqConfig{
 		AddressReservations: make([]Reservation, 0),
-		needsAction:         true, // allow worker to (re)start dnsmasq for the first time
+		needsAction:         true,
+		needsRestart:        true,
 	}
 }
 
@@ -90,20 +92,20 @@ type restarter interface {
 }
 
 type Server struct {
-	logger      *zap.SugaredLogger
-	chanWorker  chan struct{}
-	dhcpService restarter
-	cfg         *DNSMasqConfig
-	ifaceName   string
-	hwAddr      net.HardwareAddr
-	dnsMasqServiceDisabledForDebug     bool
+	logger                         *zap.SugaredLogger
+	chanWorker                     chan struct{}
+	dhcpService                    restarter
+	cfg                            *DNSMasqConfig
+	ifaceName                      string
+	hwAddr                         net.HardwareAddr
+	dnsMasqServiceDisabledForDebug bool
 }
 
 func NewServer(ctx context.Context, logger *zap.SugaredLogger, dnsMasqServiceDisabledForDebug bool) (*Server, error) {
 	s := &Server{
-		logger:      logger,
-		chanWorker:  make(chan struct{}, 2),
-		dhcpService: defaultDhcpService,
+		logger:                         logger,
+		chanWorker:                     make(chan struct{}, 2),
+		dhcpService:                    defaultDhcpService,
 		dnsMasqServiceDisabledForDebug: dnsMasqServiceDisabledForDebug, // hacky way of disabling dnsmasq start/stopping activity for stable network connectivity.
 		// nil cfg so that it is fetched by s.GetConfig() below.
 	}
@@ -188,7 +190,8 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 	}
 
 	for idx := 0; idx < numAttempts; idx++ {
-		// Determine DHCP service status.
+		// Determine DHCP service status; this only works if there is a good network.
+		// Recheck below using service status.
 		dhcpRunningLocal, dhcpRunningRouter, err = svc.isDHCPServerRunning(logger, s.hwAddr)
 		if err != nil { // if we should try again...
 			logger.Errorf("Error checking if DHCP server is running: %v", err)
@@ -212,31 +215,32 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 				state = serviceStateInactive
 				return
 			}
-		} else {                   // else dnsmasq is enabled by the user...
-			if !dhcpRunningLocal { // if the local server isn't running...
-				// (Re)start the service.
-				// needsAction is set to true when the config file is changed.
-				// We don't care if another server is running on the router.
-				// Prefer to have two DHCP services running than none at all and advise the user to stop the
-				// router DHCP service via web interface.
-				logger.Info("Attempting to start dnsmasq (the local DHCP server is not running)")
+		} else { // else dnsmasq is enabled by the user...
+			// We don't care if another server is running on the router.
+			// Prefer to have two DHCP services running than none at all and advise the user to stop the
+			// router DHCP service via web interface.
 
-				// Start dnsmasq.
+			// Start dnsmasq.
+			if s.cfg.needsRestart {
+				logger.Info("Attempting to (re)start dnsmasq")
 				if err = svc.startDnsmasq(logger, s.cfg, s.ifaceName, s.hwAddr); err != nil { // if dnsmasq failed to started...
 					logger.Errorf("Failed to start dnsmasq on attempt %d: %v", numAttempts+1, err)
 					continue // retry in case of failure
 				}
+				s.cfg.needsRestart = false
+			}
 
-				if dhcpRunningRouter {
-					state = serviceStateActiveRouterCanBeStopped
-					logger.Info("Started dnsmasq (router DHCP server is running)")
-					return
-				}
-
-				state = serviceStateActive
-				logger.Info("Started dnsmasq")
+			if dhcpRunningRouter {
+				state = serviceStateActiveRouterCanBeStopped
+				logger.Info("Started dnsmasq (router DHCP server is still running)")
 				return
 			}
+
+			state = serviceStateActive
+			logger.Info("Started dnsmasq (router DHCP server is disabled OK)")
+			return
+
+			// }
 		}
 	}
 
@@ -382,6 +386,7 @@ func SetConfig(_ *zap.SugaredLogger, oldCfg **DNSMasqConfig, newCfg *DNSMasqConf
 
 	fnUpdateInMem := func(cfg *DNSMasqConfig) {
 		cfg.needsAction = true // assume something has changed for now and that we want a restart; this should be done under lock in SetConfig().
+		cfg.needsRestart = true
 		*oldCfg = cfg
 	}
 
