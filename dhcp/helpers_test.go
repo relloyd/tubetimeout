@@ -235,13 +235,15 @@ func TestSetConfig_WritesToFile(t *testing.T) {
 	}
 
 	// Call SetConfig and ensure no error is returned.
-	err = SetConfig(config.MustGetLogger(), s.cfg, sampleCfg)
+	err = SetConfig(config.MustGetLogger(), &s.cfg, sampleCfg)
 	assert.NoError(t, err)
 
 	// Read back the file contents.
 	b, err := os.ReadFile(tmpFile.Name())
 	assert.NoError(t, err)
 	content := string(b)
+
+	// TODO: test that the in-memory copy is updated.
 
 	// Check that the content has at least one known value from the config.
 	// (For example, our DefaultGateway should be present.)

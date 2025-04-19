@@ -336,7 +336,7 @@ func GetConfig(logger *zap.SugaredLogger, cfg **DNSMasqConfig) error {
 func (s *Server) SetConfig(logger *zap.SugaredLogger, newCfg *DNSMasqConfig) error {
 	// Allow lazy mocking of the func that gets config so we don't have to mock
 	// the whole inner workings of config.GetConfig in tests.
-	err := defaultSetConfig(logger, s.cfg, newCfg)
+	err := defaultSetConfig(logger, &s.cfg, newCfg)
 	if err != nil {
 		return err
 	}
@@ -344,7 +344,7 @@ func (s *Server) SetConfig(logger *zap.SugaredLogger, newCfg *DNSMasqConfig) err
 	return nil
 }
 
-func SetConfig(_ *zap.SugaredLogger, oldCfg *DNSMasqConfig, newCfg *DNSMasqConfig) error {
+func SetConfig(_ *zap.SugaredLogger, oldCfg **DNSMasqConfig, newCfg *DNSMasqConfig) error {
 	if newCfg == nil {
 		return fmt.Errorf("supplied new dnsmasq config is nil")
 	}
@@ -382,7 +382,7 @@ func SetConfig(_ *zap.SugaredLogger, oldCfg *DNSMasqConfig, newCfg *DNSMasqConfi
 	}
 
 	fnUpdateInMem := func(cfg *DNSMasqConfig) {
-		oldCfg = cfg
+		*oldCfg = cfg
 	}
 
 	err := config.SetConfig[*DNSMasqConfig](dhcpMutex, configFileDHCPSettings, fnValidate, fnUpdateInMem, newCfg) // TODO: validate the incoming config but don't override any yet
