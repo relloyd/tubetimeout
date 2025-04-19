@@ -345,11 +345,11 @@ func (s *Server) SetConfig(logger *zap.SugaredLogger, newCfg *DNSMasqConfig) err
 }
 
 func SetConfig(_ *zap.SugaredLogger, oldCfg **DNSMasqConfig, newCfg *DNSMasqConfig) error {
-	if newCfg == nil {
-		return fmt.Errorf("supplied new dnsmasq config is nil")
-	}
 	if oldCfg == nil {
 		return fmt.Errorf("existing dnsmasq config is nil")
+	}
+	if newCfg == nil {
+		return fmt.Errorf("supplied new dnsmasq config is nil")
 	}
 
 	fnValidate := func(cfg *DNSMasqConfig) error {
@@ -377,11 +377,11 @@ func SetConfig(_ *zap.SugaredLogger, oldCfg **DNSMasqConfig, newCfg *DNSMasqConf
 		for _, v := range cfg.AddressReservations { // for each address reservation...
 			v.MacAddr = models.MAC(strings.ToUpper(strings.ReplaceAll(string(v.MacAddr), ":", "-"))) // Ensure upper case and hyphens.
 		}
-		cfg.needsAction = true // assume something has changed for now and that we want a restart
 		return nil
 	}
 
 	fnUpdateInMem := func(cfg *DNSMasqConfig) {
+		cfg.needsAction = true // assume something has changed for now and that we want a restart; this should be done under lock in SetConfig().
 		*oldCfg = cfg
 	}
 
@@ -394,6 +394,5 @@ func SetConfig(_ *zap.SugaredLogger, oldCfg **DNSMasqConfig, newCfg *DNSMasqConf
 }
 
 func (s *Server) restart() {
-	s.cfg.needsAction = true
 	s.chanWorker <- struct{}{}
 }

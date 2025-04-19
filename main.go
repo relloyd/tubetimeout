@@ -36,7 +36,7 @@ type cleanupFunc func() error
 func handleDelayedStart(logger *zap.SugaredLogger, appConfig *config.AppConfig) {
 	if appConfig.DelayStart && !appConfig.DebugConfig.DebugEnabled { // if we should delay startup, and we're not in debug mode...
 		delay := time.Second * 30
-		logger.Infof("Delaying startup for %v seconds", delay)
+		logger.Infof("Delaying startup for %v", delay)
 		time.Sleep(delay)
 	}
 }

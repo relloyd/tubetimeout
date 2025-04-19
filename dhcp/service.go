@@ -99,13 +99,13 @@ func (d *dhcpService) isDHCPServerRunning(logger *zap.SugaredLogger, mac net.Har
 		// Parse the response into a DHCP message.
 		resp, err := dhcpv4.FromBytes(buf[:n])
 		if err != nil {
-			logger.Warnf("failed to parse DHCP response: %v", err)
+			logger.Warnf("Failed to parse DHCP response: %v", err)
 			continue
 		}
 
 		// Only process DHCP OFFER messages.
 		if resp.MessageType() != dhcpv4.MessageTypeOffer {
-			logger.Warnf("received unexpected DHCP message type: %v", resp.MessageType())
+			logger.Warnf("Received unexpected DHCP message type: %v", resp.MessageType())
 			continue
 		}
 
@@ -119,7 +119,7 @@ func (d *dhcpService) isDHCPServerRunning(logger *zap.SugaredLogger, mac net.Har
 				routerDetected = true
 			}
 		} else {
-			logger.Warnf("unable to determine source IP from address: %v", addr)
+			logger.Warnf("Unable to determine source IP from address: %v", addr)
 		}
 	}
 
@@ -200,12 +200,12 @@ func (d *dhcpService) setStaticIP(logger *zap.SugaredLogger, ifaceName string, c
 		"ipv4.addr", cfg.ThisGateway.To4().String() + "/" + cidr,
 		"ipv4.dns", strings.Join(ipStrings, " "),
 	}
-	logger.Info("configuring device: ", cmd, strings.Join(args, " "))
+	logger.Infof("Configuring device: %v %v", cmd, strings.Join(args, " "))
 	output, err := exec.Command(cmd, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("error setting static IP: %v: %v", string(output), err)
 	}
-	logger.Infof("command output: %v", strings.TrimRight(string(output), "\n"))
+	logger.Infof("Command output: %v", strings.TrimRight(string(output), "\n"))
 	return nil
 }
 
@@ -221,7 +221,7 @@ func (d *dhcpService) unsetStaticIP(logger *zap.SugaredLogger, ifaceName string)
 		"ipv4.addr", "",
 		"ipv4.dns", "",
 	}
-	logger.Info("configuring device: ", cmd, strings.Join(args, " "))
+	logger.Infof("Configuring device: %v %v", cmd, strings.Join(args, " "))
 	output, err := exec.Command(cmd, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("error unsetting static IP: %v: %v", string(output), err)
@@ -232,13 +232,13 @@ func (d *dhcpService) unsetStaticIP(logger *zap.SugaredLogger, ifaceName string)
 	args = []string{
 		"dev", "up", ifaceName,
 	}
-	logger.Info("upping device: ", cmd, strings.Join(args, " "))
+	logger.Infof("Upping device: %v %v", cmd, strings.Join(args, " "))
 	output, err = exec.Command(cmd, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("error unsetting static IP: %v: %v", string(output), err)
 	}
 
-	logger.Infof("command output: %v", string(output))
+	logger.Infof("Command output: %v", string(output))
 	return nil
 }
 
