@@ -723,6 +723,17 @@ document.addEventListener('DOMContentLoaded', () => {
         enabledField.appendChild(enabledInput);
         dhcpConfigForm.appendChild(enabledField);
 
+        const statusField = document.createElement('div');
+        statusField.className = 'form-field';
+        const statusLabel = document.createElement('label');
+        statusLabel.textContent = 'Service Status';
+        const statusText = document.createElement('span');
+        statusText.id = 'service-state';
+        statusText.textContent = ''; // default value or status
+        statusField.appendChild(statusLabel);
+        statusField.appendChild(statusText);
+        dhcpConfigForm.appendChild(statusField);
+
         const saveBtn = document.getElementById('dhcp-config-save-button');
         saveBtn.onclick = saveDHCPConfig;
     }
@@ -760,6 +771,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('dns-ip1').value = cfg.dnsIPs?.[0] || '';
         document.getElementById('dns-ip2').value = cfg.dnsIPs?.[1] || '';
         document.getElementById('service-enabled').checked = cfg.serviceEnabled || false;
+        const status = cfg.serviceState || '';
+        const capitalizedStatus = status.charAt(0).toUpperCase() + status.slice(1); // initial capital letter
+        document.getElementById('service-state').textContent = capitalizedStatus || '';
 
         const container = document.getElementById('reservation-container');
         container.innerHTML = '';

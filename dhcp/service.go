@@ -232,7 +232,7 @@ func (d *dhcpService) unsetStaticIP(logger *zap.SugaredLogger, ifaceName string)
 	args = []string{
 		"dev", "up", ifaceName,
 	}
-	logger.Info("upping device: ", cmd, strings.Join(args, ""))
+	logger.Info("upping device: ", cmd, strings.Join(args, " "))
 	output, err = exec.Command(cmd, args...).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("error unsetting static IP: %v: %v", string(output), err)

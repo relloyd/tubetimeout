@@ -182,6 +182,7 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 	}
 
 	if s.dnsMasqServiceDisabledForDebug {
+		state = serviceStateInactive
 		logger.Infof("DNSMasq service is disabled for debug - maybeStartOrStopDnsmasq exit early")
 		return
 	}
