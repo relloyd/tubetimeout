@@ -110,6 +110,9 @@ func NewServer(ctx context.Context, logger *zap.SugaredLogger, dnsMasqServiceDis
 		// nil cfg so that it is fetched by s.GetConfig() below.
 	}
 
+	// TODO: set dynamic network adapter at startup before doing anything as a power failure will leave it in static mode
+	//   and we will rely on the previous dhcp config to be valid for a force start of dnsmasq to work.
+
 	_, err := s.GetConfig(s.logger) // GetConfig() sets the server config.
 	if err != nil {
 		return nil, err
