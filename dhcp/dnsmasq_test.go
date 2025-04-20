@@ -110,6 +110,7 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	mockSvc = new(mockRestarter)
 	s.dhcpService = mockSvc
 	cfg.needsAction = true
+	cfg.needsRestart = true
 	mockSvc.On("isDNSMasqEnabledInConfig", cfg).Return(true)
 	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, true, nil)
 	mockSvc.On("startDnsmasq", mock.Anything, cfg, iface, hw).Return(nil)
@@ -122,6 +123,7 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	mockSvc = new(mockRestarter)
 	s.dhcpService = mockSvc
 	cfg.needsAction = true
+	cfg.needsRestart = true
 	mockSvc.On("isDNSMasqEnabledInConfig", cfg).Return(true)
 	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, false, nil)
 	mockSvc.On("startDnsmasq", mock.Anything, cfg, iface, hw).Return(nil)
@@ -134,6 +136,7 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	mockSvc = new(mockRestarter)
 	s.dhcpService = mockSvc
 	cfg.needsAction = true
+	cfg.needsRestart = true
 	mockSvc.On("isDNSMasqEnabledInConfig", cfg).Return(true)
 	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, false, errors.New("mock error"))
 	mockSvc.On("isDnsmasqServiceActive").Return(false, nil)
