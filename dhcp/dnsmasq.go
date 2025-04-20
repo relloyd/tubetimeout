@@ -212,6 +212,7 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 				return
 			} else if dhcpRunningLocal { // else if dhcpRunningRouter is false...
 				// We are waiting for the router DHCP server to be stopped.
+				logger.Info("Waiting to stop dnsmasq (router DHCP server is not running)")
 				state = serviceStateWaitingToStop
 				return
 			} else { // else the local dnsmasq is not running...
