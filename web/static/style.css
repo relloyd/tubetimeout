@@ -54,7 +54,7 @@ h1 a {
 .container {
     width: 90%;
     max-width: 1200px;
-    margin: 40px auto;
+    margin: 20px auto;
     padding: 20px;
     background: var(--card-bg);
     border-radius: 8px;
@@ -186,6 +186,7 @@ button:hover {
 
 .form-field label {
     font-weight: bold;
+    margin-top: 5px;
     margin-bottom: 5px;
     color: var(--primary-color);
 }
