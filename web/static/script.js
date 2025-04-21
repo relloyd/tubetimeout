@@ -905,6 +905,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     };
 
+    // Allow heading link to refresh the page.
+    document.getElementById('refresh-page').addEventListener('click', (event) => {
+        event.preventDefault();
+        window.location.href = window.location.pathname + '?reload=' + new Date().getTime();
+    });
+
     groupRetentionSelect.addEventListener('change', updateStartDayVisibility);
     saveButton.addEventListener('click', saveConfig);
 
