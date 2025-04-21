@@ -426,3 +426,14 @@ button:hover {
 .reservation-row-line .ip-field {
     flex: 2;
 }
+
+/* ---------------------------
+Collapsible elements
+---------------------------- */
+
+.toggle-arrow {
+    margin-left: 8px;
+    font-size: 0.7em;
+    display: inline-block;
+    user-select: none;
+}

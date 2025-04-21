@@ -905,6 +905,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     };
 
+    // Collapsible sections.
+    document.querySelectorAll('.form-container.collapsible').forEach(function(container) {
+        var section = container.getAttribute('data-section');
+        var heading = container.querySelector('h1');
+        // Create toggle arrow
+        var toggle = document.createElement('span');
+        toggle.classList.add('toggle-arrow');
+        toggle.textContent = '▼';
+        toggle.style.cursor = 'pointer';
+        heading.appendChild(toggle);
+        // Gather all child elements except the heading
+        var contentEls = Array.prototype.filter.call(container.children, function(el) {
+            return !el.matches('h1');
+        });
+        // Initialize collapse state from localStorage
+        var collapsed = localStorage.getItem('collapse-' + section) === 'true';
+        function setState(collapsed) {
+            contentEls.forEach(function(el) {
+                el.style.display = collapsed ? 'none' : '';
+            });
+            toggle.textContent = collapsed ? '►' : '▼';
+        }
+        setState(collapsed);
+        // Toggle on arrow click
+        toggle.addEventListener('click', function() {
+            collapsed = !collapsed;
+            setState(collapsed);
+            localStorage.setItem('collapse-' + section, collapsed);
+        });
+    });
+
     // Allow heading link to refresh the page.
     document.getElementById('refresh-page').addEventListener('click', (event) => {
         event.preventDefault();
