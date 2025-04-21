@@ -17,7 +17,7 @@ input, textarea, select {
     --primary-hover: #0056b3;
     --success-color: #4caf50;
     --error-color: #f44336;
-    --bg-color: #f4f4f9;
+    --bg-color: #ffffff;
     --card-bg: #ffffff;
     --text-color: #333;
     --border-color: #ddd;
@@ -58,7 +58,7 @@ h1 a {
     padding: 20px;
     background: var(--card-bg);
     border-radius: 8px;
-    box-shadow: var(--shadow);
+
 }
 
 /* ------------------------------------
