@@ -279,7 +279,6 @@ func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper
 		fmt.Sprintf("dhcp-range=%v,%v,%v", subnetLower, subnetUpper, defaultLeaseDuration),
 		fmt.Sprintf("dhcp-option=option:router,%v", thisGateway),
 		fmt.Sprintf("dhcp-option=option:dns-server,%v", strings.Join(ipStrings, ",")),
-		fmt.Sprintf("no-dhcpv6-interface=%v", defaultInterfaceName),
 		"no-resolv", // no-resolv will use server entries below as the upstream DNS servers, instead of resolv.conf.
 		fmt.Sprintf("server=%v", dnsIPS[0]),
 		fmt.Sprintf("server=%v", dnsIPS[1]),
