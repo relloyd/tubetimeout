@@ -899,6 +899,29 @@ document.addEventListener('DOMContentLoaded', () => {
         renderGroups();
     });
 
+    document.getElementById('delete-tracker-btn').addEventListener('click', () => {
+        const groupSelect = document.getElementById('group-select');
+        const selectedName = groupSelect.value;
+
+        if (!selectedName) {
+            alert("Please select a tracker to delete.");
+            return;
+        }
+
+        const index = groups.findIndex(g => g.name === selectedName);
+        if (index !== -1) {
+            groups.splice(index, 1); // Remove the group
+            updateGroupSelect();     // Refresh dropdown options
+            updateDeviceGroupDropdown(); // In case device dropdown is linked
+            groupSelect.value = "";  // Clear selection after deletion
+            showNotification(`Tracker "${selectedName}" deleted. Please hit save or reload the page to undo.`, false);
+            showSaveButtons();
+            renderGroups();
+        } else {
+            alert("Selected tracker not found.");
+        }
+    });
+
     // Device assignment: add a device to a group.
     document.getElementById('add-to-group-btn').onclick = () => {
         const mac = document.getElementById('device-dropdown').value;

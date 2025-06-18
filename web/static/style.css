@@ -222,6 +222,16 @@ button:hover {
 }
 
 /* ------------------------------------
+   Workaround iOS input field
+   overflow issue
+------------------------------------- */
+input[type="time"] {
+    width: auto;
+    max-width: 100%;
+    -webkit-appearance: none;
+}
+
+/* ------------------------------------
    Groups Container & Cards
 ------------------------------------- */
 #groups-container {
