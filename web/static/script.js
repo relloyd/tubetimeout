@@ -479,6 +479,10 @@ document.addEventListener('DOMContentLoaded', () => {
             opt15.value = "15";
             opt15.textContent = "15 mins";
             durationSelect.appendChild(opt15);
+            const opt30 = document.createElement('option');
+            opt30.value = "30";
+            opt30.textContent = "30 mins";
+            durationSelect.appendChild(opt30);
             const opt60 = document.createElement('option');
             opt60.value = "60";
             opt60.textContent = "1 hour";
@@ -487,6 +491,10 @@ document.addEventListener('DOMContentLoaded', () => {
             opt120.value = "120";
             opt120.textContent = "2 hours";
             durationSelect.appendChild(opt120);
+            const opt240 = document.createElement('option');
+            opt240.value = "240";
+            opt240.textContent = "4 hours";
+            durationSelect.appendChild(opt240);
             const optUntilMidnight = document.createElement('option');
             optUntilMidnight.value = "untilMidnight";
             optUntilMidnight.textContent = "Until Midnight";
