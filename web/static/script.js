@@ -2,7 +2,7 @@
 // noinspection ExceptionCaughtLocallyJS
 
 document.addEventListener('DOMContentLoaded', () => {
-    const saveButton = document.getElementById('save-config-btn');
+    const saveButtons = document.querySelectorAll('.button-save-config');
 
     // API endpoints – note the use of /groups instead of /groupMACs.
     const UrlGroupAPI = '/groups';
@@ -265,7 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             showNotification('Error saving configuration: ' + error.message, true);
         }
-        hideSaveButton();
+        hideSaveButtons();
     }
 
     async function fetchUsageData() {
@@ -554,7 +554,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         renderDevices();
         renderGroups();
-        showSaveButton();
+        showSaveButtons();
     }
 
     function removeGroup(groupName) {
@@ -566,7 +566,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateDeviceGroupDropdown();
         renderDevices();
         renderGroups();
-        showSaveButton();
+        showSaveButtons();
     }
 
     function showNotification(message, isError = false) {
@@ -594,12 +594,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }, timeout);
     }
 
-    function showSaveButton() {
-        saveButton.style.display = 'inline-block';
+    function showSaveButtons() {
+        saveButtons.forEach(button => {
+            button.style.display = 'inline-block';
+        });
     }
 
-    function hideSaveButton() {
-        saveButton.style.display = 'none';
+    function hideSaveButtons() {
+        saveButtons.forEach(button => {
+            button.style.display = 'none';
+        });
     }
 
     function getDayName(day) {
@@ -883,7 +887,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showNotification(`Tracker ${group.name} updated. Please hit save or reload the page to undo!`, false);
             }
         }
-        showSaveButton();
+        showSaveButtons();
         renderGroups();
     });
 
@@ -900,7 +904,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         renderDevices();
         renderGroups();
-        showSaveButton();
+        showSaveButtons();
         showNotification(`Group ${group.name} updated. Please hit save or reload the page to undo!`, false);
 
     };
@@ -943,7 +947,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     groupRetentionSelect.addEventListener('change', updateStartDayVisibility);
-    saveButton.addEventListener('click', saveConfig);
+    saveButtons.forEach(button => {
+        button.addEventListener('click', saveConfig);
+    });
 
     fetchConfigAndRender();
 });

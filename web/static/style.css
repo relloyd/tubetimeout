@@ -13,10 +13,12 @@ input, textarea, select {
    CSS Variables & Reset
 ------------------------------------- */
 :root {
-    --primary-color: #007BFF;
-    --primary-hover: #0056b3;
+    --primary-color: #2F90B0;
+    --primary-hover: #62BDE8;
     --success-color: #4caf50;
     --error-color: #f44336;
+    --pending-color: #FA9F49;
+    --pending-hover: #F8AC66;
     --bg-color: #ffffff;
     --card-bg: #ffffff;
     --text-color: #333;
@@ -106,7 +108,6 @@ tbody tr:hover {
     overflow: hidden;
 }
 
-
 /* ------------------------------------
    Form Controls (Inputs & Selects)
 ------------------------------------- */
@@ -125,7 +126,7 @@ select {
 button {
     display: inline-block;
     padding: 20px 20px;
-    background-color: var(--error-color);
+    background-color: var(--primary-hover);
     color: #fff;
     border: none;
     border-radius: 4px;
@@ -231,7 +232,7 @@ button:hover {
 }
 
 .group-header button {
-    background-color: var(--error-color);
+    background-color: var(--primary-hover);
 }
 
 .group-header button:hover {
@@ -299,9 +300,13 @@ button:hover {
 }
 
 .group ul li button {
-    background-color: var(--error-color);
+    background-color: var(--primary-hover);
     padding: 6px 10px;
     font-size: 0.9rem;
+}
+
+.group ul li button:hover {
+    background-color: var(--primary-color);
 }
 
 /* ------------------------------------
@@ -378,6 +383,21 @@ button {
     transition: background-color 0.2s ease;
 }
 
+.button-save-config {
+    padding: 12px 20px;
+    background-color: var(--pending-color);
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.button-save-config:hover {
+    background-color: var(--pending-hover);
+}
+
 button:hover {
     background-color: var(--primary-hover);
 }
@@ -407,7 +427,7 @@ button:hover {
 }
 
 .reservation-row button {
-    background-color: var(--error-color);
+    background-color: var(--primary-hover);
     padding: 6px 10px;
     font-size: 0.9rem;
 }
