@@ -30,11 +30,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: new URLSearchParams(data),
             });
-            // document.getElementById("statusMessage").innerText = await response.text();
             showNotification(await response.text(), false);
 
         } catch (error) {
-            // document.getElementById("statusMessage").innerText = "Error: " + error.message;
             showNotification("Error: " + error.message, true);
         }
     }
@@ -47,10 +45,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: params,
             });
-            // document.getElementById("statusMessage").innerText = await response.text();
             showNotification(await response.text(), false);
         } catch (error) {
-            // document.getElementById("statusMessage").innerText = "Error: " + error.message;
             showNotification("Error: " + error.message, true);
         }
     }
@@ -258,9 +254,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: groupBody,
             });
             if (response.ok) {
-                showNotification('Configuration saved successfully', false);
+                showNotification('Configuration saved successfully.', false);
             } else {
-                showNotification('Failed to save tracker config', true);
+                showNotification('Failed to save tracker config.', true);
             }
         } catch (error) {
             showNotification('Error saving configuration: ' + error.message, true);
@@ -562,6 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         renderDevices();
         renderGroups();
+        showNotification("Device removed.", false, true);
         showSaveButtons();
     }
 
@@ -574,32 +571,53 @@ document.addEventListener('DOMContentLoaded', () => {
         updateDeviceGroupDropdown();
         renderDevices();
         renderGroups();
+        showNotification("Group removed.", false, true);
         showSaveButtons();
     }
 
-    function showNotification(message, isError = false) {
+    function showNotification(message, isError = false, isSave = false) {
         const notification = document.getElementById('notification');
-        notification.textContent = message;
+        notification.innerHTML = ''; // clear previous content
 
-        let timeout = 3000;
-        if (isError) {
-            notification.classList.add('error');
-            notification.classList.remove('success');
-            timeout = 5000;
-        } else {
-            notification.classList.add('success');
-            notification.classList.remove('error');
-        }
+        const textSpan = document.createElement('span');
+        textSpan.textContent = message;
+        notification.appendChild(textSpan);
+        notification.classList.remove('error', 'success', 'hidden', 'pending');
 
-        notification.classList.add('show');
-        notification.classList.remove('hidden');
+        if (isSave) {
+            const buttonRow = document.createElement('div');
+            buttonRow.classList.add('button-row');
 
-        setTimeout(() => {
-            notification.classList.remove('show');
+            const saveBtn = document.createElement('button');
+            saveBtn.textContent = 'Save';
+            saveBtn.classList.add('inline-save');
+            saveBtn.addEventListener('click', async () => {
+                await saveConfig();
+            });
+
+            const undoBtn = document.createElement('button');
+            undoBtn.textContent = 'Undo';
+            undoBtn.classList.add('inline-undo');
+            undoBtn.addEventListener('click', () => {
+                location.reload();
+            });
+
+            buttonRow.appendChild(saveBtn);
+            buttonRow.appendChild(undoBtn);
+            notification.appendChild(buttonRow);
+
+            notification.classList.add('pending', 'show');
+        } else { // else this is a standard notification...
+            notification.classList.add(isError ? 'error' : 'success', 'show');
+
+            const timeout = isError ? 5000 : 3000;
             setTimeout(() => {
-                notification.classList.add('hidden'); // Hide after transition
-            }, 300); // Matches the transition duration
-        }, timeout);
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    notification.classList.add('hidden');
+                }, 300);
+            }, timeout);
+        }
     }
 
     function showSaveButtons() {
@@ -892,7 +910,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 group.threshold = thresholdDuration;
                 group.startDay = startDay;
                 group.startDuration = startDuration;
-                showNotification(`Tracker ${group.name} updated. Please hit save or reload the page to undo!`, false);
+                showNotification(`Tracker "${group.name}" updated. Please hit Save or Undo.`, false, true);
             }
         }
         showSaveButtons();
@@ -914,7 +932,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateGroupSelect();     // Refresh dropdown options
             updateDeviceGroupDropdown(); // In case device dropdown is linked
             groupSelect.value = "";  // Clear selection after deletion
-            showNotification(`Tracker "${selectedName}" deleted. Please hit save or reload the page to undo.`, false);
+            showNotification(`Tracker "${selectedName}" deleted. Please hit Save or Undo.`, false, true);
             showSaveButtons();
             renderGroups();
         } else {
@@ -935,9 +953,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         renderDevices();
         renderGroups();
+        showNotification(`Group "${group}" updated. Please hit Save or Undo.`, false, true);
         showSaveButtons();
-        showNotification(`Group ${group.name} updated. Please hit save or reload the page to undo!`, false);
-
     };
 
     // Collapsible sections.

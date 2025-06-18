@@ -384,6 +384,39 @@ input[type="time"] {
     color: #fff;
 }
 
+.notification.pending {
+    background-color: var(--pending-color);
+    color: #fff;
+}
+
+#notification {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+}
+
+#notification span {
+    display: block;
+}
+
+#notification .button-row {
+    display: flex;
+    gap: 8px;
+}
+
+#notification button.inline-save,
+#notification button.inline-undo {
+    flex: 1; /* Each button takes up 50% of the space */
+    padding: 8px;
+    font-size: 1em;
+    cursor: pointer;
+    background-color: var(--pending-hover);
+    color: white;
+    border: none;
+    border-radius: 4px;
+}
+
 .button-wrapper {
     flex-grow: 1;
     display: flex;
