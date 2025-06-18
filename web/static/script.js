@@ -589,7 +589,7 @@ document.addEventListener('DOMContentLoaded', () => {
             buttonRow.classList.add('button-row');
 
             const saveBtn = document.createElement('button');
-            saveBtn.textContent = 'Save';
+            saveBtn.textContent = 'Save Configuration';
             saveBtn.classList.add('inline-save');
             saveBtn.addEventListener('click', async () => {
                 await saveConfig();
