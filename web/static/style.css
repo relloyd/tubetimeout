@@ -64,6 +64,29 @@ h1 a {
 }
 
 /* ------------------------------------
+   Branding
+------------------------------------- */
+.branding-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0px;
+    text-align: center;
+}
+
+.branding-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 0px;
+    cursor: pointer;
+}
+
+.branding-title {
+    font-size: 2em;
+    margin: 0;
+}
+
+/* ------------------------------------
    Headings
 ------------------------------------- */
 h1 {

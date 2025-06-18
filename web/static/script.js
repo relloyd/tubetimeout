@@ -948,10 +948,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Allow heading link to refresh the page.
-    document.getElementById('refresh-page').addEventListener('click', (event) => {
-        event.preventDefault();
-        window.location.href = window.location.pathname + '?reload=' + new Date().getTime();
+    // Allow heading to refresh the page.
+    document.querySelectorAll('.refresh-page').forEach(el => {
+        el.addEventListener('click', (event) => {
+            event.preventDefault();
+            window.location.href = window.location.pathname + '?reload=' + new Date().getTime();
+        });
     });
 
     groupRetentionSelect.addEventListener('change', updateStartDayVisibility);
