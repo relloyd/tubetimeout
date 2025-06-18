@@ -57,10 +57,8 @@ h1 a {
     width: 90%;
     max-width: 1200px;
     margin: 20px auto;
-    padding: 20px;
     background: var(--card-bg);
     border-radius: 8px;
-
 }
 
 /* ------------------------------------
