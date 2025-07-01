@@ -216,7 +216,7 @@ func (f *NFQueueFilter) startNFQueueFilter(ctx context.Context, cfg *config.Filt
 
 // Source Ip (bytes 12-15 in IPv4 header)
 // Destination Ip (bytes 16-19 in IPv4 header)
-// getPacketIPs extracts the source and destination Ip addresses from the packet payload.
+// getPacketIPs extracts the source and destination Ip addresses, and packet length from the packet payload.
 func getPacketIPs(a nfqueue.Attribute) (packetIPs, int, error) {
 	if a.Payload == nil { // if there's no payload...
 		return packetIPs{}, 0, fmt.Errorf("payload is nil")
