@@ -623,7 +623,6 @@ func TestGetHardwareAddressSuccess(t *testing.T) {
 }
 
 func TestGenerateDnsmasqConfig(t *testing.T) {
-	defaultGateway := net.ParseIP("192.168.1.1")
 	thisGateway := net.ParseIP("192.168.1.2")
 	subnetLower := net.ParseIP("192.168.1.10")
 	subnetUpper := net.ParseIP("192.168.1.100")
@@ -638,7 +637,7 @@ func TestGenerateDnsmasqConfig(t *testing.T) {
 	// 	{MAC: "dc:a6:32:68:47:e9", Name: ""},
 	// }
 
-	generatedConfig, err := generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper, thisGatewayHardwareAddr, fallbackDNSIPs, reservations)
+	generatedConfig, err := generateDnsmasqConfig("eth0", thisGateway, subnetLower, subnetUpper, thisGatewayHardwareAddr, fallbackDNSIPs, reservations)
 	assert.NoError(t, err, "generateDnsmasqConfig should not return an error")
 
 	expectedLines := []string{

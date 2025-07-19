@@ -335,7 +335,7 @@ func chooseIPFromBottom(lower, upper net.IP) (chosenIP, newLower, newUpper net.I
 }
 
 // generateDnsmasqConfig builds the full dnsmasq configuration as a string.
-func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper net.IP, thisGatewayHardwareAddress string, dnsIPS []net.IP, reservations []Reservation) (string, error) {
+func generateDnsmasqConfig(interfaceName string, thisGateway, subnetLower, subnetUpper net.IP, thisGatewayHardwareAddress string, dnsIPS []net.IP, reservations []Reservation) (string, error) {
 	// Global configuration settings.
 	if len(dnsIPS) != 2 {
 		return "", fmt.Errorf("expected two DNS IPs: %v", dnsIPS)
@@ -348,7 +348,7 @@ func generateDnsmasqConfig(defaultGateway, thisGateway, subnetLower, subnetUpper
 
 	lines := []string{
 		"# dnsmasq configuration generated programmatically",
-		fmt.Sprintf("interface=%v", defaultInterfaceName),
+		fmt.Sprintf("interface=%v", interfaceName),
 		fmt.Sprintf("dhcp-range=%v,%v,%v", subnetLower, subnetUpper, defaultLeaseDuration),
 		fmt.Sprintf("dhcp-option=option:router,%v", thisGateway),
 		fmt.Sprintf("dhcp-option=option:dns-server,%v", strings.Join(ipStrings, ",")),

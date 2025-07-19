@@ -144,7 +144,7 @@ func (d *dhcpService) startDnsmasq(logger *zap.SugaredLogger, cfg *DNSMasqConfig
 	}
 
 	var dat string
-	dat, err = generateDnsmasqConfig(cfg.DefaultGateway, cfg.ThisGateway, cfg.LowerBound, cfg.UpperBound, hwAddr.String(), cfg.DnsIPs, cfg.AddressReservations)
+	dat, err = generateDnsmasqConfig(ifaceName, cfg.ThisGateway, cfg.LowerBound, cfg.UpperBound, hwAddr.String(), cfg.DnsIPs, cfg.AddressReservations)
 	if err != nil {
 		err = fmt.Errorf("error generating dnsmasq config: %v", err)
 		return
