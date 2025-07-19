@@ -199,7 +199,7 @@ func (d *dhcpService) setStaticIP(logger *zap.SugaredLogger, ifaceName string, c
 		"ipv4.gateway", cfg.DefaultGateway.To4().String(),
 		"ipv4.addr", cfg.ThisGateway.To4().String() + "/" + cidr,
 		"ipv4.dns", strings.Join(ipStrings, " "),
-		"ipv6.method", "ignore",
+		"ipv6.method", "disabled",
 	}
 	logger.Infof("Configuring device: %v %v", cmd, strings.Join(args, " "))
 	output, err := exec.Command(cmd, args...).CombinedOutput()

@@ -392,9 +392,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 const configInfo = document.createElement('div');
                 configInfo.classList.add('group-config-info');
                 const retention = humaniseDuration(groupConfig.retention);
-                const threshold = humaniseDuration(groupConfig.threshold);
+                if (Number(groupConfig.threshold) === 0) {
+                    configInfo.textContent = "Block group always.";
+                } else {
+                    const threshold = humaniseDuration(groupConfig.threshold);
+                    configInfo.textContent = `Block group after ${threshold} usage.`;
+                }
                 const startDurationHHMM = formatMinutes(durationToMinutes(groupConfig.startDuration));
-                configInfo.textContent = `Block group after ${threshold} usage. `
                 if (groupConfig.retention >= daysToDuration(7)) {
                     configInfo.textContent += `Next reset on ${getDayName(groupConfig.startDay)} ${startDurationHHMM}`;
                 } else if (groupConfig.retention >= daysToDuration(1)){
