@@ -99,14 +99,21 @@ type Server struct {
 	ifaceName                      string
 	hwAddr                         net.HardwareAddr
 	dnsMasqServiceDisabledForDebug bool
+	ledWarning                     LEDController
 }
 
-func NewServer(ctx context.Context, logger *zap.SugaredLogger, dnsMasqServiceDisabledForDebug bool) (*Server, error) {
+type LEDController interface {
+	EnableWarning()
+	DisableWarning()
+}
+
+func NewServer(ctx context.Context, logger *zap.SugaredLogger, dnsMasqServiceDisabledForDebug bool, ledWarning LEDController) (*Server, error) {
 	s := &Server{
 		logger:                         logger,
 		chanWorker:                     make(chan struct{}, 2),
 		dhcpService:                    defaultDhcpService,
 		dnsMasqServiceDisabledForDebug: dnsMasqServiceDisabledForDebug, // hacky way of disabling dnsmasq start/stopping activity for stable network connectivity.
+		ledWarning:                     ledWarning,
 		// nil cfg so that it is fetched by s.GetConfig() below.
 	}
 
@@ -116,6 +123,10 @@ func NewServer(ctx context.Context, logger *zap.SugaredLogger, dnsMasqServiceDis
 	_, err := s.GetConfig(s.logger) // GetConfig() sets the server config.
 	if err != nil {
 		return nil, err
+	}
+
+	if ledWarning == nil {
+		return nil, fmt.Errorf("LED warning controller is nil")
 	}
 
 	s.ifaceName, err = getPrimaryInterfaceName()
@@ -146,7 +157,7 @@ func (s *Server) startWorker(ctx context.Context) {
 			// Generate synthetic events to trigger the refresh of dnsmasq service state:
 			// If the service is on the way up:
 			// - The user may have configured dnsmasq to be enabled in the config file but the router DHCP service
-			//   may still be running so we advise the user via status.
+			//   may still be running, so we advise the user via status.
 			// If the service is on the way down:
 			// - The user may have configured dnsmasq to be disabled in the config file but it may not be safe to
 			//   disable dnsmasq yet. We advise the user to enable another DHCP service.
@@ -163,10 +174,10 @@ func (s *Server) startWorker(ctx context.Context) {
 }
 
 // maybeStartOrStopDnsmasq checks if it's okay to start dnsmasq based on config.
-// If the service is config disabled then return false without an error.
+// If the service is config disabled, then return false without an error.
 // Return true if config wants dnsmasq started and the service could be started,
-// i.e. there isn't already a DHCP server on the network.
-// If there is a DHCP server on the network then return false and an error.
+// i.e., there isn't already a DHCP server on the network.
+// If there is a DHCP server on the network, then return false and an error.
 func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarter) (state serviceState, err error) {
 	state = s.cfg.ServiceState
 	err = nil
@@ -177,8 +188,15 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 	wantEnabled := svc.isDNSMasqEnabledInConfig(s.cfg)
 
 	defer func() {
-		if state == serviceStateActive || state == serviceStateInactive { // if the service make it all the way up or down...
+		if state == serviceStateActive || state == serviceStateInactive { // if the service made it all the way up or down...
 			s.cfg.needsAction = false
+		}
+		if s.ledWarning != nil {
+			if state == serviceStateActive {
+				s.ledWarning.DisableWarning()
+			} else if state == serviceStateInactive {
+				s.ledWarning.EnableWarning()
+			}
 		}
 	}()
 

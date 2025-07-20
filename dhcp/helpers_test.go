@@ -57,7 +57,7 @@ func TestNewServer(t *testing.T) {
 
 			// defaultDhcpService = &mockRestarter{}
 			ctx, cancelFunc := context.WithCancel(context.Background())
-			server, err := NewServer(ctx, config.MustGetLogger(), false)
+			server, err := NewServer(ctx, config.MustGetLogger(), false, &mockLEDController{})
 
 			if tt.expectError {
 				assert.Error(t, err, tt.errorMsg)
@@ -218,7 +218,7 @@ func TestSetConfig_WritesToFile(t *testing.T) {
 	// Setup server config.
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
-	s, err := NewServer(ctx, config.MustGetLogger(), false)
+	s, err := NewServer(ctx, config.MustGetLogger(), false, &mockLEDController{})
 	assert.NoError(t, err)
 
 	// Create a sample config with a known value.

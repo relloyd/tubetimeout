@@ -158,3 +158,85 @@ func TestMaybeStartDnsmasq_SuccessfulStart(t *testing.T) {
 	assert.Equal(t, serviceStateFailedCheckConfig, state)
 	mockSvc.AssertExpectations(t)
 }
+
+// Test LEDController handling.
+
+type mockLEDController struct {
+	mock.Mock
+}
+
+func (m *mockLEDController) EnableWarning() {
+	m.Called()
+}
+
+func (m *mockLEDController) DisableWarning() {
+	m.Called()
+}
+
+func TestMaybeStartDnsmasq_LEDControllerBehavior(t *testing.T) {
+	logger := zap.NewNop().Sugar()
+	hw := net.HardwareAddr{0xde, 0xad, 0xbe, 0xef}
+	iface := "eth0"
+
+	// Shared config
+	cfg := &DNSMasqConfig{ServiceEnabled: true, needsAction: false}
+
+	// Case 1: Nil LEDController should not panic.
+
+	mockSvc := new(mockRestarter)
+	s := &Server{
+		logger:     logger,
+		cfg:        cfg,
+		ifaceName:  iface,
+		hwAddr:     hw,
+		ledWarning: nil,
+	}
+	mockSvc.On("isDNSMasqEnabledInConfig", cfg).Return(true)
+	mockSvc.On("isDHCPServerRunning", mock.Anything, hw).Return(false, false, nil)
+	mockSvc.On("startDnsmasq", mock.Anything, cfg, iface, hw).Return(nil)
+
+	_, err := s.maybeStartOrStopDnsmasq(logger, mockSvc)
+	assert.NoError(t, err)
+
+	// Case 2: LEDController.DisableWarning() called when state == serviceStateActive.
+
+	cfg = &DNSMasqConfig{ServiceEnabled: true, needsAction: false, ServiceState: serviceStateActive}
+	mockLED := new(mockLEDController)
+	mockLED.On("DisableWarning").Return()
+
+	mockSvc = new(mockRestarter)
+	s = &Server{
+		logger:     logger,
+		cfg:        cfg,
+		ifaceName:  iface,
+		hwAddr:     hw,
+		ledWarning: mockLED,
+	}
+	mockSvc.On("isDNSMasqEnabledInConfig", cfg).Return(true)
+
+	state, err := s.maybeStartOrStopDnsmasq(logger, mockSvc)
+	assert.NoError(t, err)
+	assert.Equal(t, serviceStateActive, state)
+	mockLED.AssertCalled(t, "DisableWarning")
+
+	// Case 3: LEDController.EnableWarning() called when state == serviceStateInactive.
+
+	cfg = &DNSMasqConfig{ServiceEnabled: false, needsAction: false, ServiceState: serviceStateInactive}
+	mockLED = new(mockLEDController)
+	mockLED.On("EnableWarning").Return()
+
+	mockSvc = new(mockRestarter)
+	s = &Server{
+		logger:     logger,
+		cfg:        cfg,
+		ifaceName:  iface,
+		hwAddr:     hw,
+		ledWarning: mockLED,
+	}
+	mockSvc.On("isDNSMasqEnabledInConfig", cfg).Return(false)
+
+	state, err = s.maybeStartOrStopDnsmasq(logger, mockSvc)
+	assert.NoError(t, err)
+	assert.Equal(t, serviceStateInactive, state)
+	mockLED.AssertCalled(t, "EnableWarning")
+}

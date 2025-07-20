@@ -15,6 +15,7 @@ import (
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/dhcp"
 	"relloyd/tubetimeout/group"
+	"relloyd/tubetimeout/led"
 	"relloyd/tubetimeout/monitor"
 	"relloyd/tubetimeout/nfq"
 	"relloyd/tubetimeout/nft"
@@ -88,7 +89,7 @@ func main() {
 	handleDebugging(logger, &config.AppCfg.DebugConfig)
 
 	// Maybe start DHCP server.
-	dhcpServer, err := dhcp.NewServer(ctx, logger, config.AppCfg.DHCPServerDisabled)
+	dhcpServer, err := dhcp.NewServer(ctx, logger, config.AppCfg.DHCPServerDisabled, led.NewController(logger))
 	if err != nil {
 		logger.Fatalf("Failed to setup DHCP server: %v", err)
 	}
