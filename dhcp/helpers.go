@@ -18,88 +18,26 @@ func defaultRouteCmd() (string, error) {
 	return string(output), err
 }
 
-// getPrimaryInterfaceName returns the interface that carries the default route.
-// On Linux it parses /proc/net/route; on macOS it shells out to `route -n get default`.
-// If that fails, it returns the first non-loopback interface that is UP and has a MAC.
-// As a convenience, it still prefers classic names (eth0, end0, eno1, enp*, enx*) when available.
+var preferredIfaces = []string{
+	"eth0", // RaspberryPi Zero 2w
+	"end0", // OrangePiZero3
+}
+
 func getPrimaryInterfaceName() (string, error) {
-	switch runtime.GOOS {
-	case "linux":
-		if name, _ := ifaceFromProcNetRoute(); name != "" {
-			return name, nil
-		}
-	case "darwin":
-		if name, _ := ifaceFromRouteCmd(); name != "" {
-			return name, nil
-		}
-	}
-
-	// Fallback: choose a reasonable interface from the list.
-	return firstUsableIface()
-}
-
-// ifaceFromProcNetRoute parses /proc/net/route for Dest==0.0.0.0 (default GW).
-func ifaceFromProcNetRoute() (string, error) {
-	f, err := os.Open("/proc/net/route")
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	s := bufio.NewScanner(f)
-	for s.Scan() {
-		fields := strings.Fields(s.Text())
-		if len(fields) >= 2 && fields[1] == "00000000" { // default route
-			return fields[0], nil
-		}
-	}
-	return "", errors.New("no default route found")
-}
-
-// ifaceFromRouteCmd runs `route -n get default` (macOS) and extracts the 'interface:' line.
-func ifaceFromRouteCmd() (string, error) {
-	out, err := exec.Command("route", "-n", "get", "default").CombinedOutput()
-	if err != nil {
-		return "", err
-	}
-	for _, line := range strings.Split(string(out), "\n") {
-		if strings.HasPrefix(line, "interface:") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "interface:")), nil
-		}
-	}
-	return "", errors.New("default route not found")
-}
-
-// firstUsableIface prefers common Ethernet prefixes, then any non-loopback UP iface with a MAC.
-func firstUsableIface() (string, error) {
-	priorities := []string{"eth", "end", "eno", "enp", "enx"}
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return "", err
 	}
 
-	// Helper to decide if iface is candidate.
-	isGood := func(iface net.Interface) bool {
-		return iface.Flags&net.FlagLoopback == 0 &&
-			iface.Flags&net.FlagUp != 0 &&
-			len(iface.HardwareAddr) != 0
-	}
-
-	// 1. Look for preferred prefixes.
-	for _, p := range priorities {
+	for _, name := range preferredIfaces {
 		for _, iface := range ifaces {
-			if isGood(iface) && strings.HasPrefix(iface.Name, p) {
+			if iface.Name == name {
 				return iface.Name, nil
 			}
 		}
 	}
-	// 2. Take the first usable.
-	for _, iface := range ifaces {
-		if isGood(iface) {
-			return iface.Name, nil
-		}
-	}
-	return "", errors.New("no suitable interface found")
+
+	return "", errors.New("no preferred interface found")
 }
 
 // GetHardwareAddress returns the hardware (MAC) address of the given network interface.
