@@ -390,3 +390,16 @@ func (h *Handler) dhcpHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 	}
 }
+
+func (h *Handler) ipv6Handler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		status := h.ipv6Checker.IsEnabled()
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(status); err != nil {
+			h.logger.Errorf("Error getting IPv6 status: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	} else {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+	}
+}

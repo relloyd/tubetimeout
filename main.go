@@ -15,6 +15,7 @@ import (
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/dhcp"
 	"relloyd/tubetimeout/group"
+	"relloyd/tubetimeout/ipv6"
 	"relloyd/tubetimeout/led"
 	"relloyd/tubetimeout/monitor"
 	"relloyd/tubetimeout/nfq"
@@ -88,6 +89,9 @@ func main() {
 	handleDelayedStart(logger, &config.AppCfg)
 	handleDebugging(logger, &config.AppCfg.DebugConfig)
 
+	// IPv6 status checker.
+	ipv6Checker := ipv6.NewIPv6Checker(ctx)
+
 	// Maybe start DHCP server.
 	dhcpServer, err := dhcp.NewServer(ctx, logger, config.AppCfg.DHCPServerDisabled, led.NewController(logger))
 	if err != nil {
@@ -160,7 +164,7 @@ func main() {
 
 	// Web server start.
 	if config.AppCfg.WebConfig.WebEnabled {
-		s := web.NewServer(logger, t, config.GroupMACs, trafficMap, dhcpServer)
+		s := web.NewServer(logger, t, config.GroupMACs, trafficMap, dhcpServer, ipv6Checker)
 		go func() {
 			if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				logger.Fatalln("Error starting web server:", err)
@@ -180,7 +184,7 @@ func main() {
 		})
 	}
 
-	// Capture SIGINT and SIGTERM to gracefully shutdown.
+	// Capture SIGINT and SIGTERM to shut down gracefully.
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	<-sigs

@@ -188,10 +188,10 @@ func (s *Server) maybeStartOrStopDnsmasq(logger *zap.SugaredLogger, svc restarte
 	wantEnabled := svc.isDNSMasqEnabledInConfig(s.cfg)
 
 	defer func() {
-		if state == serviceStateActive || state == serviceStateInactive { // if the service made it all the way up or down...
+		if state == serviceStateActive || state == serviceStateInactive { // if the service made it ALL the way up or down...
 			s.cfg.needsAction = false
 		}
-		if s.ledWarning != nil {
+		if s.ledWarning != nil { // TODO: stop always setting the LEDs every time maybeStartOrStopDnsmasq() is called.
 			if state == serviceStateActive {
 				s.ledWarning.DisableWarning()
 			} else if state == serviceStateInactive {

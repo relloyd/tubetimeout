@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"relloyd/tubetimeout/config"
 	"relloyd/tubetimeout/dhcp"
+	"relloyd/tubetimeout/ipv6"
 	"relloyd/tubetimeout/models"
 )
 
@@ -45,6 +46,10 @@ type DHCPConfigGetterSetter interface {
 	SetConfig(logger *zap.SugaredLogger, cfg *dhcp.DNSMasqConfig) error
 }
 
+type IPV6Checker interface {
+	IsEnabled() ipv6.Status
+}
+
 type Handler struct {
 	logger                 *zap.SugaredLogger
 	startTime              time.Time
@@ -52,10 +57,11 @@ type Handler struct {
 	usageTracker           UsageTracker
 	monitor                Monitor
 	dhcpConfigGetterSetter DHCPConfigGetterSetter
+	ipv6Checker            IPV6Checker
 }
 
-func NewServer(logger *zap.SugaredLogger, ut UsageTracker, gm GroupMACsGroupGetterSetter, m Monitor, d DHCPConfigGetterSetter) *http.Server {
-	h := Handler{logger: logger, startTime: time.Now(), usageTracker: ut, groupMACsGetterSetter: gm, monitor: m, dhcpConfigGetterSetter: d}
+func NewServer(logger *zap.SugaredLogger, ut UsageTracker, gm GroupMACsGroupGetterSetter, m Monitor, d DHCPConfigGetterSetter, ipv6Checker IPV6Checker) *http.Server {
+	h := Handler{logger: logger, startTime: time.Now(), usageTracker: ut, groupMACsGetterSetter: gm, monitor: m, dhcpConfigGetterSetter: d, ipv6Checker: ipv6Checker}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", h.rootHandler)
 	mux.HandleFunc("/static/", h.staticHandler)
@@ -66,6 +72,7 @@ func NewServer(logger *zap.SugaredLogger, ut UsageTracker, gm GroupMACsGroupGett
 	mux.HandleFunc("/mode", h.modeHandler)         // TODO: move /pause to a sub context under group
 	mux.HandleFunc("/reset", h.resetGroupHandler)
 	mux.HandleFunc("/dhcp", h.dhcpHandler)
+	mux.HandleFunc("/ipv6Status", h.ipv6Handler)
 
 	return &http.Server{
 		Addr:                         fmt.Sprintf(":%d", config.AppCfg.WebConfig.WebPort),
