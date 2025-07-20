@@ -400,9 +400,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 const startDurationHHMM = formatMinutes(durationToMinutes(groupConfig.startDuration));
                 if (groupConfig.retention >= daysToDuration(7)) {
-                    configInfo.textContent += `Next reset on ${getDayName(groupConfig.startDay)} ${startDurationHHMM}`;
+                    configInfo.textContent += ` Next reset on ${getDayName(groupConfig.startDay)} ${startDurationHHMM}`;
                 } else if (groupConfig.retention >= daysToDuration(1)){
-                    configInfo.textContent += `Reset daily at ${startDurationHHMM}`;
+                    configInfo.textContent += ` Reset daily at ${startDurationHHMM}`;
                 }
                 groupDiv.appendChild(configInfo);
             }
