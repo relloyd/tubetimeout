@@ -817,6 +817,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = generateAddressReservationRow(r, container);
             container.appendChild(row);
         });
+
+        // Save DHCP config for status and render indicators.
+        dhcpConfigData = cfg;
+        await updateTubetimeoutStatus();
     }
 
     async function saveDHCPConfig() {
@@ -853,6 +857,72 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             const responseBody = (await res.text()).trim();
             showNotification(`Failed to save configuration: "${responseBody}"`, true);
+        }
+    }
+
+    // ----------------------------------------------------------------------------
+    // TubeTimeout status indicators
+    // ----------------------------------------------------------------------------
+    let dhcpConfigData = null;
+
+    async function updateTubetimeoutStatus() {
+        const container = document.getElementById('tubetimeout-status');
+        if (!container) return;
+        container.innerHTML = '';
+
+        // --- IPv6 check ---
+        try {
+            const resp = await fetch('/ipv6');
+            if (resp.ok) {
+                const { enabled } = await resp.json();
+                if (enabled) {
+                    const row = document.createElement('div');
+                    const circle = document.createElement('span');
+                    Object.assign(circle.style, {
+                        display:        'inline-block',
+                        width:          '10px',
+                        height:         '10px',
+                        borderRadius:   '50%',
+                        backgroundColor:'var(--error-color)',
+                        marginRight:    '6px'
+                    });
+                    row.appendChild(circle);
+                    row.appendChild(document.createTextNode(
+                        'IPv6 detected - disable IPv6 on the router'
+                    ));
+                    container.appendChild(row);
+                }
+            } else {
+                console.error('Failed to fetch /ipv6 status:', resp.status);
+            }
+        } catch (e) {
+            console.error('Error fetching /ipv6:', e);
+        }
+
+        // --- DHCP status ---
+        if (dhcpConfigData) {
+            const state = dhcpConfigData.serviceState;
+            const row = document.createElement('div');
+            const circle = document.createElement('span');
+            Object.assign(circle.style, {
+                display:      'inline-block',
+                width:        '10px',
+                height:       '10px',
+                borderRadius: '50%',
+                marginRight:  '6px'
+            });
+
+            if (state === 'active')  {
+                circle.style.backgroundColor = 'var(--success-color)';
+                row.appendChild(circle);
+                row.appendChild(document.createTextNode('Tube'));
+            } else {
+                circle.style.backgroundColor = 'var(--error-color)';
+                row.appendChild(circle);
+                row.appendChild(document.createTextNode('DHCP server not started - see DHCP configuration'));
+            }
+
+            container.appendChild(row);
         }
     }
 

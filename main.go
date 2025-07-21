@@ -91,6 +91,7 @@ func main() {
 
 	// IPv6 status checker.
 	ipv6Checker := ipv6.NewIPv6Checker(ctx, logger)
+	logger.Info("IPv6 status checker created")
 
 	// Maybe start DHCP server.
 	dhcpServer, err := dhcp.NewServer(ctx, logger, config.AppCfg.DHCPServerDisabled, led.NewController(logger))
