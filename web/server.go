@@ -72,7 +72,7 @@ func NewServer(logger *zap.SugaredLogger, ut UsageTracker, gm GroupMACsGroupGett
 	mux.HandleFunc("/mode", h.modeHandler)         // TODO: move /pause to a sub context under group
 	mux.HandleFunc("/reset", h.resetGroupHandler)
 	mux.HandleFunc("/dhcp", h.dhcpHandler)
-	mux.HandleFunc("/ipv6Status", h.ipv6Handler)
+	mux.HandleFunc("/ipv6", h.ipv6Handler)
 
 	return &http.Server{
 		Addr:                         fmt.Sprintf(":%d", config.AppCfg.WebConfig.WebPort),
