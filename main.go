@@ -90,7 +90,7 @@ func main() {
 	handleDebugging(logger, &config.AppCfg.DebugConfig)
 
 	// IPv6 status checker.
-	ipv6Checker := ipv6.NewIPv6Checker(ctx)
+	ipv6Checker := ipv6.NewIPv6Checker(ctx, logger)
 
 	// Maybe start DHCP server.
 	dhcpServer, err := dhcp.NewServer(ctx, logger, config.AppCfg.DHCPServerDisabled, led.NewController(logger))

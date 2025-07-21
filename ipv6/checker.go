@@ -5,6 +5,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 var (
@@ -20,7 +22,7 @@ type Status struct {
 	Enabled bool `json:"enabled"`
 }
 
-func NewIPv6Checker(ctx context.Context) *Checker {
+func NewIPv6Checker(ctx context.Context, log *zap.SugaredLogger) *Checker {
 	if checker != nil {
 		return checker
 	}
@@ -30,7 +32,6 @@ func NewIPv6Checker(ctx context.Context) *Checker {
 	}
 
 	t := time.NewTicker(15 * time.Second)
-	defer t.Stop()
 
 	go func() {
 		for {
@@ -40,7 +41,9 @@ func NewIPv6Checker(ctx context.Context) *Checker {
 				checker.mu.Lock()
 				checker.ipv6Enabled = v
 				checker.mu.Unlock()
+				log.Debug("IPv6 detected: ", checker.ipv6Enabled)
 			case <-ctx.Done():
+				t.Stop()
 				return
 			}
 		}
