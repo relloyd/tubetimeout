@@ -762,7 +762,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const statusField = document.createElement('div');
         statusField.className = 'form-field';
         const statusLabel = document.createElement('label');
-        statusLabel.textContent = 'Service Status';
+        statusLabel.textContent = 'DHCP Service Status';
         const statusText = document.createElement('span');
         statusText.id = 'service-state';
         statusText.textContent = ''; // default value or status
@@ -870,12 +870,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!container) return;
         container.innerHTML = '';
 
-        // --- IPv6 check ---
-        try {
+        let hasRed = false;
+
+        try { // IPv6 check
             const resp = await fetch('/ipv6');
             if (resp.ok) {
                 const { enabled } = await resp.json();
                 if (enabled) {
+                    hasRed = true;
                     const row = document.createElement('div');
                     const circle = document.createElement('span');
                     Object.assign(circle.style, {
@@ -899,29 +901,41 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error fetching /ipv6:', e);
         }
 
-        // --- DHCP status ---
-        if (dhcpConfigData) {
+        if (dhcpConfigData) { // DHCP status
             const state = dhcpConfigData.serviceState;
+            if (state !== 'active') {
+                hasRed = true;
+                const row = document.createElement('div');
+                const circle = document.createElement('span');
+                Object.assign(circle.style, {
+                    display:      'inline-block',
+                    width:        '10px',
+                    height:       '10px',
+                    borderRadius: '50%',
+                    backgroundColor:'var(--error-color)',
+                    marginRight:  '6px'
+                });
+                row.appendChild(circle);
+                row.appendChild(document.createTextNode(
+                    'DHCP server not started - see DHCP configuration'
+                ));
+                container.appendChild(row);
+            }
+        }
+        
+        if (!hasRed) { // Show green status
             const row = document.createElement('div');
             const circle = document.createElement('span');
             Object.assign(circle.style, {
-                display:      'inline-block',
-                width:        '10px',
-                height:       '10px',
-                borderRadius: '50%',
-                marginRight:  '6px'
+                display:        'inline-block',
+                width:          '10px',
+                height:         '10px',
+                borderRadius:   '50%',
+                backgroundColor:'var(--success-color)',
+                marginRight:    '6px'
             });
-
-            if (state === 'active')  {
-                circle.style.backgroundColor = 'var(--success-color)';
-                row.appendChild(circle);
-                row.appendChild(document.createTextNode('Tube'));
-            } else {
-                circle.style.backgroundColor = 'var(--error-color)';
-                row.appendChild(circle);
-                row.appendChild(document.createTextNode('DHCP server not started - see DHCP configuration'));
-            }
-
+            row.appendChild(circle);
+            row.appendChild(document.createTextNode('Active'));
             container.appendChild(row);
         }
     }
