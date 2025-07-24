@@ -433,7 +433,8 @@ document.addEventListener('DOMContentLoaded', () => {
             grouped[groupName].forEach(({mac, name}) => {
                 const listItem = document.createElement('li');
                 const label = document.createElement('span');
-                label.textContent = `${mac.replace(/^:/g, '')} - ${name}`;
+                label.textContent = `${name}\n${mac.replace(/^:/g, '')}`;
+                label.style.whiteSpace = 'pre-line';  // or ‘pre-wrap’
                 label.style.paddingRight = '10px'; // add space before the button
                 const lastActiveTimestamp = usage.activity && usage.activity[mac];
                 if (lastActiveTimestamp) {
@@ -917,7 +918,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 row.appendChild(circle);
                 row.appendChild(document.createTextNode(
-                    'DHCP server not started - see DHCP configuration'
+                    'DHCP configuration needs completing'
                 ));
                 container.appendChild(row);
             }
