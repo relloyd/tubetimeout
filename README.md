@@ -2,6 +2,8 @@
 
 TubeTimeout is a light-weight parental controls app able to keep track of and block YouTube usage on your home network.
 
+![TubeTimeout Screenshot](docs/screenshot/ui-configured.png)
+
 ## Requirements
 
 TubeTimeout runs on low spec hardware like a RaspberryPi Zero 2w or OrangePiZero3 and works best when there is a wired ethernet connection.
