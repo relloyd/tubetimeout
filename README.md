@@ -4,22 +4,23 @@ TubeTimeout is a super light-weight parental controls app able to keep track of 
 
 After setup, use the UI at http://tubetimeout.local to devices to groups and configure usage limits.
 
-## Hardware Requirements
+## Prerequisites
+
+### Hardware
 
 It runs on a low spec hardware like a RaspberryPi Zero 2w or OrangePiZero3 and works best when there is a wired ethernet connection.
 
-## Networking Requirements
+### Networking
 
 * Disable IPv6 on your home network
 * Disable DHCP on your router and let the TubeTimeout device take over (it uses dnsmasq)
 
-## Device Setup
+## Get Started
 
 The following is a rough list of commands required to install TubeTimeout on a vanilla OrangePiZero3
 running Armbian o/s.
 
-This has been tested on Armbian 25.5.1 Noble, but should work well with Raspbian o/s as well.
-
+This has been tested on Armbian 25.5.1 Noble, but should work well with Raspbian o/s on RaspberryPi devices as well.
 
 ```
 # Run everything as root
@@ -36,15 +37,15 @@ wget https://go.dev/dl/go1.23.1.linux-arm64.tar.gz
 tar -C /usr/local -xzf go1.23.1.linux-arm64.tar.gz
 rm go1.23.1.linux-arm64.tar.gz
 echo 'export PATH=$PATH:/usr/local/go/bin:.' >> ~/.zshrc
-export PATH=$PATH:/usr/local/go/bin:.
+source ~/.zshrc
 
-# After syncing tubetimeout code, prevent file ownership warnings
+# Clone the repo and prevent file ownership warnings
 
 cd /root
 git clone git@github.com:relloyd/tubetimeout.git
 git config --global --add safe.directory /root/tubetimeout
 
-# Set kernel parameters
+# Set kernel parameters to enable ip forwarding and more
 
 cat <<EOF > /etc/sysctl.d/local.conf
 net.ipv4.ip_forward=1
@@ -98,7 +99,7 @@ echo "stmmac-0:01:1Gbps" | tee /sys/class/leds/red:status/trigger
 echo "none" | tee /sys/class/leds/red:status/trigger
 echo 1 | tee /sys/class/leds/red:status/brightness
 
-# Configure the hostname and reboot
+# Configure the hostname and reboot to pick up the new kernel parameters etc
 
 hostnamectl hostname tubetimeout
 reboot
