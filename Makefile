@@ -58,9 +58,11 @@ run-docker:
 	docker run -it --rm --cap-add=NET_ADMIN --cap-add=NET_RAW ubuntu-nftables-go
 
 daemon:
-	cp -p tubetimeout.service /etc/systemd/system/
+	cp -p services/tubetimeout.service /etc/systemd/system/
+	cp -p services/tubetimeout-netfilter-settings.service /etc/systemd/system/
 	systemctl daemon-reload
 	systemctl enable tubetimeout
+	sysctmctl enable tubetimeout-netfilter-settings.service
 
 start:
 	systemctl start tubetimeout
