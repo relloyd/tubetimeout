@@ -103,11 +103,13 @@ reboot
 
 ## Next Steps
 
-After your device reboots, head over to the UI here:
+Learn how to use the UI and configure TubeTimeout by reading documentation here:
+
+https://www.tubetimeout.com/post/how-to-set-up-tubetimeout
+
+After your device reboots, load the UI here:
 
 http://tubetimeout.local
-
-More detailed instructions on how to use the UI can be found at https://www.tubetimeout.com/post/how-to-set-up-tubetimeout
 
 I'd welcome any PRs and suggestions you may have. Good luck and best wishes,
 
