@@ -1,21 +1,19 @@
 # TubeTimeout
 
-TubeTimeout is a super light-weight parental controls app able to keep track of & block YouTube usage on your home network.
+TubeTimeout is a light-weight parental controls app able to keep track of and block YouTube usage on your home network.
 
 After setup, use the UI at http://tubetimeout.local to devices to groups and configure usage limits.
 
+## Requirements
+
+TubeTimeout runs on low spec hardware like a RaspberryPi Zero 2w or OrangePiZero3 and works best when there is a wired ethernet connection.
+
 ## Prerequisites
-
-### Hardware
-
-It runs on a low spec hardware like a RaspberryPi Zero 2w or OrangePiZero3 and works best when there is a wired ethernet connection.
-
-### Networking
 
 * Disable IPv6 on your home network
 * Disable DHCP on your router and let the TubeTimeout device take over (it uses dnsmasq)
 
-## Get Started
+## How To Get Started
 
 The following is a rough list of commands required to install TubeTimeout on a vanilla OrangePiZero3
 running Armbian o/s.
@@ -104,3 +102,16 @@ echo 1 | tee /sys/class/leds/red:status/brightness
 hostnamectl hostname tubetimeout
 reboot
 ```
+
+## Next Steps
+
+After your device reboots, head over to the UI here:
+
+http://tubetimeout.local
+
+Usage instructions can be found at https://www.tubetimeout.com/blog
+
+Good luck and all PRs are welcome.
+
+Best wishes,
+Richard
