@@ -26,5 +26,6 @@ go.work.sum
 
 .DS_Store
 
-youtube-nfqueue
-nfqueue
+.idea
+
+tubetimeout
