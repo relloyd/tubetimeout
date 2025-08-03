@@ -2,7 +2,7 @@
 
 TubeTimeout is a light-weight parental controls app able to keep track of and block YouTube usage on your home network.
 
-![TubeTimeout Screenshot](docs/screenshot/ui-configured.png)
+![TubeTimeout Screenshot](docs/screenshots/ui-configured.png)
 
 ## Requirements
 
