@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>TubeTimout</title>
+
+  <script src="/static/script.js" defer></script>
+  <link rel="stylesheet" href="/static/style.css" />
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/favicon/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon/favicon-16x16.png">
+  <link rel="manifest" href="/static/favicon/site.webmanifest">
+</head>
+<body>
+
+<div class="container">
+  <section class="branding-bar">
+    <a href="#" class="refresh-page">
+      <img src="/static/favicon/android-chrome-512x512.png" alt="Refresh TubeTimeout" class="branding-icon">
+    </a>
+    <h1><a href="#" class="refresh-page branding-title">TubeTimeout</a></h1>
+    <div id="tubetimeout-status" class="tubetimeout-status"></div>
+  </section>
+
+  <section class="form-section">
+
+    <div class="form-container collapsible" data-section="dhcp-config">
+      <h1>DHCP Configuration</h1>
+      <div class="form-card">
+        <div id="dhcp-config">
+        </div>
+      </div>
+      <div class="button-wrapper">
+        <div class="button-container-end">
+          <button id="dhcp-config-save-button" class="button-full-bottom" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-container collapsible" data-section="dhcp-reservations">
+      <h1>IP Address Reservations</h1>
+      <div class="form-card">
+        <div id="dhcp-address-reservations">
+        </div>
+      </div>
+      <div class="button-wrapper">
+        <div class="button-container-end">
+          <button id="dhcp-address-reservations-save-button" class="button-full-bottom" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-container collapsible" data-section="usage-trackers">
+      <h1>Usage Trackers</h1>
+      <div class="form-card">
+        <div class="form-field">
+          <label for="group-select">Tracker</label>
+          <select id="group-select">
+            <option value="">-- New Tracker --</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="group-name">Name</label>
+          <input id="group-name" type="text" placeholder="Name" required>
+        </div>
+        <div class="form-field">
+          <label for="group-threshold">Block After Minutes</label>
+          <input id="group-threshold" type="number" placeholder="Threshold (minutes)" required>
+        </div>
+        <div class="form-field">
+          <label for="group-retention">Reset Every</label>
+          <select id="group-retention">
+            <option value="7">Week</option>
+            <option value="1">Day</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="group-start-day">Reset Day</label>
+          <select id="group-start-day">
+            <option value="0">Sunday</option>
+            <option value="1">Monday</option>
+            <option value="2">Tuesday</option>
+            <option value="3">Wednesday</option>
+            <option value="4">Thursday</option>
+            <option value="5">Friday</option>
+            <option value="6">Saturday</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="group-start-time">Reset Time</label>
+          <input id="group-start-time" type="time" step="300" required>
+        </div>
+      </div>
+      <div class="button-wrapper">
+        <div class="button-container-end">
+          <button id="save-tracker-btn" class="button-full-bottom">Save</button>
+        </div>
+      </div>
+      <div class="button-wrapper">
+        <div class="button-container-end">
+          <button id="delete-tracker-btn" class="button-full-bottom">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-container collapsible" data-section="devices">
+      <h1>Devices</h1>
+      <div class="form-card">
+        <div class="form-field">
+          <label for="device-group-dropdown">Tracker</label>
+          <select id="device-group-dropdown"></select>
+        </div>
+        <div class="form-field">
+          <label for="device-dropdown">Device</label>
+          <select id="device-dropdown"></select>
+        </div>
+        <div class="form-field">
+          <label for="device-name">Name</label>
+          <input id="device-name" type="text" placeholder="Device Name" required>
+        </div>
+      </div>
+      <div class="button-wrapper">
+        <div class="button-container-end">
+          <button id="add-to-group-btn" class="button-full-bottom" type="button">Add Device To Tracker</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="groups-container"></div>
+
+  <div class="save-container">
+    <button class="button-save-config" style="display: none;">Save Configuration</button>
+  </div>
+
+  <div id="notification" class="notification hidden"></div>
+  <div id="statusMessage"></div>
+</div>
+
+<footer class="app-footer">
+  <span>Version: {{ .BuildVersion }}.</span>
+  <span>Build Time: {{ .BuildTime }}.</span>
+  <span>Start Time: {{ .StartTime }}</span>
+</footer>
+
+</body>
+</html>
