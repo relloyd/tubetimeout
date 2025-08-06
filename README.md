@@ -2,8 +2,6 @@
 
 TubeTimeout is a light-weight parental controls app able to keep track of and block YouTube usage on your home network.
 
-It's designed to run on a Raspberry Pi Zero 2w or Orange Pi Zero3 and will run on similar inexpensive hardware.
-
 ## Features
 
 * Counts YouTube usage and blocks traffic using nftables
