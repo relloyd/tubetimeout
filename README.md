@@ -8,7 +8,7 @@ TubeTimeout is a light-weight parental controls app able to keep track of and bl
 * Apply daily or weekly time limits to any group of devices
 * Works for all devices on your home network
 * Simple web UI to configure settings
-* No third-party javascript, cloud services or apps required
+* No third-party JavaScript, cloud services or apps required
 
 ![TubeTimeout Screenshot](docs/screenshots/ui-configured.png)
 
